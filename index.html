@@ -1,0 +1,1669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game Log — RetroAchievements Tracker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&family=Metal+Mania&display=swap');
+
+  :root{
+    --bg:#15121f;
+    --bg-alt:#1b1729;
+    --panel:#201a32;
+    --panel-2:#251e3a;
+    --border:#332a52;
+    --gold:#e4a93f;
+    --gold-dim:#8a6a2e;
+    --teal:#59c9a5;
+    --text:#ece8f7;
+    --muted:#948db3;
+    --danger:#e2685c;
+    --radius:3px;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);}
+  body{
+    font-family:'Inter',sans-serif;
+    color:var(--text);
+    min-height:100vh;
+    background-image:
+      radial-gradient(circle at 20% 0%, rgba(228,169,63,0.06), transparent 40%),
+      radial-gradient(circle at 80% 100%, rgba(89,201,165,0.06), transparent 40%);
+    padding:24px 16px 64px;
+  }
+
+  .wrap{max-width:960px;margin:0 auto;}
+
+  .brand{
+    display:flex;align-items:center;gap:10px;margin-bottom:28px;
+  }
+  .brand .menu-wrap{margin-left:auto;}
+  .brand .mark{
+    font-family:'Space Mono',monospace;
+    font-weight:700;
+    font-size:20px;
+    letter-spacing:1px;
+    color:var(--gold);
+    border:2px solid var(--gold);
+    padding:2px 7px;
+    border-radius:var(--radius);
+  }
+  .brand .name{font-family:'Space Mono',monospace;font-size:15px;color:var(--muted);}
+
+  /* ---- Connect panel ---- */
+  .connect{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:28px;
+    max-width:440px;
+    margin:60px auto;
+  }
+  .connect h1{
+    font-family:'Space Mono',monospace;
+    font-size:19px;
+    margin:0 0 6px;
+  }
+  .connect p{color:var(--muted);font-size:14px;line-height:1.6;margin:0 0 22px;}
+  .field{margin-bottom:16px;}
+  .field label{
+    display:block;font-size:12px;color:var(--muted);
+    margin-bottom:6px;font-family:'Space Mono',monospace;
+  }
+  .field input{
+    width:100%;padding:10px 12px;background:var(--bg-alt);
+    border:1px solid var(--border);border-radius:var(--radius);
+    color:var(--text);font-size:14px;font-family:'Inter',sans-serif;
+  }
+  .field input:focus{outline:none;border-color:var(--gold);}
+  .field .hint{font-size:12px;color:var(--muted);margin-top:6px;}
+  .field .hint a{color:var(--teal);}
+
+  button{
+    font-family:'Space Mono',monospace;
+    cursor:pointer;border:none;border-radius:var(--radius);
+    font-size:13px;font-weight:700;letter-spacing:0.3px;
+  }
+  .btn-primary{
+    background:var(--gold);color:#1a1424;padding:11px 20px;width:100%;
+  }
+  .btn-primary:hover{background:#f0b953;}
+  .btn-primary:disabled{background:var(--gold-dim);cursor:wait;}
+  .btn-ghost{
+    background:transparent;border:1px solid var(--border);color:var(--muted);
+    padding:8px 14px;
+  }
+  .btn-ghost:hover{color:var(--text);border-color:var(--muted);}
+
+  /* ---- Hamburger dropdown menu ---- */
+  .menu-wrap{position:relative;}
+  .btn-hamburger{
+    background:transparent;border:1px solid var(--border);border-radius:4px;
+    width:38px;height:34px;display:flex;flex-direction:column;justify-content:center;
+    align-items:center;gap:4px;cursor:pointer;
+  }
+  .btn-hamburger:hover{border-color:var(--muted);}
+  .btn-hamburger .bar{width:18px;height:2px;background:var(--text);border-radius:1px;}
+  .dropdown-menu{
+    display:none;position:absolute;top:calc(100% + 6px);right:0;
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    min-width:150px;overflow:hidden;z-index:50;
+    box-shadow:0 8px 20px rgba(0,0,0,0.45);
+  }
+  .dropdown-menu.open{display:block;}
+  .dropdown-item{
+    display:block;width:100%;text-align:left;background:transparent;border:none;
+    color:var(--text);padding:11px 14px;font-family:'Space Mono',monospace;font-size:12.5px;
+    cursor:pointer;
+  }
+  .dropdown-item:hover{background:var(--bg-alt);}
+  .dropdown-item + .dropdown-item{border-top:1px solid var(--border);}
+
+  .error-box{
+    background:rgba(226,104,92,0.1);border:1px solid var(--danger);
+    color:#f3aca4;padding:12px 14px;border-radius:var(--radius);
+    font-size:13px;margin-top:16px;line-height:1.5;
+  }
+
+  /* ---- Dashboard ---- */
+  #dashboard{display:none;}
+
+  .topbar{display:flex;justify-content:flex-end;align-items:center;margin-bottom:22px;gap:12px;flex-wrap:wrap;}
+
+  .profile-hero{
+    background:linear-gradient(135deg, var(--panel-2), var(--panel));
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:22px;
+    display:flex;gap:18px;align-items:center;
+    margin-bottom:24px;
+    flex-wrap:wrap;
+  }
+  .profile-hero img.avatar{
+    width:72px;height:72px;border-radius:var(--radius);
+    border:2px solid var(--gold);
+    image-rendering:pixelated;
+    flex-shrink:0;
+  }
+  .profile-hero .who{flex:1;min-width:160px;}
+  .profile-hero .who h2{
+    font-family:'Space Mono',monospace;margin:0 0 4px;font-size:20px;
+  }
+  .profile-hero .who .motto{color:var(--muted);font-size:13px;margin:0;}
+  .stat-row{display:flex;gap:22px;flex-wrap:wrap;}
+  .stat{text-align:right;}
+  .stat .num{
+    font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--gold);
+    line-height:1;
+  }
+  .stat .lbl{font-size:11px;color:var(--muted);margin-top:4px;}
+
+  .section-title{
+    font-family:'Space Mono',monospace;font-size:14px;color:var(--muted);
+    letter-spacing:0.5px;margin:32px 0 12px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .section-title span.count{color:var(--gold-dim);}
+
+  .cart-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));
+    gap:10px;
+  }
+  .cart{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    overflow:hidden;display:flex;flex-direction:column;cursor:pointer;
+    transition:border-color 0.15s;
+  }
+  .cart:hover{border-color:var(--gold-dim);}
+  .cart .art{
+    width:100%;aspect-ratio:1/1;object-fit:cover;background:var(--bg-alt);
+    display:block;
+  }
+  .cart .body{padding:8px;}
+  .cart .title{
+    font-size:11.5px;font-weight:600;margin:0 0 2px;line-height:1.3;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  .cart .console{font-size:9.5px;color:var(--muted);margin:0 0 6px;}
+  .progress-track{
+    background:var(--bg-alt);border-radius:20px;height:5px;overflow:hidden;margin-bottom:4px;
+  }
+  .progress-fill{height:100%;background:var(--teal);border-radius:20px;}
+  .progress-fill.complete{background:var(--gold);}
+  .cart .prog-lbl{
+    display:flex;justify-content:space-between;font-size:9.5px;color:var(--muted);
+    font-family:'Space Mono',monospace;
+  }
+  .cart .hours{
+    font-size:9.5px;color:var(--muted);font-family:'Space Mono',monospace;margin-top:3px;
+  }
+  .cart .hours .val{color:var(--teal);}
+
+  .unlock-list{display:flex;flex-direction:column;gap:1px;background:var(--border);border-radius:6px;overflow:hidden;border:1px solid var(--border);}
+  .unlock{
+    background:var(--panel);padding:10px 14px;display:flex;align-items:center;gap:12px;
+  }
+  .unlock img{width:40px;height:40px;border-radius:var(--radius);flex-shrink:0;image-rendering:pixelated;}
+  .unlock .info{flex:1;min-width:0;}
+  .unlock .info .t{font-size:13.5px;font-weight:600;margin:0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .unlock .info .g{font-size:11.5px;color:var(--muted);margin:0;}
+  .unlock .pts{
+    font-family:'Space Mono',monospace;color:var(--gold);font-size:13px;font-weight:700;
+    flex-shrink:0;
+  }
+  .unlock .when{font-size:11px;color:var(--muted);flex-shrink:0;width:70px;text-align:right;}
+
+  .lib-search{
+    width:100%;padding:9px 12px;background:var(--bg-alt);border:1px solid var(--border);
+    border-radius:var(--radius);color:var(--text);font-size:13px;margin-bottom:12px;font-family:'Inter',sans-serif;
+  }
+  .lib-search:focus{outline:none;border-color:var(--gold);}
+
+  .lib-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .lib-table th{
+    text-align:left;font-family:'Space Mono',monospace;font-weight:400;
+    color:var(--muted);font-size:11px;padding:6px 10px;border-bottom:1px solid var(--border);
+    cursor:pointer;user-select:none;
+  }
+  .lib-table th:hover{color:var(--text);}
+  .lib-table td{padding:8px 10px;border-bottom:1px solid var(--bg-alt);vertical-align:middle;}
+  .lib-table tr:last-child td{border-bottom:none;}
+  .lib-table tbody tr{cursor:pointer;}
+  .lib-table tbody tr:hover{background:var(--panel-2);}
+  .lib-table .g-title{display:flex;align-items:center;gap:8px;}
+  .lib-table .g-title img{width:22px;height:22px;border-radius:2px;image-rendering:pixelated;}
+  .lib-table .bar{width:90px;}
+
+  .pill{
+    display:inline-block;font-family:'Space Mono',monospace;font-size:9.5px;
+    padding:2px 7px;border-radius:10px;white-space:nowrap;
+  }
+  .pill-teal{background:rgba(89,201,165,0.15);color:var(--teal);}
+  .pill-gold{background:rgba(228,169,63,0.15);color:var(--gold);}
+  .pill-muted{background:rgba(148,141,179,0.12);color:var(--muted);}
+
+  /* ---- Tabs ---- */
+  .tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px;}
+  .tab-btn{
+    background:transparent;border:none;color:var(--muted);
+    padding:10px 16px 10px 0;margin-right:20px;font-size:13px;
+    border-bottom:2px solid transparent;
+  }
+  .tab-btn.active{color:var(--text);border-bottom-color:var(--gold);}
+  .tab-btn:hover{color:var(--text);}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  /* ---- System filter chips ---- */
+  .chip-row{
+    display:none;gap:8px;overflow-x:auto;padding-bottom:10px;margin-bottom:6px;
+    -webkit-overflow-scrolling:touch;
+  }
+  .chip-row.visible{display:flex;}
+  .chip-row::-webkit-scrollbar{height:4px;}
+  .chip{
+    flex-shrink:0;background:var(--panel);border:1px solid var(--border);color:var(--muted);
+    font-family:'Space Mono',monospace;font-size:11.5px;padding:6px 12px;border-radius:20px;
+    white-space:nowrap;cursor:pointer;
+  }
+  .chip:hover{color:var(--text);border-color:var(--muted);}
+  .chip.active{background:var(--gold);color:#1a1424;border-color:var(--gold);font-weight:700;}
+
+  /* ---- Game detail modal ---- */
+  .modal-backdrop{
+    display:none;position:fixed;inset:0;background:rgba(10,8,16,0.75);
+    z-index:100;padding:20px;overflow-y:auto;
+  }
+  .modal-backdrop.open{display:block;}
+  .modal-card{
+    max-width:480px;margin:20px auto 40px;background:var(--panel);
+    border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;
+  }
+  .modal-art{width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--bg-alt);display:block;}
+  .modal-body{padding:20px;}
+  .modal-close{
+    position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.5);color:var(--text);
+    width:30px;height:30px;border-radius:50%;font-size:16px;line-height:1;z-index:2;
+  }
+  .modal-body h2{font-family:'Space Mono',monospace;font-size:19px;margin:0 0 4px;}
+  .modal-body .sub{color:var(--muted);font-size:13px;margin:0 0 16px;}
+  .modal-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-bottom:18px;}
+  .modal-meta .mi .k{font-size:10.5px;color:var(--muted);font-family:'Space Mono',monospace;margin-bottom:2px;}
+  .modal-meta .mi .v{font-size:13px;}
+  .modal-progress{background:var(--bg-alt);border-radius:6px;padding:14px;margin-bottom:16px;}
+  .modal-progress .row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;}
+  .modal-progress .row:last-child{margin-bottom:0;}
+  .modal-links{display:flex;gap:8px;flex-wrap:wrap;}
+  .modal-links a{
+    font-family:'Space Mono',monospace;font-size:11.5px;color:var(--teal);
+    border:1px solid var(--border);padding:6px 12px;border-radius:20px;text-decoration:none;
+  }
+  .modal-links a:hover{border-color:var(--teal);}
+  .modal-note{font-size:11px;color:var(--muted);margin-top:14px;line-height:1.5;}
+
+  .rawg-badge-row{
+    display:flex;justify-content:flex-end;padding:10px 16px 0;min-height:14px;
+  }
+  .rawg-score{
+    font-family:'Metal Mania', cursive;
+    font-size:22px;
+    line-height:1;
+    padding:6px 12px 8px;
+    border-radius:5px;
+    transform:rotate(-6deg);
+    text-shadow:0 1px 2px rgba(0,0,0,0.5);
+    border:2px solid rgba(0,0,0,0.35);
+    box-shadow:0 3px 8px rgba(0,0,0,0.45);
+    white-space:nowrap;
+    display:inline-block;
+  }
+  .rawg-score.tier-green{background:linear-gradient(135deg,#8fe0a8,#3fae5c);color:#0c2414;}
+  .rawg-score.tier-yellow{background:linear-gradient(135deg,#f2df8a,#dcb52e);color:#3a2c05;}
+  .rawg-score.tier-red{background:linear-gradient(135deg,#f0958a,#d8483a);color:#3a0a06;}
+  .rawg-score.tier-muted{background:var(--panel-2);color:var(--muted);border-color:var(--border);box-shadow:none;transform:rotate(-3deg);font-size:14px;}
+  .rawg-setup-note{font-size:11px;color:var(--muted);margin:2px 0 0;}
+  .rawg-setup-note a{color:var(--teal);cursor:pointer;}
+
+  /* ---- Library search row + add game ---- */
+  .lib-search-row{display:flex;gap:8px;margin-bottom:12px;}
+  .lib-search-row .lib-search{margin-bottom:0;flex:1;}
+  .lib-search-row .btn-ghost{flex-shrink:0;white-space:nowrap;}
+
+  #addgame-card select{
+    width:100%;padding:10px 12px;background:var(--bg-alt);
+    border:1px solid var(--border);border-radius:3px;color:var(--text);
+    font-size:14px;font-family:'Inter',sans-serif;
+  }
+  #addgame-card select:focus{outline:none;border-color:var(--gold);}
+  #addgame-results{margin-top:16px;max-height:280px;overflow-y:auto;}
+  .ag-result{
+    display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:4px;cursor:pointer;
+  }
+  .ag-result:hover{background:var(--bg-alt);}
+  .ag-result img{width:32px;height:32px;border-radius:2px;image-rendering:pixelated;flex-shrink:0;}
+  .ag-result .t{font-size:13px;flex:1;}
+  .ag-result .n{font-size:10.5px;color:var(--muted);font-family:'Space Mono',monospace;}
+  .ag-empty{font-size:12.5px;color:var(--muted);margin-top:14px;}
+
+  .g-title{position:relative;}
+  .manual-remove{
+    background:transparent;border:none;color:var(--muted);font-size:13px;
+    margin-left:8px;padding:2px 6px;flex-shrink:0;
+  }
+  .manual-remove:hover{color:var(--danger);}
+
+  /* ---- By year ---- */
+  .year-group{margin-bottom:28px;}
+  .year-heading{
+    font-family:'Space Mono',monospace;font-size:15px;color:var(--text);
+    margin:0 0 12px;display:flex;align-items:baseline;gap:8px;
+  }
+  .year-heading .n{font-size:11px;color:var(--muted);font-weight:400;}
+  .year-icons{display:flex;flex-wrap:wrap;gap:12px;}
+  .year-item{width:60px;text-align:center;cursor:pointer;}
+  .year-item img{
+    width:48px;height:48px;border-radius:3px;image-rendering:pixelated;
+    border:1px solid var(--border);display:block;margin:0 auto 5px;
+  }
+  .year-item .yt{
+    font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;margin-bottom:3px;
+  }
+
+  .empty, .loading{
+    text-align:center;color:var(--muted);padding:30px 10px;font-size:13px;
+  }
+  .loading::after{
+    content:'';display:inline-block;width:12px;height:12px;margin-left:8px;
+    border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;
+    animation:spin 0.7s linear infinite;vertical-align:middle;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  @media (max-width:520px){
+    .profile-hero{flex-direction:column;align-items:flex-start;}
+    .stat-row{width:100%;justify-content:space-between;}
+    .stat{text-align:left;}
+    .lib-table .bar{display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="brand">
+    <span class="mark">RA</span><span class="name">Game Log</span>
+    <div class="menu-wrap" id="menu-wrap" style="display:none;">
+      <button class="btn-hamburger" id="btn-menu" aria-label="Menu">
+        <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+      </button>
+      <div class="dropdown-menu" id="dropdown-menu">
+        <button class="dropdown-item" id="btn-rawg-settings">Ratings</button>
+        <button class="dropdown-item" id="btn-refresh">Refresh</button>
+        <button class="dropdown-item" id="btn-disconnect">Disconnect</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="connect" class="connect">
+    <h1>Connect your RetroAchievements account</h1>
+    <p>Enter your username and Web API key to pull your library, progress, and recent unlocks.</p>
+    <div class="field">
+      <label>Username</label>
+      <input id="in-user" type="text" placeholder="e.g. xelnia" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Web API Key</label>
+      <input id="in-key" type="password" placeholder="paste your key" autocomplete="off">
+      <div class="hint">Find it on your <a href="https://retroachievements.org/controlpanel.php" target="_blank" rel="noopener">control panel</a>, under Keys. Stored only for this app, never shared.</div>
+    </div>
+    <button class="btn-primary" id="btn-connect">Connect</button>
+    <div id="connect-error"></div>
+  </div>
+
+  <div id="dashboard">
+
+    <div class="profile-hero" id="profile-hero"></div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="overview">Overview</button>
+      <button class="tab-btn" data-tab="library">Library</button>
+      <button class="tab-btn" data-tab="year">By year</button>
+    </div>
+
+    <div id="tab-overview" class="tab-panel active">
+      <div class="section-title">Recently played</div>
+      <div id="recent-games" class="cart-grid"><div class="loading">Loading</div></div>
+
+      <div class="section-title">Recent unlocks</div>
+      <div id="recent-unlocks" class="unlock-list"><div class="loading">Loading</div></div>
+    </div>
+
+    <div id="system-chips" class="chip-row"></div>
+
+    <div id="tab-library" class="tab-panel">
+      <div class="section-title">Full library <span class="count" id="lib-count"></span></div>
+      <div class="lib-search-row">
+        <input class="lib-search" id="lib-search" type="text" placeholder="Search your games...">
+        <button class="btn-ghost" id="btn-add-game">+ Add game</button>
+      </div>
+      <div id="lib-table-wrap"><div class="loading">Loading</div></div>
+    </div>
+
+    <div id="tab-year" class="tab-panel">
+      <div id="year-wrap"><div class="loading">Loading</div></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="modal-backdrop" class="modal-backdrop">
+  <div class="modal-card" id="modal-card"></div>
+</div>
+
+<div id="addgame-backdrop" class="modal-backdrop">
+  <div class="modal-card" id="addgame-card">
+    <button class="modal-close" id="addgame-close-btn">✕</button>
+    <div class="modal-body">
+      <h2 style="margin-bottom:4px;">Add a game</h2>
+      <p class="sub" style="margin-bottom:18px;">Search RetroAchievements' game list and add one to your library with no progress yet.</p>
+
+      <div class="field">
+        <label>System</label>
+        <select id="addgame-system"><option>Loading systems…</option></select>
+      </div>
+      <div class="field">
+        <label>Game title</label>
+        <input id="addgame-title" type="text" placeholder="e.g. Chrono Trigger" autocomplete="off">
+      </div>
+      <button class="btn-primary" id="addgame-search-btn">Search</button>
+
+      <div id="addgame-results"></div>
+    </div>
+  </div>
+</div>
+
+<div id="rawg-backdrop" class="modal-backdrop">
+  <div class="modal-card" id="rawg-card">
+    <button class="modal-close" id="rawg-close-btn">✕</button>
+    <div class="modal-body">
+      <h2 style="margin-bottom:4px;">RAWG ratings</h2>
+      <p class="sub" style="margin-bottom:18px;">Optional — shows a review-score badge on each game's detail view, pulled from RAWG (includes real Metacritic scores where RAWG has them).</p>
+
+      <div class="field">
+        <label>API Key</label>
+        <input id="rawg-api-key" type="text" autocomplete="off">
+        <div class="hint">Free — get a key at <a href="https://rawg.io/apidocs" target="_blank" rel="noopener">rawg.io/apidocs</a> (20,000 requests/month free, no OAuth, just this one key).</div>
+      </div>
+      <button class="btn-primary" id="rawg-save-btn">Save</button>
+      <div id="rawg-status"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const MEDIA = 'https://media.retroachievements.org';
+  let creds = null; // { username, apiKey }
+  let libraryData = [];
+  let recentGamesData = [];
+  let libraryIndex = {}; // GameID -> library entry, for looking up beaten status
+  let librarySort = { key: 'lastPlayed', dir: 'desc' };
+  const estHoursCache = {}; // in-memory, keyed by GameID, for this session — { hours, beaten }
+  let systemFilter = 'All';
+
+  // Serializes loadAll() against manual add/remove operations so they can
+  // never interleave — e.g. adding a game while the initial post-login load
+  // is still fetching used to let that load's later completion silently
+  // overwrite the just-added game with stale data. Now anything queued here
+  // always waits for whatever's already running to fully settle first.
+  let taskQueue = Promise.resolve();
+  function enqueueTask(fn){
+    const run = taskQueue.then(fn, fn);
+    taskQueue = run.catch(() => {}); // one failure shouldn't jam the queue for later tasks
+    return run;
+  }
+  let loadGeneration = 0; // bumped each loadAll() call; lets a stale/superseded run detect it's outdated
+  let activeTab = 'overview';
+  const gameExtendedCache = {}; // in-memory, keyed by GameID
+
+  const $ = (sel) => document.querySelector(sel);
+
+  function parseRADate(dateStr){
+    if(!dateStr) return null;
+    let s = String(dateStr).trim();
+    if(s.indexOf('T') === -1) s = s.replace(' ', 'T');
+    if(!/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z'; // RA API times are UTC with no offset marker
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function timeAgo(dateStr){
+    const d = parseRADate(dateStr);
+    if(!d) return '—';
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if(diff < 60) return 'just now';
+    if(diff < 3600) return Math.floor(diff/60) + 'm ago';
+    if(diff < 86400) return Math.floor(diff/3600) + 'h ago';
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  // --- Networking: try a direct call, fall back to CORS proxies ---
+  async function raFetch(endpoint, params){
+    const qs = new URLSearchParams({ ...params, y: creds.apiKey, u: creds.username });
+    const targetUrl = `https://retroachievements.org/API/${endpoint}?${qs.toString()}`;
+
+    async function validate(label, res){
+      if(res.status === 401 || res.status === 403){
+        if(label === 'direct'){
+          // Only the direct call is guaranteed to have actually reached RetroAchievements —
+          // a proxy returning 401/403 is often the proxy's own auth wall, not RA's.
+          const err = new Error('RetroAchievements rejected the username or API key (HTTP ' + res.status + ').');
+          err.authFailure = true;
+          throw err;
+        }
+        throw new Error(`${label}: HTTP ${res.status} (likely the proxy, not RetroAchievements)`);
+      }
+      if(!res.ok) throw new Error(`${label}: HTTP ${res.status}`);
+      let data;
+      try{ data = await res.json(); }
+      catch(e){ throw new Error(`${label}: response wasn't valid JSON`); }
+      if(data && data.Error) throw new Error(data.Error);
+      if(data === null || (Array.isArray(data) && data.length === 0 && endpoint.includes('Profile'))){
+        throw new Error(`${label}: empty response`);
+      }
+      return data;
+    }
+
+    async function attempt(label, run){
+      let res;
+      try{ res = await run(); }
+      catch(networkErr){ throw new Error(`${label}: blocked (${networkErr.message})`); }
+      return validate(label, res);
+    }
+
+    // Races a set of promises, resolving with whichever succeeds first.
+    // Only rejects once every single one has failed, collecting all reasons.
+    // (Written by hand instead of using Promise.any for wider compatibility.)
+    function raceFirstSuccess(promises){
+      return new Promise((resolve, reject) => {
+        let remaining = promises.length;
+        const errors = [];
+        promises.forEach(p => {
+          p.then(resolve, (err) => {
+            errors.push(err && err.message ? err.message : String(err));
+            remaining--;
+            if(remaining === 0) reject(new Error(errors.join('; ')));
+          });
+        });
+      });
+    }
+
+    // Try direct first — fast when it works, and its status is the only one we
+    // can trust as a real signal from RetroAchievements itself (not a proxy).
+    try{
+      return await attempt('direct', () => fetch(targetUrl));
+    }catch(directErr){
+      if(directErr.authFailure) throw directErr;
+      // Otherwise fall through and race the proxies below.
+    }
+
+    const proxyAttempts = [
+      attempt('allorigins', () => fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl))),
+      attempt('codetabs',   () => fetch('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(targetUrl))),
+      attempt('corsproxy',  () => fetch('https://corsproxy.io/?url=' + encodeURIComponent(targetUrl))),
+      attempt('thingproxy', () => fetch('https://thingproxy.freeboard.io/fetch/' + targetUrl)),
+      attempt('corseu',     () => fetch('https://cors.eu.org/' + targetUrl)),
+    ];
+
+    try{
+      return await raceFirstSuccess(proxyAttempts);
+    }catch(aggregateErr){
+      throw new Error('Every connection route failed — ' + aggregateErr.message);
+    }
+  }
+
+  function imgUrl(path){
+    if(!path) return '';
+    return path.startsWith('http') ? path : MEDIA + path;
+  }
+
+  // --- Playtime, derived from achievement-unlock timing ---
+  // RetroAchievements has no real playtime stat. For a game you've beaten,
+  // completed, or mastered, we show the span from your first unlock to the
+  // one that earned the award — how long it took to beat, not active hours.
+  // For a game still in progress, we instead estimate active playtime by
+  // grouping unlock timestamps into "sessions" (a gap under 30 minutes
+  // counts as continuous play) and summing them. Both are rough proxies.
+  const SESSION_GAP_MIN = 30;
+  const SESSION_START_MIN = 5;
+
+  function estimateHoursFromTimestamps(msTimestamps){
+    if(!msTimestamps || msTimestamps.length === 0) return null;
+    const sorted = [...new Set(msTimestamps)].sort((a,b) => a - b);
+    let totalMin = SESSION_START_MIN;
+    for(let i = 1; i < sorted.length; i++){
+      const diffMin = (sorted[i] - sorted[i-1]) / 60000;
+      totalMin += diffMin <= SESSION_GAP_MIN ? diffMin : SESSION_START_MIN;
+    }
+    return totalMin / 60;
+  }
+
+  function beatenSpanHoursFromTimestamps(msTimestamps){
+    if(!msTimestamps || msTimestamps.length === 0) return null;
+    const sorted = [...new Set(msTimestamps)].sort((a,b) => a - b);
+    return (sorted[sorted.length - 1] - sorted[0]) / 3600000;
+  }
+
+  function formatDuration(entry){
+    if(!entry || entry.hours == null) return '—';
+    const h = entry.hours;
+    if(entry.beaten){
+      if(h < 1) return Math.round(h * 60) + 'm';
+      if(h < 48) return h.toFixed(1) + 'h';
+      return (h / 24).toFixed(1) + 'd';
+    }
+    if(h < 1) return Math.round(h * 60) + 'm';
+    return h.toFixed(1) + 'h';
+  }
+
+  async function getEstimatedHours(gameId){
+    if(estHoursCache[gameId] !== undefined) return estHoursCache[gameId];
+
+    const localGame = libraryIndex[gameId];
+    const officialAward = !!(localGame && localGame.HighestAwardKind);
+    // RA only assigns an official "beaten" award when the achievement set's
+    // author tagged specific win-condition achievements — many sets never
+    // do. A 100%-complete game is functionally beaten either way, so treat
+    // it the same regardless of whether that formal tag exists.
+    const fullyCompleted = !!(localGame && Number(localGame.MaxPossible) > 0 &&
+      Number(localGame.NumAwarded) >= Number(localGame.MaxPossible));
+    const beaten = officialAward || fullyCompleted;
+    const cacheKey = `ra-hours:${creds.username}:${gameId}:${beaten ? 'beaten' : 'progress'}`;
+    try{
+      const r = await window.storage.get(cacheKey, false);
+      if(r && r.value){
+        const parsed = JSON.parse(r.value);
+        if(Date.now() - parsed.ts < 12 * 60 * 60 * 1000){
+          estHoursCache[gameId] = { hours: parsed.hours, beaten };
+          return estHoursCache[gameId];
+        }
+      }
+    }catch(e){ /* not cached yet */ }
+
+    let hours = null;
+    try{
+      const data = await raFetch('API_GetGameInfoAndUserProgress.php', { g: gameId, a: 1 });
+      const achievements = (data && data.Achievements) ? Object.values(data.Achievements) : [];
+      const dates = [];
+      achievements.forEach(a => {
+        const d1 = parseRADate(a.DateEarned);
+        const d2 = parseRADate(a.DateEarnedHardcore);
+        if(d1) dates.push(d1.getTime());
+        if(d2) dates.push(d2.getTime());
+      });
+      hours = beaten ? beatenSpanHoursFromTimestamps(dates) : estimateHoursFromTimestamps(dates);
+    }catch(e){ hours = null; }
+
+    estHoursCache[gameId] = { hours, beaten };
+    try{ await window.storage.set(cacheKey, JSON.stringify({ hours, ts: Date.now() }), false); }catch(e){ /* non-fatal */ }
+    return estHoursCache[gameId];
+  }
+
+  async function loadEstimatedHoursFor(games, onProgress){
+    const CONCURRENCY = 8;
+    const targets = games.filter(g =>
+      g && g.GameID != null &&
+      Number(g.NumAwarded ?? g.NumAchieved ?? 0) > 0 &&
+      estHoursCache[g.GameID] === undefined
+    );
+    let idx = 0;
+    let doneSinceRender = 0;
+    async function worker(){
+      while(idx < targets.length){
+        const g = targets[idx++];
+        await getEstimatedHours(g.GameID);
+        doneSinceRender++;
+        if(onProgress && doneSinceRender % 4 === 0) onProgress();
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker));
+    if(onProgress) onProgress(); // final render to catch any remainder
+  }
+
+  // --- Persistence via window.storage ---
+  async function saveCreds(username, apiKey){
+    try{ await window.storage.set('ra-credentials', JSON.stringify({ username, apiKey }), false); }
+    catch(e){ /* non-fatal */ }
+  }
+  async function loadCreds(){
+    try{
+      const r = await window.storage.get('ra-credentials', false);
+      if(r && r.value) return JSON.parse(r.value);
+    }catch(e){ /* none stored yet */ }
+    return null;
+  }
+  async function clearCreds(){
+    try{ await window.storage.delete('ra-credentials', false); }catch(e){}
+  }
+
+  // --- Manually added ("wishlist") games ---
+  // Keyed by a normalized (lowercase, trimmed) username so that reconnecting
+  // with different capitalization — RA logins are case-insensitive — can't
+  // silently land on a different storage slot and appear empty.
+  function manualGamesKey(){
+    return `ra-manual-games:${creds.username.trim().toLowerCase()}`;
+  }
+
+  async function loadManualGames(){
+    try{
+      const r = await window.storage.get(manualGamesKey(), false);
+      if(r && r.value) return JSON.parse(r.value);
+    }catch(e){ /* not found under the normalized key — check the old format below */ }
+
+    // Fallback for games saved before this key was normalized, keyed by the
+    // exact username string as originally typed.
+    try{
+      const legacyKey = `ra-manual-games:${creds.username}`;
+      if(legacyKey !== manualGamesKey()){
+        const r = await window.storage.get(legacyKey, false);
+        if(r && r.value){
+          const migrated = JSON.parse(r.value);
+          await saveManualGames(migrated); // re-save under the normalized key going forward
+          return migrated;
+        }
+      }
+    }catch(e){ /* nothing under the old key either */ }
+
+    return [];
+  }
+  async function saveManualGames(list){
+    try{ await window.storage.set(manualGamesKey(), JSON.stringify(list), false); }
+    catch(e){ /* non-fatal */ }
+  }
+
+  async function removeManualGame(gameId){
+    return enqueueTask(async () => {
+      libraryData = libraryData.filter(g => g.GameID !== gameId);
+      const manual = await loadManualGames();
+      await saveManualGames(manual.filter(g => g.GameID !== gameId));
+      renderSystemChips();
+      renderLibrary();
+      renderByYear();
+    });
+  }
+
+  // --- Console + game list lookups, for manually adding a game ---
+  async function getConsoleList(){
+    const cacheKey = 'ra-consoles';
+    try{
+      const r = await window.storage.get(cacheKey, false);
+      if(r && r.value){
+        const parsed = JSON.parse(r.value);
+        if(Date.now() - parsed.ts < 30 * 24 * 60 * 60 * 1000) return parsed.data;
+      }
+    }catch(e){ /* not cached yet */ }
+
+    const data = await raFetch('API_GetConsoleIDs.php', {});
+    try{ await window.storage.set(cacheKey, JSON.stringify({ data, ts: Date.now() }), false); }catch(e){}
+    return data;
+  }
+
+  async function getGameListForConsole(consoleId){
+    const cacheKey = `ra-gamelist:${consoleId}`;
+    try{
+      const r = await window.storage.get(cacheKey, false);
+      if(r && r.value){
+        const parsed = JSON.parse(r.value);
+        if(Date.now() - parsed.ts < 7 * 24 * 60 * 60 * 1000) return parsed.data;
+      }
+    }catch(e){ /* not cached yet */ }
+
+    const data = await raFetch('API_GetGameList.php', { i: consoleId, f: 1 });
+    try{ await window.storage.set(cacheKey, JSON.stringify({ data, ts: Date.now() }), false); }catch(e){}
+    return data;
+  }
+
+  // --- RAWG ratings (optional) ---
+  // RAWG auths with a plain API key as a URL query param, and — unlike RA —
+  // actually supports CORS for direct browser calls, so this tries direct
+  // first and only falls back to proxies if that fails.
+  const RAWG_DEFAULT_API_KEY = 'a8bf350bf38d4e6a87a32967e345e384';
+  let rawgCreds = null; // { apiKey }, lazy-loaded
+
+  async function loadRawgCreds(){
+    try{
+      const r = await window.storage.get('rawg-credentials', false);
+      if(r && r.value) return JSON.parse(r.value);
+    }catch(e){ /* not set up yet */ }
+    return { apiKey: RAWG_DEFAULT_API_KEY }; // built-in default — overridable via the Ratings button
+  }
+  async function saveRawgCreds(apiKey){
+    try{ await window.storage.set('rawg-credentials', JSON.stringify({ apiKey }), false); }
+    catch(e){ /* non-fatal */ }
+  }
+
+  async function rawgGet(url){
+    function raceFirstSuccess(promises){
+      return new Promise((resolve, reject) => {
+        let remaining = promises.length;
+        const errors = [];
+        promises.forEach(p => {
+          p.then(resolve, (err) => {
+            errors.push(err && err.message ? err.message : String(err));
+            remaining--;
+            if(remaining === 0) reject(new Error(errors.join('; ')));
+          });
+        });
+      });
+    }
+
+    async function attempt(label, run){
+      let res;
+      try{ res = await run(); }
+      catch(networkErr){ throw new Error(`${label}: blocked (${networkErr.message})`); }
+      if(!res.ok) throw new Error(`${label}: HTTP ${res.status}`);
+      let data;
+      try{ data = await res.json(); }
+      catch(e){ throw new Error(`${label}: response wasn't valid JSON`); }
+      return data;
+    }
+
+    try{
+      return await attempt('direct', () => fetch(url));
+    }catch(directErr){ /* fall through to proxies */ }
+
+    return raceFirstSuccess([
+      attempt('allorigins', () => fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url))),
+      attempt('codetabs',   () => fetch('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url))),
+      attempt('corsproxy',  () => fetch('https://corsproxy.io/?url=' + encodeURIComponent(url))),
+      attempt('thingproxy', () => fetch('https://thingproxy.freeboard.io/fetch/' + url)),
+      attempt('corseu',     () => fetch('https://cors.eu.org/' + url)),
+    ]);
+  }
+
+  async function fetchRawgRatingLive(title){
+    if(!rawgCreds) rawgCreds = await loadRawgCreds();
+    if(!rawgCreds || !rawgCreds.apiKey) return null;
+
+    const url = `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgCreds.apiKey)}&search=${encodeURIComponent(title)}&page_size=5`;
+    const json = await rawgGet(url);
+    const results = (json && json.results) || [];
+    if(results.length === 0) return null;
+
+    const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Prefer RAWG's real Metacritic score when they have one on file; fall
+    // back to RAWG's own community rating (scaled 0-5 -> 0-100) otherwise —
+    // common for older/retro titles Metacritic never covered. Critically,
+    // RAWG returns rating:0 / metacritic:0 for games with NO data yet, not
+    // null — so those need to be treated as "nothing here", not a real 0.
+    function extractScore(g){
+      if(g.metacritic != null && g.metacritic > 0){
+        return { score: g.metacritic, metacritic: true };
+      }
+      if(g.rating != null && g.rating > 0 && Number(g.ratings_count) > 0){
+        return { score: g.rating * 20, metacritic: false };
+      }
+      return null;
+    }
+
+    // Try the exact title match first, but if THAT entry has no usable score,
+    // check the other results the search returned before giving up entirely —
+    // sometimes the exact match is a barely-populated RAWG entry while a
+    // closely related listing among the top results has real review data.
+    const exact = results.find(r => norm(r.name) === norm(title));
+    const ordered = exact ? [exact, ...results.filter(r => r !== exact)] : results;
+
+    for(const g of ordered){
+      const extracted = extractScore(g);
+      if(extracted){
+        return {
+          score: Math.round(extracted.score),
+          metacritic: extracted.metacritic,
+          matchedName: g.name,
+        };
+      }
+    }
+    return null;
+  }
+
+  async function getRawgRating(title, forceRefresh){
+    const cacheKey = `rawg-rating:${title.toLowerCase()}`;
+    if(!forceRefresh){
+      try{
+        const r = await window.storage.get(cacheKey, false);
+        if(r && r.value){
+          const parsed = JSON.parse(r.value);
+          const isStaleZeroBug = parsed.data && parsed.data.score === 0; // fixed bug artifact — never a real score
+          const ttl = parsed.data ? 30 * 24 * 60 * 60 * 1000 : 10 * 60 * 1000;
+          if(!isStaleZeroBug && Date.now() - parsed.ts < ttl) return parsed.data;
+        }
+      }catch(e){ /* not cached yet */ }
+    }
+
+    let data = null;
+    try{ data = await fetchRawgRatingLive(title); }
+    catch(e){
+      data = null;
+      console.error(`RAWG lookup failed for "${title}":`, e.message);
+    }
+
+    try{ await window.storage.set(cacheKey, JSON.stringify({ data, ts: Date.now() }), false); }
+    catch(e){ /* non-fatal */ }
+    return data;
+  }
+
+  // --- Rendering ---
+  function renderProfile(p){
+    $('#profile-hero').innerHTML = `
+      <img class="avatar" src="${imgUrl(p.UserPic)}" alt="${p.User}">
+      <div class="who">
+        <h2>${p.User}</h2>
+        <p class="motto">${p.Motto ? p.Motto : 'Member since ' + (parseRADate(p.MemberSince) ? parseRADate(p.MemberSince).toLocaleDateString() : '—')}</p>
+      </div>
+      <div class="stat-row">
+        <div class="stat"><div class="num" style="color:var(--teal)">${Number(p.TotalSoftcorePoints || 0).toLocaleString()}</div><div class="lbl">casual pts</div></div>
+      </div>
+    `;
+  }
+
+  function awardPill(kind){
+    const map = {
+      'mastered':        { label: 'Mastered',    cls: 'pill-gold' },
+      'completed':       { label: 'Completed',   cls: 'pill-teal' },
+      'beaten-hardcore': { label: 'Beaten (HC)',  cls: 'pill-gold' },
+      'beaten-softcore': { label: 'Beaten',       cls: 'pill-teal' },
+    };
+    const m = map[kind];
+    if(!m) return '<span class="pill pill-muted">In progress</span>';
+    return `<span class="pill ${m.cls}">${m.label}</span>`;
+  }
+
+  function renderRecentGames(games){
+    const el = $('#recent-games');
+    if(!games || games.length === 0){ el.innerHTML = '<div class="empty">No recently played games found.</div>'; return; }
+    el.innerHTML = games.slice(0, 12).map(g => {
+      const total = Number(g.NumPossibleAchievements || g.AchievementsTotal || 0);
+      const earned = Number(g.NumAchieved || 0);
+      const pct = total ? Math.round((earned/total)*100) : 0;
+      const est = estHoursCache[g.GameID];
+      const hoursHtml = est
+        ? `<span class="val" style="color:${est.beaten ? 'var(--gold)' : 'var(--teal)'}">${est.beaten ? '' : '≈ '}${formatDuration(est)}</span>`
+        : (Number(g.NumAchieved || 0) > 0 ? 'estimating…' : '—');
+      return `
+        <div class="cart" data-game-id="${g.GameID}">
+          <img class="art" src="${imgUrl(g.ImageIcon)}" alt="${g.Title}">
+          <div class="body">
+            <p class="title">${g.Title}</p>
+            <p class="console">${g.ConsoleName}</p>
+            <div class="progress-track"><div class="progress-fill ${pct>=100?'complete':''}" style="width:${pct}%"></div></div>
+            <div class="prog-lbl"><span>${earned}/${total}</span><span>${pct}%</span></div>
+            <div class="hours">${hoursHtml}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    el.querySelectorAll('.cart').forEach(card => {
+      card.addEventListener('click', () => openGameModal(Number(card.getAttribute('data-game-id'))));
+    });
+  }
+
+  function renderUnlocks(list){
+    const el = $('#recent-unlocks');
+    if(!list || list.length === 0){ el.innerHTML = '<div class="empty">No unlocks in the last few days. Go play something!</div>'; return; }
+    el.innerHTML = list.slice(0, 20).map(a => {
+      const isHardcore = Number(a.HardcoreMode) === 1;
+      return `
+      <div class="unlock">
+        <img src="${imgUrl('/Badge/' + a.BadgeName + '.png')}" alt="">
+        <div class="info">
+          <p class="t">${a.Title}</p>
+          <p class="g">${a.GameTitle}</p>
+        </div>
+        ${isHardcore ? '<span class="pill pill-muted">HC</span>' : ''}
+        <div class="pts" style="color:${isHardcore ? 'var(--muted)' : 'var(--teal)'}">${a.Points}</div>
+        <div class="when">${timeAgo(a.Date)}</div>
+      </div>
+    `;
+    }).join('');
+  }
+
+  function renderSystemChips(){
+    const chipRow = $('#system-chips');
+    const counts = {};
+    const source = activeTab === 'year'
+      ? libraryData.filter(g => g.HighestAwardKind && g.HighestAwardDate)
+      : libraryData;
+    source.forEach(g => { counts[g.ConsoleName] = (counts[g.ConsoleName] || 0) + 1; });
+    const systems = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
+
+    if(systems.length === 0){ chipRow.innerHTML = ''; return; }
+
+    const chips = ['All', ...systems];
+    chipRow.innerHTML = chips.map(sys => `
+      <button class="chip ${sys === systemFilter ? 'active' : ''}" data-sys="${sys}">
+        ${sys}${sys === 'All' ? '' : ` (${counts[sys]})`}
+      </button>
+    `).join('');
+
+    chipRow.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        systemFilter = chip.getAttribute('data-sys');
+        renderSystemChips();
+        renderLibrary();
+        renderByYear();
+      });
+    });
+  }
+
+  function renderLibrary(){
+    const wrap = $('#lib-table-wrap');
+    libraryData.forEach(g => { g.estHours = (estHoursCache[g.GameID] && estHoursCache[g.GameID].hours) ?? -1; });
+    const searchVal = ($('#lib-search').value || '').toLowerCase();
+    let rows = libraryData.filter(g =>
+      g.Title.toLowerCase().includes(searchVal) &&
+      (systemFilter === 'All' || g.ConsoleName === systemFilter)
+    );
+
+    const { key, dir } = librarySort;
+    rows = rows.slice().sort((a,b) => {
+      let av = a[key], bv = b[key];
+      if(typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+      if(av < bv) return dir === 'asc' ? -1 : 1;
+      if(av > bv) return dir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    $('#lib-count').textContent = rows.length ? `(${rows.length})` : '';
+
+    if(rows.length === 0){ wrap.innerHTML = '<div class="empty">No games match.</div>'; return; }
+
+    wrap.innerHTML = `
+      <table class="lib-table">
+        <thead><tr>
+          <th data-key="Title">Game</th>
+          <th data-key="HighestAwardKind">Award</th>
+          <th data-key="pct">Progress</th>
+          <th data-key="estHours" title="In-progress games: estimated active playtime. Beaten/completed games: time from first unlock to the award.">Playtime</th>
+          <th data-key="lastPlayed">Last played</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(g => {
+            const est = estHoursCache[g.GameID];
+            const earned = Number(g.NumAwarded || 0);
+            const hoursLabel = est ? formatDuration(est) : (earned > 0 ? '…' : '—');
+            const hoursColor = est && est.beaten ? 'var(--gold)' : 'var(--teal)';
+            return `
+            <tr data-game-id="${g.GameID}">
+              <td><div class="g-title"><img src="${imgUrl(g.ImageIcon)}" alt=""><span>${g.Title}</span>${g.manual ? `<button class="manual-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : ''}</div></td>
+              <td>${awardPill(g.HighestAwardKind)}</td>
+              <td>
+                <div class="bar">
+                  <div class="progress-track"><div class="progress-fill ${g.pct>=100?'complete':''}" style="width:${g.pct}%"></div></div>
+                </div>
+                <span style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)">${g.NumAwarded}/${g.MaxPossible} · ${g.pct}%</span>
+              </td>
+              <td style="font-family:'Space Mono',monospace;font-size:12px;color:${hoursColor}">${hoursLabel}</td>
+              <td style="color:var(--muted);font-size:12px;">${g.lastPlayed ? timeAgo(g.lastPlayed) : 'Never'}</td>
+            </tr>
+          `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+
+    wrap.querySelectorAll('th[data-key]').forEach(th => {
+      th.addEventListener('click', () => {
+        const k = th.getAttribute('data-key');
+        librarySort.dir = (librarySort.key === k && librarySort.dir === 'desc') ? 'asc' : 'desc';
+        librarySort.key = k;
+        renderLibrary();
+      });
+    });
+    wrap.querySelectorAll('tbody tr').forEach(row => {
+      row.addEventListener('click', () => openGameModal(Number(row.getAttribute('data-game-id'))));
+    });
+    wrap.querySelectorAll('.manual-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeManualGame(Number(btn.getAttribute('data-remove-id')));
+      });
+    });
+  }
+
+  function renderByYear(){
+    const el = $('#year-wrap');
+    const done = libraryData.filter(g =>
+      g.HighestAwardKind && g.HighestAwardDate &&
+      (systemFilter === 'All' || g.ConsoleName === systemFilter)
+    );
+    if(done.length === 0){
+      el.innerHTML = '<div class="empty">No completions yet — beat or master a game and it\'ll show up here.</div>';
+      return;
+    }
+
+    const casualFirst = { 'beaten-softcore': 0, 'completed': 1, 'beaten-hardcore': 2, 'mastered': 3 };
+    const byYear = {};
+    done.forEach(g => {
+      const parsed = parseRADate(g.HighestAwardDate);
+      if(!parsed) return;
+      const year = parsed.getFullYear();
+      if(!byYear[year]) byYear[year] = [];
+      byYear[year].push(g);
+    });
+
+    const years = Object.keys(byYear).sort((a,b) => b - a);
+    el.innerHTML = years.map(year => {
+      const games = byYear[year].slice().sort((a,b) =>
+        (casualFirst[a.HighestAwardKind] ?? 9) - (casualFirst[b.HighestAwardKind] ?? 9)
+      );
+      return `
+        <div class="year-group">
+          <div class="year-heading">${year} <span class="n">${games.length} completion${games.length===1?'':'s'}</span></div>
+          <div class="year-icons">
+            ${games.map(g => `
+              <div class="year-item" data-game-id="${g.GameID}" title="${g.Title}">
+                <img src="${imgUrl(g.ImageIcon)}" alt="">
+                <div class="yt">${g.Title}</div>
+                ${awardPill(g.HighestAwardKind)}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+    el.querySelectorAll('.year-item').forEach(item => {
+      item.addEventListener('click', () => openGameModal(Number(item.getAttribute('data-game-id'))));
+    });
+  }
+
+  function showError(msg){
+    $('#connect-error').innerHTML = `<div class="error-box">${msg}</div>`;
+  }
+
+  // --- Game detail modal ---
+  async function getGameExtended(gameId){
+    if(gameExtendedCache[gameId]) return gameExtendedCache[gameId];
+
+    const cacheKey = `ra-gameinfo:${gameId}`;
+    try{
+      const r = await window.storage.get(cacheKey, false);
+      if(r && r.value){
+        const parsed = JSON.parse(r.value);
+        if(Date.now() - parsed.ts < 7 * 24 * 60 * 60 * 1000){
+          gameExtendedCache[gameId] = parsed.data;
+          return parsed.data;
+        }
+      }
+    }catch(e){ /* not cached yet */ }
+
+    const data = await raFetch('API_GetGameExtended.php', { i: gameId });
+    gameExtendedCache[gameId] = data;
+    try{ await window.storage.set(cacheKey, JSON.stringify({ data, ts: Date.now() }), false); }catch(e){ /* non-fatal */ }
+    return data;
+  }
+
+  function findGameLocal(gameId){
+    return libraryData.find(g => g.GameID === gameId) || recentGamesData.find(g => g.GameID === gameId) || null;
+  }
+
+  async function openGameModal(gameId){
+    const card = $('#modal-card');
+    const local = findGameLocal(gameId);
+    card.dataset.gameId = gameId;
+    $('#modal-backdrop').classList.add('open');
+    card.innerHTML = `
+      <button class="modal-close" id="modal-close-btn">✕</button>
+      <img class="modal-art" src="" alt="">
+      <div class="rawg-badge-row"><span id="rawg-badge"></span></div>
+      <div class="modal-body"><div class="loading">Loading game info</div></div>
+    `;
+    $('#modal-close-btn').addEventListener('click', closeGameModal);
+
+    let ext;
+    try{
+      ext = await getGameExtended(gameId);
+    }catch(e){
+      if(card.dataset.gameId !== String(gameId)) return;
+      card.querySelector('.modal-body').innerHTML = `<div class="error-box">Could not load game details: ${e.message}</div>`;
+      return;
+    }
+    if(card.dataset.gameId !== String(gameId)) return; // user moved on to another game while this loaded
+
+    const title = ext.Title || (local && local.Title) || 'Unknown game';
+    const console_ = ext.ConsoleName || (local && local.ConsoleName) || '—';
+    const genre = ext.Genre || '—';
+    const developer = ext.Developer || '—';
+    const publisher = ext.Publisher || '—';
+    const released = ext.Released ? parseRADate(ext.Released) : null;
+    const releasedLabel = released ? released.toLocaleDateString(undefined, { year:'numeric', month:'long', day: ext.ReleasedAtGranularity === 'year' ? undefined : 'numeric' }) : '—';
+    const boxArt = imgUrl(ext.ImageBoxArt || (local && local.ImageIcon));
+
+    const totalAch = Number(ext.NumAchievements || (local && (local.MaxPossible || local.NumPossibleAchievements)) || 0);
+
+    const earned = local ? Number(local.NumAwarded ?? local.NumAchieved ?? 0) : 0;
+    const pct = totalAch ? Math.round((earned/totalAch)*100) : 0;
+    const est = estHoursCache[gameId];
+    const awardKind = local ? local.HighestAwardKind : null;
+
+    const raUrl = `https://retroachievements.org/game/${gameId}`;
+    const hltbUrl = `https://howlongtobeat.com/?q=${encodeURIComponent(title)}`;
+
+    card.querySelector('.modal-art').src = boxArt;
+    card.dataset.gameId = gameId;
+    card.querySelector('.modal-body').innerHTML = `
+      <h2>${title}</h2>
+      <p class="sub">${console_}</p>
+
+      <div class="modal-meta">
+        <div class="mi"><div class="k">GENRE</div><div class="v">${genre}</div></div>
+        <div class="mi"><div class="k">RELEASED</div><div class="v">${releasedLabel}</div></div>
+        <div class="mi"><div class="k">DEVELOPER</div><div class="v">${developer}</div></div>
+        <div class="mi"><div class="k">PUBLISHER</div><div class="v">${publisher}</div></div>
+      </div>
+
+      <div class="modal-progress">
+        <div class="row"><span>Your progress</span><span>${earned}/${totalAch || '?'} · ${pct}%</span></div>
+        <div class="row"><span>Status</span><span>${awardPill(awardKind)}</span></div>
+        <div class="row"><span>${est && est.beaten ? 'Time to beat' : 'Est. playtime'}</span><span style="color:${est && est.beaten ? 'var(--gold)' : 'var(--teal)'}">${est ? formatDuration(est) : '—'}</span></div>
+      </div>
+
+      <div class="modal-links">
+        <a href="${raUrl}" target="_blank" rel="noopener">RetroAchievements page ↗</a>
+        <a href="${hltbUrl}" target="_blank" rel="noopener">Search HowLongToBeat ↗</a>
+      </div>
+
+      <p class="modal-note">Ratings via <a href="https://rawg.io" target="_blank" rel="noopener" style="color:var(--teal)">RAWG</a>.</p>
+    `;
+
+    if(!rawgCreds) rawgCreds = await loadRawgCreds();
+    if(!rawgCreds){
+      const note = card.querySelector('.modal-note');
+      if(note) note.insertAdjacentHTML('afterend', `<p class="rawg-setup-note"><a id="rawg-setup-link">Set up RAWG</a> to show review scores here.</p>`);
+      const link = card.querySelector('#rawg-setup-link');
+      if(link) link.addEventListener('click', () => { closeGameModal(); openRawgModal(); });
+    }else{
+      const badge = card.querySelector('#rawg-badge');
+      if(badge) badge.innerHTML = `<span class="rawg-score tier-muted">…</span>`;
+
+      const runRawgLookup = (force) => {
+        getRawgRating(title, force).then(rating => {
+          if(card.dataset.gameId !== String(gameId)) return; // modal moved on to another game
+          const badgeEl = card.querySelector('#rawg-badge');
+          if(!badgeEl) return;
+
+          const label = rating ? String(rating.score) : 'N/A';
+          const tier = !rating ? 'tier-muted' : rating.score >= 80 ? 'tier-green' : rating.score >= 50 ? 'tier-yellow' : 'tier-red';
+          badgeEl.innerHTML = `<span class="rawg-score ${tier}" id="rawg-retry" title="Tap to look up again">${label}</span>`;
+
+          const retryEl = card.querySelector('#rawg-retry');
+          if(retryEl){
+            retryEl.style.cursor = 'pointer';
+            retryEl.addEventListener('click', () => {
+              badgeEl.innerHTML = `<span class="rawg-score tier-muted">…</span>`;
+              runRawgLookup(true);
+            });
+          }
+        });
+      };
+      runRawgLookup(false);
+    }
+  }
+
+  function closeGameModal(){
+    $('#modal-backdrop').classList.remove('open');
+  }
+
+  $('#modal-backdrop').addEventListener('click', (e) => {
+    if(e.target.id === 'modal-backdrop') closeGameModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape'){ closeGameModal(); closeAddGameModal(); closeRawgModal(); closeDropdownMenu(); }
+  });
+
+  // --- Add game manually ---
+  function rankGames(games, query){
+    const q = query.trim().toLowerCase();
+    if(!q || !games) return [];
+    return games
+      .map(g => {
+        const title = String(g.Title ?? g.title ?? '').toLowerCase();
+        let score = -1;
+        if(title === q) score = 3;
+        else if(title.startsWith(q)) score = 2;
+        else if(title.includes(q)) score = 1;
+        return { g, score, len: title.length };
+      })
+      .filter(x => x.score >= 0)
+      .sort((a, b) => (b.score - a.score) || (a.len - b.len))
+      .slice(0, 20)
+      .map(x => x.g);
+  }
+
+  async function openAddGameModal(){
+    $('#addgame-backdrop').classList.add('open');
+    $('#addgame-title').value = '';
+    $('#addgame-results').innerHTML = '';
+    const sel = $('#addgame-system');
+    sel.innerHTML = '<option>Loading systems…</option>';
+    try{
+      const consoles = await getConsoleList();
+      const sorted = (consoles || [])
+        .map(c => ({ id: c.ID ?? c.id, name: c.Name ?? c.name }))
+        .filter(c => c.id != null && c.name)
+        .sort((a, b) => a.name.localeCompare(b.name));
+      sel.innerHTML = sorted.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    }catch(e){
+      sel.innerHTML = '<option value="">Could not load systems</option>';
+    }
+  }
+
+  function closeAddGameModal(){
+    $('#addgame-backdrop').classList.remove('open');
+  }
+
+  async function searchAddGame(){
+    const sel = $('#addgame-system');
+    const consoleId = sel.value;
+    const query = $('#addgame-title').value.trim();
+    const resultsEl = $('#addgame-results');
+    if(!query || !consoleId){
+      resultsEl.innerHTML = '<div class="ag-empty">Pick a system and enter a title.</div>';
+      return;
+    }
+    resultsEl.innerHTML = '<div class="loading">Searching</div>';
+    try{
+      const list = await getGameListForConsole(consoleId);
+      const matches = rankGames(list, query);
+      if(matches.length === 0){
+        resultsEl.innerHTML = '<div class="ag-empty">No matching games found on this system.</div>';
+        return;
+      }
+      const consoleName = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : '';
+      resultsEl.innerHTML = matches.map(g => {
+        const id = g.ID ?? g.id;
+        const title = g.Title ?? g.title;
+        const icon = g.ImageIcon ?? g.imageIcon;
+        const numAch = g.NumAchievements ?? g.numAchievements ?? 0;
+        return `
+          <div class="ag-result" data-game-id="${id}">
+            <img src="${imgUrl(icon)}" alt="">
+            <span class="t">${title}</span>
+            <span class="n">${numAch} ach.</span>
+          </div>
+        `;
+      }).join('');
+      resultsEl.querySelectorAll('.ag-result').forEach(el => {
+        el.addEventListener('click', () => {
+          const id = Number(el.getAttribute('data-game-id'));
+          const match = matches.find(g => Number(g.ID ?? g.id) === id);
+          if(match) addManualGame(match, consoleId, consoleName);
+        });
+      });
+    }catch(e){
+      resultsEl.innerHTML = `<div class="error-box">Search failed: ${e.message}</div>`;
+    }
+  }
+
+  async function addManualGame(g, consoleId, consoleName){
+    return enqueueTask(async () => {
+      const gameId = Number(g.ID ?? g.id);
+      if(libraryData.some(x => x.GameID === gameId)){
+        closeAddGameModal();
+        return; // already tracked for real
+      }
+      const entry = {
+        GameID: gameId,
+        Title: g.Title ?? g.title,
+        ConsoleID: Number(consoleId),
+        ConsoleName: g.ConsoleName ?? g.consoleName ?? consoleName,
+        ImageIcon: g.ImageIcon ?? g.imageIcon,
+        MaxPossible: g.NumAchievements ?? g.numAchievements ?? 0,
+        NumAwarded: 0,
+        NumAwardedHardcore: 0,
+        HighestAwardKind: null,
+        HighestAwardDate: null,
+        MostRecentAwardedDate: null,
+        pct: 0,
+        lastPlayed: null,
+        manual: true,
+      };
+      libraryData = [...libraryData, entry];
+      const manual = await loadManualGames();
+      await saveManualGames([...manual, entry]);
+      renderSystemChips();
+      renderLibrary();
+      renderByYear();
+      closeAddGameModal();
+    });
+  }
+
+  $('#btn-add-game').addEventListener('click', openAddGameModal);
+  $('#addgame-close-btn').addEventListener('click', closeAddGameModal);
+  $('#addgame-backdrop').addEventListener('click', (e) => {
+    if(e.target.id === 'addgame-backdrop') closeAddGameModal();
+  });
+  $('#addgame-search-btn').addEventListener('click', searchAddGame);
+  $('#addgame-title').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter') searchAddGame();
+  });
+
+  // --- RAWG settings modal ---
+  async function openRawgModal(){
+    $('#rawg-backdrop').classList.add('open');
+    $('#rawg-status').innerHTML = '';
+    const existing = await loadRawgCreds();
+    $('#rawg-api-key').value = existing ? existing.apiKey : '';
+  }
+
+  function closeRawgModal(){
+    $('#rawg-backdrop').classList.remove('open');
+  }
+
+  $('#btn-rawg-settings').addEventListener('click', openRawgModal);
+  $('#rawg-close-btn').addEventListener('click', closeRawgModal);
+  $('#rawg-backdrop').addEventListener('click', (e) => {
+    if(e.target.id === 'rawg-backdrop') closeRawgModal();
+  });
+  $('#rawg-save-btn').addEventListener('click', async () => {
+    const apiKey = $('#rawg-api-key').value.trim();
+    const statusEl = $('#rawg-status');
+    if(!apiKey){
+      statusEl.innerHTML = '<div class="error-box">Enter an API key.</div>';
+      return;
+    }
+
+    const btn = $('#rawg-save-btn');
+    btn.disabled = true; btn.textContent = 'Verifying…';
+    statusEl.innerHTML = '';
+
+    rawgCreds = { apiKey };
+    await saveRawgCreds(apiKey);
+
+    try{
+      // No token exchange to verify against — run a real lookup instead.
+      const result = await fetchRawgRatingLive('Super Mario Bros');
+      if(!result) throw new Error('Key saved, but a test lookup came back empty — double-check the key is correct');
+      statusEl.innerHTML = '<p style="color:var(--teal);font-size:12.5px;margin-top:10px;">Connected — ratings will show on game details from now on.</p>';
+    }catch(e){
+      statusEl.innerHTML = `<div class="error-box">Couldn't verify: ${e.message}</div>`;
+    }finally{
+      btn.disabled = false; btn.textContent = 'Save';
+    }
+  });
+
+  async function loadAll(){
+    await enqueueTask(async () => {
+    $('#recent-games').innerHTML = '<div class="loading">Loading</div>';
+    $('#recent-unlocks').innerHTML = '<div class="loading">Loading</div>';
+    $('#lib-table-wrap').innerHTML = '<div class="loading">Loading</div>';
+
+    try{
+      const profile = await raFetch('API_GetUserProfile.php', {});
+      renderProfile(profile);
+    }catch(e){
+      $('#profile-hero').innerHTML = `<div class="error-box">Could not load profile: ${e.message}</div>`;
+    }
+
+    try{
+      const recent = await raFetch('API_GetUserRecentlyPlayedGames.php', { c: 12 });
+      recentGamesData = recent || [];
+      renderRecentGames(recentGamesData);
+    }catch(e){
+      $('#recent-games').innerHTML = `<div class="error-box">Could not load recently played games: ${e.message}</div>`;
+    }
+
+    try{
+      const unlocks = await raFetch('API_GetUserRecentAchievements.php', { m: 4320 });
+      renderUnlocks(unlocks);
+    }catch(e){
+      $('#recent-unlocks').innerHTML = `<div class="error-box">Could not load recent unlocks: ${e.message}</div>`;
+    }
+
+    try{
+      const progress = await raFetch('API_GetUserCompletionProgress.php', { c: 500 });
+      const results = (progress && progress.Results) || [];
+      libraryData = results.map(g => ({
+        ...g,
+        pct: Number(g.MaxPossible) ? Math.round((Number(g.NumAwarded)/Number(g.MaxPossible))*100) : 0,
+        lastPlayed: g.LastPlayed || g.MostRecentAwardedDate || null,
+      }));
+
+      // Merge in manually-added games not yet actually played; drop any that
+      // now show up for real (the user has since earned progress on them).
+      const realIds = new Set(libraryData.map(g => g.GameID));
+      const manual = await loadManualGames();
+      const stillManual = manual.filter(g => !realIds.has(g.GameID));
+      if(stillManual.length !== manual.length) await saveManualGames(stillManual);
+      libraryData = [...libraryData, ...stillManual];
+    }catch(e){
+      console.error('Failed to load live library data:', e);
+      // Still show whatever's manually tracked — a proxy hiccup shouldn't
+      // make the wishlist disappear for this session. (renderLibrary() runs
+      // right after this block regardless, so no need to touch the DOM here.)
+      try{
+        libraryData = await loadManualGames();
+      }catch(e2){
+        libraryData = [];
+      }
+      if(libraryData.length === 0){
+        $('#lib-table-wrap').innerHTML = `<div class="error-box">Could not load your library: ${e.message}</div>`;
+        $('#year-wrap').innerHTML = `<div class="error-box">Could not load completions: ${e.message}</div>`;
+        return;
+      }
+    }
+
+    try{ renderSystemChips(); }
+    catch(e){ console.error('renderSystemChips failed:', e); }
+
+    try{ renderLibrary(); }
+    catch(e){
+      console.error('renderLibrary failed:', e);
+      $('#lib-table-wrap').innerHTML = `<div class="error-box">Couldn't display your library: ${e.message}</div>`;
+    }
+
+    try{ renderByYear(); }
+    catch(e){
+      console.error('renderByYear failed:', e);
+      $('#year-wrap').innerHTML = `<div class="error-box">Couldn't display completions by year: ${e.message}</div>`;
+    }
+    }); // end of queued task — everything above this point is fully serialized
+
+    loadEstimatedHoursFor([...recentGamesData, ...libraryData], () => {
+      renderRecentGames(recentGamesData);
+      try{ renderLibrary(); }catch(e){ console.error('renderLibrary failed:', e); }
+    });
+  }
+
+  function showDashboard(){
+    $('#connect').style.display = 'none';
+    $('#dashboard').style.display = 'block';
+    $('#menu-wrap').style.display = 'block';
+  }
+  function showConnect(){
+    $('#connect').style.display = 'block';
+    $('#dashboard').style.display = 'none';
+    $('#menu-wrap').style.display = 'none';
+  }
+
+  $('#btn-connect').addEventListener('click', async () => {
+    const username = $('#in-user').value.trim();
+    const apiKey = $('#in-key').value.replace(/\s+/g, '');
+    $('#connect-error').innerHTML = '';
+    if(!username || !apiKey){ showError('Enter both a username and an API key.'); return; }
+
+    const btn = $('#btn-connect');
+    btn.disabled = true; btn.textContent = 'Connecting…';
+    creds = { username, apiKey };
+    try{
+      const profile = await raFetch('API_GetUserProfile.php', {});
+      if(!profile || !profile.User){ throw new Error('Unexpected response — check your username and key.'); }
+      await saveCreds(username, apiKey);
+      showDashboard();
+      loadAll();
+    }catch(e){
+      creds = null;
+      showError(`Connection failed: ${e.message}. Double-check your username and Web API key.`);
+    }finally{
+      btn.disabled = false; btn.textContent = 'Connect';
+    }
+  });
+
+  $('#btn-refresh').addEventListener('click', loadAll);
+  $('#btn-disconnect').addEventListener('click', async () => {
+    creds = null;
+    await clearCreds();
+    showConnect();
+  });
+  $('#lib-search').addEventListener('input', renderLibrary);
+
+  function closeDropdownMenu(){
+    $('#dropdown-menu').classList.remove('open');
+  }
+  $('#btn-menu').addEventListener('click', (e) => {
+    e.stopPropagation();
+    $('#dropdown-menu').classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    const wrap = $('#menu-wrap');
+    if(wrap && !wrap.contains(e.target)) closeDropdownMenu();
+  });
+  document.querySelectorAll('.dropdown-item').forEach(item => {
+    item.addEventListener('click', closeDropdownMenu);
+  });
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabName = btn.getAttribute('data-tab');
+      const panel = $('#tab-' + tabName);
+      if(!panel) return; // shouldn't happen, but never leave the UI in a half-switched state
+
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      panel.classList.add('active');
+      activeTab = tabName;
+      $('#system-chips').classList.toggle('visible', tabName === 'library' || tabName === 'year');
+
+      try{ renderSystemChips(); }
+      catch(e){ console.error('renderSystemChips failed:', e); }
+    });
+  });
+
+  // Auto-connect if we have saved credentials
+  (async () => {
+    const saved = await loadCreds();
+    if(saved && saved.username && saved.apiKey){
+      creds = saved;
+      $('#in-user').value = saved.username;
+      showDashboard();
+      loadAll();
+    }
+  })();
+})();
+</script>
+</body>
+</html>
