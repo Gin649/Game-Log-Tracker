@@ -1,8 +1,12 @@
-const CACHE_NAME = 'gl-tracker-v1';
+const CACHE_NAME = 'gl-tracker-v2';
 const ASSETS_TO_CACHE = [
 './',
 './index.html',
-'./manifest.json'
+'./manifest.json',
+'./icon-192.png',
+'./icon-512.png',
+'./icon-512-maskable.png',
+'./apple-touch-icon.png'
 ]; 
 
 // Install Event: Cache interface elements
@@ -43,3 +47,4 @@ return cachedResponse || fetch(event.request);
 })
 );
 });
+
