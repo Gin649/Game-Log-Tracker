@@ -420,24 +420,7 @@
     </div>
   </div>
 
-  <div id="connect" class="connect">
-    <h1>Connect your RetroAchievements account</h1>
-    <p>Enter your username and Web API key to pull your library, progress, and recent unlocks.</p>
-    <div class="field">
-      <label>Username</label>
-      <input id="in-user" type="text" placeholder="e.g. xelnia" autocomplete="off">
-    </div>
-    <div class="field">
-      <label>Web API Key</label>
-      <input id="in-key" type="password" placeholder="paste your key" autocomplete="off">
-      <div class="hint">Find it on your <a href="https://retroachievements.org/controlpanel.php" target="_blank" rel="noopener">control panel</a>, under Keys. Stored only for this app, never shared.</div>
-    </div>
-    <button class="btn-primary" id="btn-connect">Connect</button>
-    <div id="connect-error"></div>
-  </div>
-
-  <div id="dashboard">
-        <!-- ☁️ CLOUD SYNC USER INTERFACE PANEL -->
+   <!-- ☁️ CLOUD SYNC USER INTERFACE PANEL -->
     <section id="firebase-sync-section" style="background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 18px; margin: 0 auto 24px; max-width: 960px;">
         <h3 style="font-family: 'Space Mono', monospace; font-size: 14px; margin: 0 0 10px; color: var(--gold);">☁️ Cloud Sync (Cross-Device)</h3>
         
@@ -458,6 +441,23 @@
             </button>
         </div>
     </section>
+  <div id="connect" class="connect">
+    <h1>Connect your RetroAchievements account</h1>
+    <p>Enter your username and Web API key to pull your library, progress, and recent unlocks.</p>
+    <div class="field">
+      <label>Username</label>
+      <input id="in-user" type="text" placeholder="e.g. xelnia" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Web API Key</label>
+      <input id="in-key" type="password" placeholder="paste your key" autocomplete="off">
+      <div class="hint">Find it on your <a href="https://retroachievements.org/controlpanel.php" target="_blank" rel="noopener">control panel</a>, under Keys. Stored only for this app, never shared.</div>
+    </div>
+    <button class="btn-primary" id="btn-connect">Connect</button>
+    <div id="connect-error"></div>
+  </div>
+
+  <div id="dashboard">
 
 
     <div class="profile-hero" id="profile-hero"></div>
