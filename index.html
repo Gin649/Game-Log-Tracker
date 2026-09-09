@@ -1791,6 +1791,18 @@
   const analytics = getAnalytics(app);
   const auth = getAuth(app);
   const db = getFirestore(app);
+  const activeAuth = (typeof auth !== 'undefined') ? auth : (window.auth ? window.auth : null);
+  if (activeAuth && typeof activeAuth.getRedirectResult === 'function') {
+    activeAuth.getRedirectResult()
+      .then((result) => {
+        if (result && result.user) {
+          console.log("Redirect authentication handshake completed successfully:", result.user.email);
+        }
+      })
+      .catch((error) => {
+        console.error("Redirect connection mismatch error tracker context:", error.message);
+      });
+  }
   const provider = new GoogleAuthProvider();
   let currentUser = null;
 
@@ -1802,7 +1814,7 @@
   // wrapper functions instead of raw auth/provider to avoid that mismatch.
   window.auth = auth;
   window.provider = provider;
-  window.doGoogleSignIn = () => signInWithPopup(auth, provider);
+  window.doGoogleSignIn = () => signInWithRedirect(auth, provider);
   window.doGoogleSignOut = () => signOut(auth);
 
   // Enable local caching so your phone handles spotty cell coverage offline gracefully
