@@ -1,23 +1,29 @@
 {
-"short_name": "GLTracker",
-"name": "Game Log — Tracker",
-"description": "Track your RetroAchievements and other achievements, progress, and recent unlocks offline or on the go.",
-"start_url": "/Game-Log-Tracker/",
-"scope": "/Game-Log-Tracker/",
-"display": "standalone",
-"orientation": "portrait",
-"background_color": "#1a1a1a",
-"theme_color": "#4A90E2",
-"icons": [
-{
-"src": "https://dummyimage.com/192x192/4A90E2/fff.png&text=RA",
-"type": "image/png",
-"sizes": "192x192"
-},
-{
-"src": "https://dummyimage.com/512x512/4A90E2/fff.png&text=RA",
-"type": "image/png",
-"sizes": "512x512"
-}
-]
+  "short_name": "GLTracker",
+  "name": "Game Log — Tracker",
+  "description": "Track your RetroAchievements library, progress, and recent unlocks offline or on the go.",
+  "start_url": "/Game-Log-Tracker/",
+  "scope": "/Game-Log-Tracker/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#15121f",
+  "theme_color": "#15121f",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    },
+    {
+      "src": "icon-512-maskable.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ]
 }
