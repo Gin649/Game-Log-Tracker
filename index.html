@@ -1707,22 +1707,24 @@
       showDashboard();
       loadAll();
     }
+    if (document.getElementById('btn-login')) {
+    document.getElementById('btn-login').addEventListener('click', () => {
+      if (window.auth && window.provider) {
+        window.auth.signInWithPopup(window.provider).catch(err => console.error("Login popup blocked:", err));
+      }
+    });
+  }
+
+  if (document.getElementById('btn-logout')) {
+    document.getElementById('btn-logout').addEventListener('click', () => {
+      if (window.auth) {
+        window.auth.signOut().catch(err => console.error("Sign-out failure:", err));
+      }
+    });
+  }
   })();
 
-    // Connect the new Google Auth panel actions to the Firebase SDK instances
-  document.getElementById('btn-login').addEventListener('click', () => {
-    if (typeof auth !== 'undefined' && typeof provider !== 'undefined') {
-      signInWithPopup(auth, provider).catch(err => console.error("Login popup blocked:", err));
-    }
-  });
-
-  document.getElementById('btn-logout').addEventListener('click', () => {
-    if (typeof auth !== 'undefined') {
-      signOut(auth).catch(err => console.error("Sign-out failure:", err));
-    }
-  });
-
-})();
+    
 </script>
 
 <script type="module">
