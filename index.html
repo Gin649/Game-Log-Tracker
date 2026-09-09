@@ -3,7 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Game Log — RetroAchievements Tracker</title>
+<title>Game Log — Tracker</title>
+
+<!-- Connects your PWA Settings and Service Worker registration -->
+<link rel="manifest" href="manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => console.log('RA Tracker Service Worker registered!'))
+        .catch(err => console.log('Registration failed: ', err));
+    });
+  }
+</script>
+  
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&family=Metal+Mania&display=swap');
 
