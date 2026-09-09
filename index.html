@@ -437,6 +437,28 @@
   </div>
 
   <div id="dashboard">
+        <!-- ☁️ CLOUD SYNC USER INTERFACE PANEL -->
+    <section id="firebase-sync-section" style="background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 18px; margin: 0 auto 24px; max-width: 960px;">
+        <h3 style="font-family: 'Space Mono', monospace; font-size: 14px; margin: 0 0 10px; color: var(--gold);">☁️ Cloud Sync (Cross-Device)</h3>
+        
+        <!-- Displayed when logged out -->
+        <div id="auth-logged-out">
+            <p style="font-size: 13px; color: var(--muted); margin: 0 0 12px; line-height: 1.4;">Log in to sync your manually added games between your phone and desktop browsers.</p>
+            <button id="btn-login" style="background: #4285F4; color: white; padding: 8px 16px; font-size: 12px; font-weight: bold; border-radius: 3px; cursor: pointer; font-family: 'Space Mono', monospace;">
+                Sign In with Google
+            </button>
+        </div>
+        
+        <!-- Displayed when logged in -->
+        <div id="auth-logged-in" style="display: none;">
+            <p style="font-size: 13px; margin: 0 0 12px;">Authenticated: <strong id="user-email" style="color: var(--teal);"></strong></p>
+            <p style="color: var(--teal); font-size: 12px; margin: 0 0 12px; font-family: 'Space Mono', monospace;">✓ Active real-time cloud sync enabled.</p>
+            <button id="btn-logout" style="background: var(--panel-2); border: 1px solid var(--border); color: var(--danger); padding: 6px 12px; font-size: 11px; cursor: pointer; font-family: 'Space Mono', monospace;">
+                Sign Out Account
+            </button>
+        </div>
+    </section>
+
 
     <div class="profile-hero" id="profile-hero"></div>
 
@@ -793,7 +815,10 @@
     return [];
   }
   async function saveManualGames(list){
-    try{ await window.storage.set(manualGamesKey(), JSON.stringify(list), false); }
+    try{ await window.storage.set(manualGamesKey(), JSON.stringify(list), false); 
+      if (window.syncManualGamesToCloud) { await window.syncManualGamesToCloud(list); }
+
+    }
     catch(e){ /* non-fatal */ }
   }
 
@@ -1676,7 +1701,105 @@
       loadAll();
     }
   })();
+
+    // Connect the new Google Auth panel actions to the Firebase SDK instances
+  document.getElementById('btn-login').addEventListener('click', () => {
+    if (typeof auth !== 'undefined' && typeof provider !== 'undefined') {
+      signInWithPopup(auth, provider).catch(err => console.error("Login popup blocked:", err));
+    }
+  });
+
+  document.getElementById('btn-logout').addEventListener('click', () => {
+    if (typeof auth !== 'undefined') {
+      signOut(auth).catch(err => console.error("Sign-out failure:", err));
+    }
+  });
+
 })();
 </script>
+
+<script type="module">
+  // 1. Import Firebase Core and Analytics (Your existing imports)
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-analytics.js";
+
+  // 2. Add the Sync SDKs (Auth and Firestore Database)
+  import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://gstatic.com";
+  import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://gstatic.com";
+
+  // 3. Your verified Web App Firebase Configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyBcLY-j69hBA-JxdX_GNWcye-B4qiFcmnk",
+    authDomain: "gin649-gamelogtracker.firebaseapp.com",
+    projectId: "gin649-gamelogtracker",
+    storageBucket: "gin649-gamelogtracker.firebasestorage.app",
+    messagingSenderId: "354999963330",
+    appId: "1:354999963330:web:b7f8113c7bcafdd671f55b",
+    measurementId: "G-136RVSLC53"
+  };
+
+  // 4. Initialize Core Engine services
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const provider = new GoogleAuthProvider();
+  let currentUser = null;
+
+  // Enable local caching so your phone handles spotty cell coverage offline gracefully
+  enableIndexedDbPersistence(db).catch((err) => {
+      console.warn("Offline caching enabled fallback code: ", err.code);
+  });
+
+  // Watch for Google Sign-In account changes across browser nodes
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      currentUser = user;
+      const emailSpan = document.getElementById('user-email');
+      if (emailSpan) emailSpan.textContent = user.email;
+      
+      const loggedOutDiv = document.getElementById('auth-logged-out');
+      const loggedInDiv = document.getElementById('auth-logged-in');
+      if (loggedOutDiv) loggedOutDiv.style.display = 'none';
+      if (loggedInDiv) loggedInDiv.style.display = 'block';
+      
+      // Download matching records automatically from the cloud database bucket
+      try {
+        const docRef = doc(db, "users", currentUser.uid);
+        const snapshot = await getDoc(docRef);
+        if (snapshot.exists() && snapshot.data().manualGames) {
+           const cloudGames = snapshot.data().manualGames;
+           
+           // Overwrite the local cache key with up-to-date cloud list arrays
+           if (window.storage && typeof creds !== "undefined" && creds?.username) {
+             const storageKey = `ra-manual-games:${creds.username.trim().toLowerCase()}`;
+             await window.storage.set(storageKey, JSON.stringify(cloudGames), false);
+             
+             // Redraw dashboard views automatically downstream
+             if (typeof loadAll === "function") { loadAll(); }
+           }
+        }
+      } catch (e) { console.error("Cloud synchronization download failed:", e); }
+    } else {
+      currentUser = null;
+      const loggedOutDiv = document.getElementById('auth-logged-out');
+      const loggedInDiv = document.getElementById('auth-logged-in');
+      if (loggedOutDiv) loggedOutDiv.style.display = 'block';
+      if (loggedInDiv) loggedInDiv.style.display = 'none';
+    }
+  });
+
+  // Global Upstream Broadcaster Hook
+  window.syncManualGamesToCloud = async function(list) {
+    if (!currentUser) return;
+    try {
+      const docRef = doc(db, "users", currentUser.uid);
+      await setDoc(docRef, { manualGames: list }, { merge: true });
+      console.log("Cloud dynamic tracker save operation succeeded.");
+    } catch (error) { console.error("Cloud document save failed:", error); }
+  };
+</script>
+
+
 </body>
 </html>
