@@ -7,6 +7,12 @@
 
 <!-- Connects your PWA Settings and Service Worker registration -->
 <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#15121f">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Game Log">
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -420,35 +426,32 @@
     </div>
   </div>
 
-  
-  <div id="connect" class="connect">
-    
-    <!-- ☁️ CLOUD SYNC USER INTERFACE PANEL -->
-    <section id="firebase-sync-section" style="background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 24px; text-align: center;">
-        <h3 style="font-family: 'Space Mono', monospace; font-size: 13px; margin: 0 0 10px; color: var(--gold);">☁️ Cloud Sync (Cross-Device)</h3>
-        
-        <!-- Displayed when logged out -->
-        <div id="auth-logged-out">
-            <p style="font-size: 11.5px; color: var(--muted); margin: 0 0 12px; line-height: 1.4;">Sign in to sync your manual game library between your phone and desktop.</p>
-            <button id="btn-login" style="background: #4285F4; color: white; padding: 8px 14px; font-size: 11px; font-weight: bold; border-radius: 3px; cursor: pointer; border: none; width: 100%; font-family: 'Space Mono', monospace;">
-                Sign In with Google
-            </button>
-        </div>
-        
-        <!-- Displayed when logged in -->
-        <div id="auth-logged-in" style="display: none;">
-            <p style="font-size: 11.5px; margin: 0 0 8px;">Sync Account: <strong id="user-email" style="color: var(--teal);"></strong></p>
-            <p style="color: var(--teal); font-size: 11px; margin: 0 0 12px; font-family: 'Space Mono', monospace;">✓ Real-time sync active.</p>
-            <button id="btn-logout" style="background: var(--panel); border: 1px solid var(--border); color: var(--danger); padding: 6px 12px; font-size: 10.5px; cursor: pointer; border-radius: 3px; width: 100%; font-family: 'Space Mono', monospace;">
-                Sign Out
-            </button>
-        </div>
-    </section>
-    
-    <!-- Your original app header titles continue right below it -->
-    <h1>Game Log — Tracker</h1>
-    <p>Connect your RetroAchievements account</p>
+  <!-- Cloud sync (Google account) is independent of RA login, so this stays
+       visible on BOTH the connect screen and the dashboard — it used to live
+       inside #connect, which is hidden the moment you log into RA, making
+       the sign-in button permanently unreachable after that. -->
+  <section id="firebase-sync-section" style="background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 24px; text-align: center; max-width: 440px; margin-left: auto; margin-right: auto;">
+      <h3 style="font-family: 'Space Mono', monospace; font-size: 13px; margin: 0 0 10px; color: var(--gold);">☁️ Cloud Sync (Cross-Device)</h3>
 
+      <!-- Displayed when logged out -->
+      <div id="auth-logged-out">
+          <p style="font-size: 11.5px; color: var(--muted); margin: 0 0 12px; line-height: 1.4;">Sign in to sync your manual game library between your phone and desktop.</p>
+          <button id="btn-login" style="background: #4285F4; color: white; padding: 8px 14px; font-size: 11px; font-weight: bold; border-radius: 3px; cursor: pointer; border: none; width: 100%; font-family: 'Space Mono', monospace;">
+              Sign In with Google
+          </button>
+      </div>
+
+      <!-- Displayed when logged in -->
+      <div id="auth-logged-in" style="display: none;">
+          <p style="font-size: 11.5px; margin: 0 0 8px;">Sync Account: <strong id="user-email" style="color: var(--teal);"></strong></p>
+          <p style="color: var(--teal); font-size: 11px; margin: 0 0 12px; font-family: 'Space Mono', monospace;">✓ Real-time sync active.</p>
+          <button id="btn-logout" style="background: var(--panel); border: 1px solid var(--border); color: var(--danger); padding: 6px 12px; font-size: 10.5px; cursor: pointer; border-radius: 3px; width: 100%; font-family: 'Space Mono', monospace;">
+              Sign Out
+          </button>
+      </div>
+  </section>
+
+  <div id="connect" class="connect">
     <h1>Connect your RetroAchievements account</h1>
     <p>Enter your username and Web API key to pull your library, progress, and recent unlocks.</p>
     <div class="field">
@@ -547,6 +550,42 @@
 
 <script>
 (function(){
+  // --- window.storage shim (localStorage-backed) ---
+  // window.storage is a Claude-artifact-only API — it does not exist in a
+  // normal browser. Every persistence call in this app (RA credentials,
+  // manually-added games, ratings cache, playtime cache) depends on it, so
+  // without this shim NONE of that works once hosted standalone (every call
+  // throws immediately, which is also why cloud sync below never fired —
+  // saveManualGames() writes locally first and only calls the cloud sync
+  // function afterward, so a throw on the first line skipped it entirely).
+  if(!window.storage){
+    const nsKey = (key, shared) => (shared ? 'shared:' : 'priv:') + key;
+    window.storage = {
+      get: async (key, shared) => {
+        const v = localStorage.getItem(nsKey(key, shared));
+        if(v === null) throw new Error('No value found for key: ' + key);
+        return { key, value: v, shared: !!shared };
+      },
+      set: async (key, value, shared) => {
+        localStorage.setItem(nsKey(key, shared), value);
+        return { key, value, shared: !!shared };
+      },
+      delete: async (key, shared) => {
+        localStorage.removeItem(nsKey(key, shared));
+        return { key, deleted: true, shared: !!shared };
+      },
+      list: async (prefix, shared) => {
+        const p = nsKey(prefix || '', shared);
+        const keys = [];
+        for(let i = 0; i < localStorage.length; i++){
+          const k = localStorage.key(i);
+          if(k.startsWith(p)) keys.push(k.slice(((shared ? 'shared:' : 'priv:')).length));
+        }
+        return { keys, prefix, shared: !!shared };
+      },
+    };
+  }
+
   const MEDIA = 'https://media.retroachievements.org';
   let creds = null; // { username, apiKey }
   let libraryData = [];
@@ -1709,22 +1748,22 @@
     }
     if (document.getElementById('btn-login')) {
     document.getElementById('btn-login').addEventListener('click', () => {
-      if (window.auth && window.provider) {
-        window.auth.signInWithPopup(window.provider).catch(err => console.error("Login popup blocked:", err));
+      if (window.doGoogleSignIn) {
+        window.doGoogleSignIn().catch(err => console.error("Login popup blocked:", err));
       }
     });
   }
 
   if (document.getElementById('btn-logout')) {
     document.getElementById('btn-logout').addEventListener('click', () => {
-      if (window.auth) {
-        window.auth.signOut().catch(err => console.error("Sign-out failure:", err));
+      if (window.doGoogleSignOut) {
+        window.doGoogleSignOut().catch(err => console.error("Sign-out failure:", err));
       }
     });
   }
   })();
-
-    
+})(); // closes the outer main app IIFE opened at the top of this script — this
+      // was missing entirely, which made the whole script fail to parse
 </script>
 
 <script type="module">
@@ -1733,8 +1772,8 @@
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-analytics.js";
 
   // 2. Add the Sync SDKs (Auth and Firestore Database)
-  import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://gstatic.com";
-  import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://gstatic.com";
+  import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
   // 3. Your verified Web App Firebase Configuration
   const firebaseConfig = {
@@ -1754,6 +1793,17 @@
   const db = getFirestore(app);
   const provider = new GoogleAuthProvider();
   let currentUser = null;
+
+  // Module scripts have their own scope — these were never reachable from
+  // the classic <script> below without being explicitly attached to window.
+  // Note: the modular SDK's signInWithPopup/signOut are standalone functions
+  // that take `auth` as an argument — they are NOT methods on the auth
+  // object (that's the older compat/v8 API shape), so we expose ready-to-call
+  // wrapper functions instead of raw auth/provider to avoid that mismatch.
+  window.auth = auth;
+  window.provider = provider;
+  window.doGoogleSignIn = () => signInWithPopup(auth, provider);
+  window.doGoogleSignOut = () => signOut(auth);
 
   // Enable local caching so your phone handles spotty cell coverage offline gracefully
   enableIndexedDbPersistence(db).catch((err) => {
@@ -1807,30 +1857,6 @@
       console.log("Cloud dynamic tracker save operation succeeded.");
     } catch (error) { console.error("Cloud document save failed:", error); }
   };
-</script>
-
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
-    apiKey: "AIzaSyBcLY-j69hBA-JxdX_GNWcye-B4qiFcmnk",
-    authDomain: "gin649-gamelogtracker.firebaseapp.com",
-    projectId: "gin649-gamelogtracker",
-    storageBucket: "gin649-gamelogtracker.firebasestorage.app",
-    messagingSenderId: "354999963330",
-    appId: "1:354999963330:web:b7f8113c7bcafdd671f55b",
-    measurementId: "G-136RVSLC53"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
 </script>
 
 </body>
