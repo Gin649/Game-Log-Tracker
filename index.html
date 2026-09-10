@@ -436,10 +436,25 @@
       <!-- Displayed when logged out -->
       <div id="auth-logged-out">
           <p style="font-size: 11.5px; color: var(--muted); margin: 0 0 12px; line-height: 1.4;">Sign in to sync your manual game library between your phone and desktop.</p>
-          <button id="btn-login" style="background: #4285F4; color: white; padding: 8px 14px; font-size: 11px; font-weight: bold; border-radius: 3px; cursor: pointer; border: none; width: 100%; font-family: 'Space Mono', monospace;">
-              Sign In with Google
-          </button>
+          <div style="text-align: left; margin-bottom: 10px;">
+            <label style="display:block; font-size: 10.5px; color: var(--muted); font-family: 'Space Mono', monospace; margin-bottom: 4px;">Email</label>
+            <input id="auth-email" type="email" autocomplete="email" style="width: 100%; padding: 8px 10px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 3px; color: var(--text); font-size: 13px; box-sizing: border-box;">
+          </div>
+          <div style="text-align: left; margin-bottom: 12px;">
+            <label style="display:block; font-size: 10.5px; color: var(--muted); font-family: 'Space Mono', monospace; margin-bottom: 4px;">Password</label>
+            <input id="auth-password" type="password" autocomplete="current-password" style="width: 100%; padding: 8px 10px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 3px; color: var(--text); font-size: 13px; box-sizing: border-box;">
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+            <button id="btn-login" style="flex:1; background: var(--gold); color: #1a1424; padding: 8px 10px; font-size: 11px; font-weight: bold; border-radius: 3px; cursor: pointer; border: none; font-family: 'Space Mono', monospace;">
+                Log In
+            </button>
+            <button id="btn-signup" style="flex:1; background: transparent; border: 1px solid var(--gold); color: var(--gold); padding: 8px 10px; font-size: 11px; font-weight: bold; border-radius: 3px; cursor: pointer; font-family: 'Space Mono', monospace;">
+                Sign Up
+            </button>
+          </div>
+          <p style="margin: 0;"><a id="btn-forgot-password" style="font-size: 11px; color: var(--teal); cursor: pointer;">Forgot password?</a></p>
           <p id="auth-error" style="color: var(--danger); font-size: 11px; margin: 10px 0 0; line-height: 1.4; display: none;"></p>
+          <p id="auth-status" style="color: var(--teal); font-size: 11px; margin: 10px 0 0; line-height: 1.4; display: none;"></p>
       </div>
 
       <!-- Displayed when logged in -->
@@ -1750,43 +1765,79 @@
       showDashboard();
       loadAll();
     }
+    function showAuthError(msg){
+      const errEl = document.getElementById('auth-error');
+      const statusEl = document.getElementById('auth-status');
+      if(statusEl) statusEl.style.display = 'none';
+      if(errEl){ errEl.textContent = msg; errEl.style.display = 'block'; }
+    }
+    function showAuthStatus(msg){
+      const errEl = document.getElementById('auth-error');
+      const statusEl = document.getElementById('auth-status');
+      if(errEl) errEl.style.display = 'none';
+      if(statusEl){ statusEl.textContent = msg; statusEl.style.display = 'block'; }
+    }
+    function friendlyAuthError(err){
+      const code = err && err.code;
+      if(code === 'auth/email-already-in-use') return 'An account already exists with that email — try Log In instead.';
+      if(code === 'auth/invalid-email') return 'That email address doesn\'t look valid.';
+      if(code === 'auth/weak-password') return 'Password must be at least 6 characters.';
+      if(code === 'auth/user-not-found' || code === 'auth/invalid-credential') return 'No account found with that email and password.';
+      if(code === 'auth/wrong-password') return 'Incorrect password.';
+      if(code === 'auth/too-many-requests') return 'Too many attempts — wait a moment and try again.';
+      return (err && err.message) ? err.message : String(err);
+    }
+
     if (document.getElementById('btn-login')) {
     document.getElementById('btn-login').addEventListener('click', () => {
       const btn = document.getElementById('btn-login');
-      const errEl = document.getElementById('auth-error');
-      if(errEl){ errEl.style.display = 'none'; errEl.textContent = ''; }
-      if (window.doGoogleSignIn) {
-        btn.disabled = true; btn.textContent = 'Redirecting to Google…';
-        // On success this navigates away immediately — nothing after this
-        // point runs. Errors here are pre-redirect failures only (e.g. an
-        // unauthorized domain); anything that happens after Google redirects
-        // back is caught by getRedirectResult() in the module script instead.
-        window.doGoogleSignIn()
-          .catch(err => {
-            console.error("Sign-in redirect failed to start:", err);
-            if(errEl){
-              let msg = err && err.message ? err.message : String(err);
-              if(err && err.code === 'auth/unauthorized-domain'){
-                msg = 'This domain isn\'t authorized for sign-in yet. In Firebase console → Authentication → Settings → Authorized domains, add this site\'s exact domain (e.g. yourname.github.io).';
-              }
-              errEl.textContent = msg;
-              errEl.style.display = 'block';
-            }
-            btn.disabled = false; btn.textContent = 'Sign In with Google';
-          });
+      const email = (document.getElementById('auth-email').value || '').trim();
+      const password = document.getElementById('auth-password').value || '';
+      if(!email || !password){ showAuthError('Enter both email and password.'); return; }
+      if (window.doEmailSignIn) {
+        btn.disabled = true; btn.textContent = 'Logging in…';
+        window.doEmailSignIn(email, password)
+          .catch(err => showAuthError(friendlyAuthError(err)))
+          .finally(() => { btn.disabled = false; btn.textContent = 'Log In'; });
       } else {
-        if(errEl){
-          errEl.textContent = 'Sign-in isn\'t ready yet — the Firebase script may have failed to load (check the browser console for errors).';
-          errEl.style.display = 'block';
-        }
+        showAuthError('Sign-in isn\'t ready yet — the Firebase script may have failed to load (check the browser console).');
+      }
+    });
+  }
+
+  if (document.getElementById('btn-signup')) {
+    document.getElementById('btn-signup').addEventListener('click', () => {
+      const btn = document.getElementById('btn-signup');
+      const email = (document.getElementById('auth-email').value || '').trim();
+      const password = document.getElementById('auth-password').value || '';
+      if(!email || !password){ showAuthError('Enter both email and password.'); return; }
+      if (window.doEmailSignUp) {
+        btn.disabled = true; btn.textContent = 'Creating account…';
+        window.doEmailSignUp(email, password)
+          .catch(err => showAuthError(friendlyAuthError(err)))
+          .finally(() => { btn.disabled = false; btn.textContent = 'Sign Up'; });
+      } else {
+        showAuthError('Sign-in isn\'t ready yet — the Firebase script may have failed to load (check the browser console).');
+      }
+    });
+  }
+
+  if (document.getElementById('btn-forgot-password')) {
+    document.getElementById('btn-forgot-password').addEventListener('click', () => {
+      const email = (document.getElementById('auth-email').value || '').trim();
+      if(!email){ showAuthError('Enter your email above first, then tap "Forgot password?"'); return; }
+      if (window.doPasswordReset) {
+        window.doPasswordReset(email)
+          .then(() => showAuthStatus('Password reset email sent — check your inbox.'))
+          .catch(err => showAuthError(friendlyAuthError(err)));
       }
     });
   }
 
   if (document.getElementById('btn-logout')) {
     document.getElementById('btn-logout').addEventListener('click', () => {
-      if (window.doGoogleSignOut) {
-        window.doGoogleSignOut().catch(err => console.error("Sign-out failure:", err));
+      if (window.doSignOut) {
+        window.doSignOut().catch(err => console.error("Sign-out failure:", err));
       }
     });
   }
@@ -1801,7 +1852,7 @@
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-analytics.js";
 
   // 2. Add the Sync SDKs (Auth and Firestore Database)
-  import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
   import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
   // 3. Your verified Web App Firebase Configuration
@@ -1820,58 +1871,26 @@
   const analytics = getAnalytics(app);
   const auth = getAuth(app);
   const db = getFirestore(app);
-  const provider = new GoogleAuthProvider();
   let currentUser = null;
 
   // Module scripts have their own scope — these were never reachable from
   // the classic <script> below without being explicitly attached to window.
+  // Email/password avoids the entire class of problem Google sign-in hit:
+  // no popup, no cross-domain redirect (your site -> Google -> firebaseapp.com
+  // -> your site), so no dependency on third-party storage/cookies surviving
+  // that hop — which is what kept breaking across different browsers.
   window.auth = auth;
-  window.provider = provider;
-  // signInWithRedirect instead of signInWithPopup: popups are unreliable on
-  // mobile browsers (often the popup opens but the original page never
-  // receives the sign-in result), which is the near-certain cause of sign-in
-  // silently doing nothing on phones while working fine on desktop. Redirect
-  // navigates away to Google and back instead, which works consistently
-  // everywhere — the tradeoff is a full page reload rather than a popup.
-  window.doGoogleSignIn = () => signInWithRedirect(auth, provider);
-  window.doGoogleSignOut = () => signOut(auth);
-
-  // Redirect-based sign-in returns here on a fresh page load rather than
-  // resolving a promise in the original click handler, so any error from
-  // that flow (e.g. unauthorized domain) has to be caught separately here.
-  getRedirectResult(auth)
-    .then(result => {
-      if (result && result.user) {
-        console.log("getRedirectResult: signed in as", result.user.email);
-      } else {
-        // This is the "goes to Google, picks account, comes back logged
-        // out, no error shown" case — the redirect completed but Firebase
-        // has no pending result to give back. Almost always a browser
-        // storage/cookie restriction breaking the multi-hop redirect
-        // (your site -> Google -> firebaseapp.com -> your site), not a
-        // code bug. Logged clearly here since this used to fail silently.
-        console.warn("getRedirectResult: resolved with no user — the redirect likely didn't complete at the storage/session level (see explanation in chat).");
-      }
-    })
-    .catch(err => {
-      console.error("Redirect sign-in failed:", err);
-      const errEl = document.getElementById('auth-error');
-      if (errEl) {
-        let msg = err && err.message ? err.message : String(err);
-        if (err && err.code === 'auth/unauthorized-domain') {
-          msg = 'This domain isn\'t authorized for sign-in yet. In Firebase console → Authentication → Settings → Authorized domains, add this site\'s exact domain.';
-        }
-        errEl.textContent = msg;
-        errEl.style.display = 'block';
-      }
-    });
+  window.doEmailSignUp = (email, password) => createUserWithEmailAndPassword(auth, email, password);
+  window.doEmailSignIn = (email, password) => signInWithEmailAndPassword(auth, email, password);
+  window.doPasswordReset = (email) => sendPasswordResetEmail(auth, email);
+  window.doSignOut = () => signOut(auth);
 
   // Enable local caching so your phone handles spotty cell coverage offline gracefully
   enableIndexedDbPersistence(db).catch((err) => {
       console.warn("Offline caching enabled fallback code: ", err.code);
   });
 
-  // Watch for Google Sign-In account changes across browser nodes
+  // Watch for sign-in state changes across browser tabs/devices
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       currentUser = user;
