@@ -14,10 +14,28 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Game Log">
 <script>
-  if ('serviceWorker' in navigator) {
+ if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js')
-        .then(reg => console.log('RA Tracker Service Worker registered!'))
+        .then(reg => {
+          console.log('RA Tracker Service Worker registered!');
+          
+          // ☁️ AUTOMATIC UPDATE CHECKER
+          // Forces the browser to look at GitHub for updates immediately on startup
+          reg.update();
+
+          // Listen for a new service worker version coming from GitHub
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            newWorker.addEventListener('statechange', () => {
+              // Once the new code is downloaded, force-swap it instantly
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('New update detected. Refreshing for cloud synchronization...');
+                window.location.reload();
+              }
+            });
+          });
+        })
         .catch(err => console.log('Registration failed: ', err));
     });
   }
