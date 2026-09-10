@@ -14,7 +14,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Game Log">
 <script>
- if ('serviceWorker' in navigator) {
+  if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js')
         .then(reg => console.log('RA Tracker Service Worker registered!'))
@@ -22,7 +22,7 @@
     });
   }
 </script>
-  
+
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&family=Metal+Mania&display=swap');
 
@@ -1800,12 +1800,12 @@
 
 <script type="module">
   // 1. Import Firebase Core and Analytics (Your existing imports)
-  import { initializeApp } from "https://gstatic.com";
-  import { getAnalytics } from "https://gstatic.com";
- 
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-analytics.js";
+
   // 2. Add the Sync SDKs (Auth and Firestore Database)
-  import { getAuth, signInWithRedirect, signOut, onAuthStateChanged, getRedirectResult, GoogleAuthProvider } from "https://gstatic.com";
-  import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, setDoc, getDoc } from "https://gstatic.com";
+  import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
   // 3. Your verified Web App Firebase Configuration
   const firebaseConfig = {
@@ -1818,34 +1818,30 @@
     measurementId: "G-136RVSLC53"
   };
 
- // 4. Initialize Core Engine services
+  // 4. Initialize Core Engine services
   const app = initializeApp(firebaseConfig);
   const analytics = getAnalytics(app);
   const auth = getAuth(app);
+  const db = getFirestore(app);
   const provider = new GoogleAuthProvider();
   let currentUser = null;
-
-  // Modern Firestore initialization that includes multi-tab offline caching built-in
-  const db = initializeFirestore(app, {
-    cache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager()
-    })
-  });
-  // Expose the database globally so other scripts can interact with it
-  window.db = db;
 
   // Module scripts have their own scope — these were never reachable from
   // the classic <script> below without being explicitly attached to window.
   window.auth = auth;
   window.provider = provider;
-  
   // signInWithRedirect instead of signInWithPopup: popups are unreliable on
-  // mobile browsers. Redirect navigates away to Google and back instead, which works consistently everywhere.
+  // mobile browsers (often the popup opens but the original page never
+  // receives the sign-in result), which is the near-certain cause of sign-in
+  // silently doing nothing on phones while working fine on desktop. Redirect
+  // navigates away to Google and back instead, which works consistently
+  // everywhere — the tradeoff is a full page reload rather than a popup.
   window.doGoogleSignIn = () => signInWithRedirect(auth, provider);
   window.doGoogleSignOut = () => signOut(auth);
 
   // Redirect-based sign-in returns here on a fresh page load rather than
-  // resolving a promise in the original click handler
+  // resolving a promise in the original click handler, so any error from
+  // that flow (e.g. unauthorized domain) has to be caught separately here.
   getRedirectResult(auth).catch(err => {
     console.error("Redirect sign-in failed:", err);
     const errEl = document.getElementById('auth-error');
@@ -1859,18 +1855,23 @@
     }
   });
 
+  // Enable local caching so your phone handles spotty cell coverage offline gracefully
+  enableIndexedDbPersistence(db).catch((err) => {
+      console.warn("Offline caching enabled fallback code: ", err.code);
+  });
+
   // Watch for Google Sign-In account changes across browser nodes
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       currentUser = user;
       const emailSpan = document.getElementById('user-email');
       if (emailSpan) emailSpan.textContent = user.email;
-      
+
       const loggedOutDiv = document.getElementById('auth-logged-out');
       const loggedInDiv = document.getElementById('auth-logged-in');
       if (loggedOutDiv) loggedOutDiv.style.display = 'none';
       if (loggedInDiv) loggedInDiv.style.display = 'block';
-      
+
       // Reconcile this device's local manual-games list with the cloud copy.
       // Previously this only ever downloaded from the cloud, which meant any
       // game added while NOT signed in (or before Google sign-in was working)
