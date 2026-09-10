@@ -1720,13 +1720,14 @@
     try {
     creds = null;
     await clearCreds();
-    await clearIndexedDBPersistence(db); 
+    await clearIndexedDbPersistence(db); 
         console.log("Cache cleared successfully!");
     } catch (error) {
         console.error("Error clearing persistence:", error);
     } finally {
     showConnect();
-  };
+  }
+  });  
   $('#lib-search').addEventListener('input', renderLibrary);
 
   function closeDropdownMenu(){
