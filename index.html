@@ -300,7 +300,7 @@
     max-width:480px;margin:20px auto 40px;background:var(--panel);
     border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;
   }
-  .modal-art{width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--bg-alt);display:block;}
+  .modal-art{width:100%;aspect-ratio:4/3;object-fit:contain;background:var(--bg-alt);display:block;}
   .modal-body{padding:20px;}
   .modal-close{
     position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.5);color:var(--text);
@@ -439,6 +439,7 @@
           <button id="btn-login" style="background: #4285F4; color: white; padding: 8px 14px; font-size: 11px; font-weight: bold; border-radius: 3px; cursor: pointer; border: none; width: 100%; font-family: 'Space Mono', monospace;">
               Sign In with Google
           </button>
+          <p id="auth-error" style="color: var(--danger); font-size: 11px; margin: 10px 0 0; line-height: 1.4; display: none;"></p>
       </div>
 
       <!-- Displayed when logged in -->
@@ -1748,8 +1749,33 @@
     }
     if (document.getElementById('btn-login')) {
     document.getElementById('btn-login').addEventListener('click', () => {
+      const btn = document.getElementById('btn-login');
+      const errEl = document.getElementById('auth-error');
+      if(errEl){ errEl.style.display = 'none'; errEl.textContent = ''; }
       if (window.doGoogleSignIn) {
-        window.doGoogleSignIn().catch(err => console.error("Login popup blocked:", err));
+        btn.disabled = true; btn.textContent = 'Opening sign-in…';
+        window.doGoogleSignIn()
+          .catch(err => {
+            console.error("Login popup blocked:", err);
+            if(errEl){
+              let msg = err && err.message ? err.message : String(err);
+              if(err && err.code === 'auth/unauthorized-domain'){
+                msg = 'This domain isn\'t authorized for sign-in yet. In Firebase console → Authentication → Settings → Authorized domains, add this site\'s exact domain (e.g. yourname.github.io).';
+              } else if(err && err.code === 'auth/popup-blocked'){
+                msg = 'Your browser blocked the sign-in popup. Allow popups for this site and try again.';
+              } else if(err && err.code === 'auth/popup-closed-by-user'){
+                msg = 'Sign-in window was closed before finishing.';
+              }
+              errEl.textContent = msg;
+              errEl.style.display = 'block';
+            }
+          })
+          .finally(() => { btn.disabled = false; btn.textContent = 'Sign In with Google'; });
+      } else {
+        if(errEl){
+          errEl.textContent = 'Sign-in isn\'t ready yet — the Firebase script may have failed to load (check the browser console for errors).';
+          errEl.style.display = 'block';
+        }
       }
     });
   }
@@ -1791,18 +1817,6 @@
   const analytics = getAnalytics(app);
   const auth = getAuth(app);
   const db = getFirestore(app);
-  const activeAuth = (typeof auth !== 'undefined') ? auth : (window.auth ? window.auth : null);
-  if (activeAuth && typeof activeAuth.getRedirectResult === 'function') {
-    activeAuth.getRedirectResult()
-      .then((result) => {
-        if (result && result.user) {
-          console.log("Redirect authentication handshake completed successfully:", result.user.email);
-        }
-      })
-      .catch((error) => {
-        console.error("Redirect connection mismatch error tracker context:", error.message);
-      });
-  }
   const provider = new GoogleAuthProvider();
   let currentUser = null;
 
@@ -1814,7 +1828,7 @@
   // wrapper functions instead of raw auth/provider to avoid that mismatch.
   window.auth = auth;
   window.provider = provider;
-  window.doGoogleSignIn = () => signInWithRedirect(auth, provider);
+  window.doGoogleSignIn = () => signInWithPopup(auth, provider);
   window.doGoogleSignOut = () => signOut(auth);
 
   // Enable local caching so your phone handles spotty cell coverage offline gracefully
