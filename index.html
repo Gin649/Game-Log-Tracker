@@ -1839,18 +1839,32 @@
   // Redirect-based sign-in returns here on a fresh page load rather than
   // resolving a promise in the original click handler, so any error from
   // that flow (e.g. unauthorized domain) has to be caught separately here.
-  getRedirectResult(auth).catch(err => {
-    console.error("Redirect sign-in failed:", err);
-    const errEl = document.getElementById('auth-error');
-    if (errEl) {
-      let msg = err && err.message ? err.message : String(err);
-      if (err && err.code === 'auth/unauthorized-domain') {
-        msg = 'This domain isn\'t authorized for sign-in yet. In Firebase console → Authentication → Settings → Authorized domains, add this site\'s exact domain.';
+  getRedirectResult(auth)
+    .then(result => {
+      if (result && result.user) {
+        console.log("getRedirectResult: signed in as", result.user.email);
+      } else {
+        // This is the "goes to Google, picks account, comes back logged
+        // out, no error shown" case — the redirect completed but Firebase
+        // has no pending result to give back. Almost always a browser
+        // storage/cookie restriction breaking the multi-hop redirect
+        // (your site -> Google -> firebaseapp.com -> your site), not a
+        // code bug. Logged clearly here since this used to fail silently.
+        console.warn("getRedirectResult: resolved with no user — the redirect likely didn't complete at the storage/session level (see explanation in chat).");
       }
-      errEl.textContent = msg;
-      errEl.style.display = 'block';
-    }
-  });
+    })
+    .catch(err => {
+      console.error("Redirect sign-in failed:", err);
+      const errEl = document.getElementById('auth-error');
+      if (errEl) {
+        let msg = err && err.message ? err.message : String(err);
+        if (err && err.code === 'auth/unauthorized-domain') {
+          msg = 'This domain isn\'t authorized for sign-in yet. In Firebase console → Authentication → Settings → Authorized domains, add this site\'s exact domain.';
+        }
+        errEl.textContent = msg;
+        errEl.style.display = 'block';
+      }
+    });
 
   // Enable local caching so your phone handles spotty cell coverage offline gracefully
   enableIndexedDbPersistence(db).catch((err) => {
