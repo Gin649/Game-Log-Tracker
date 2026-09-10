@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gl-tracker-v3';
+const CACHE_NAME = 'gl-tracker-v4';
 const ASSETS_TO_CACHE = [
 './',
 './index.html',
@@ -71,3 +71,10 @@ return cachedResponse || fetch(event.request);
 })
 );
 });
+
+
+
+
+
+
+
