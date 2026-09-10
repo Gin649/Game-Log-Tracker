@@ -1584,6 +1584,9 @@
   });
 
   async function loadAll(){
+     // ➕ FORCE APPARATUS ENGINE TO WIPE STALE SESSIONS SO CLOUD CAN DRAW
+    libraryData = []; 
+    
     await enqueueTask(async () => {
     $('#recent-games').innerHTML = '<div class="loading">Loading</div>';
     $('#recent-unlocks').innerHTML = '<div class="loading">Loading</div>';
