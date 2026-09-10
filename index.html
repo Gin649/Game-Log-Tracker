@@ -1805,7 +1805,7 @@
 
   // 2. Add the Sync SDKs (Auth and Firestore Database)
   import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-  import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+  import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, setDoc, getDoc } from "https://gstatic.com";
 
   // 3. Your verified Web App Firebase Configuration
   const firebaseConfig = {
@@ -1818,30 +1818,34 @@
     measurementId: "G-136RVSLC53"
   };
 
-  // 4. Initialize Core Engine services
+ // 4. Initialize Core Engine services
   const app = initializeApp(firebaseConfig);
   const analytics = getAnalytics(app);
   const auth = getAuth(app);
-  const db = getFirestore(app);
   const provider = new GoogleAuthProvider();
   let currentUser = null;
+
+  // Modern Firestore initialization that includes multi-tab offline caching built-in
+  const db = initializeFirestore(app, {
+    cache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
+  });
+  // Expose the database globally so other scripts can interact with it
+  window.db = db;
 
   // Module scripts have their own scope — these were never reachable from
   // the classic <script> below without being explicitly attached to window.
   window.auth = auth;
   window.provider = provider;
+  
   // signInWithRedirect instead of signInWithPopup: popups are unreliable on
-  // mobile browsers (often the popup opens but the original page never
-  // receives the sign-in result), which is the near-certain cause of sign-in
-  // silently doing nothing on phones while working fine on desktop. Redirect
-  // navigates away to Google and back instead, which works consistently
-  // everywhere — the tradeoff is a full page reload rather than a popup.
+  // mobile browsers. Redirect navigates away to Google and back instead, which works consistently everywhere.
   window.doGoogleSignIn = () => signInWithRedirect(auth, provider);
   window.doGoogleSignOut = () => signOut(auth);
 
   // Redirect-based sign-in returns here on a fresh page load rather than
-  // resolving a promise in the original click handler, so any error from
-  // that flow (e.g. unauthorized domain) has to be caught separately here.
+  // resolving a promise in the original click handler
   getRedirectResult(auth).catch(err => {
     console.error("Redirect sign-in failed:", err);
     const errEl = document.getElementById('auth-error');
@@ -1853,11 +1857,6 @@
       errEl.textContent = msg;
       errEl.style.display = 'block';
     }
-  });
-
-  // Enable local caching so your phone handles spotty cell coverage offline gracefully
-  enableIndexedDbPersistence(db).catch((err) => {
-      console.warn("Offline caching enabled fallback code: ", err.code);
   });
 
   // Watch for Google Sign-In account changes across browser nodes
