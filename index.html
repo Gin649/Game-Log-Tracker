@@ -1800,11 +1800,11 @@
 
 <script type="module">
   // 1. Import Firebase Core and Analytics (Your existing imports)
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-analytics.js";
-
+  import { initializeApp } from "https://gstatic.com";
+  import { getAnalytics } from "https://gstatic.com";
+ 
   // 2. Add the Sync SDKs (Auth and Firestore Database)
-  import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+  import { getAuth, signInWithRedirect, signOut, onAuthStateChanged, getRedirectResult, GoogleAuthProvider } from "https://gstatic.com";
   import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, setDoc, getDoc } from "https://gstatic.com";
 
   // 3. Your verified Web App Firebase Configuration
