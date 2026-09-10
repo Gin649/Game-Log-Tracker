@@ -589,6 +589,9 @@
 
   const MEDIA = 'https://media.retroachievements.org';
   let creds = null; // { username, apiKey }
+  // Exposed so the separate Firebase module script (different scope entirely
+  // — it cannot see this closure's variables) can build the same storage key.
+  window.getRaUsername = () => (creds && creds.username) ? creds.username : null;
   let libraryData = [];
   let recentGamesData = [];
   let libraryIndex = {}; // GameID -> library entry, for looking up beaten status
@@ -1848,23 +1851,45 @@
       if (loggedOutDiv) loggedOutDiv.style.display = 'none';
       if (loggedInDiv) loggedInDiv.style.display = 'block';
       
-      // Download matching records automatically from the cloud database bucket
+      // Reconcile this device's local manual-games list with the cloud copy.
+      // Previously this only ever downloaded from the cloud, which meant any
+      // game added while NOT signed in (or before Google sign-in was working)
+      // stayed stranded on that one device forever, invisible everywhere else.
       try {
-        const docRef = doc(db, "users", currentUser.uid);
-        const snapshot = await getDoc(docRef);
-        if (snapshot.exists() && snapshot.data().manualGames) {
-           const cloudGames = snapshot.data().manualGames;
-           
-           // Overwrite the local cache key with up-to-date cloud list arrays
-           if (window.storage && typeof creds !== "undefined" && creds?.username) {
-             const storageKey = `ra-manual-games:${creds.username.trim().toLowerCase()}`;
-             await window.storage.set(storageKey, JSON.stringify(cloudGames), false);
-             
-             // Redraw dashboard views automatically downstream
-             if (typeof loadAll === "function") { loadAll(); }
-           }
+        async function waitForRaUsername(maxWaitMs, intervalMs){
+          const start = Date.now();
+          while (Date.now() - start < maxWaitMs) {
+            const u = window.getRaUsername ? window.getRaUsername() : null;
+            if (u) return u;
+            await new Promise(r => setTimeout(r, intervalMs));
+          }
+          return window.getRaUsername ? window.getRaUsername() : null;
         }
-      } catch (e) { console.error("Cloud synchronization download failed:", e); }
+        const raUsername = await waitForRaUsername(3000, 200);
+        if (window.storage && raUsername) {
+          const storageKey = `ra-manual-games:${raUsername.trim().toLowerCase()}`;
+
+          let localGames = [];
+          try {
+            const localResult = await window.storage.get(storageKey, false);
+            if (localResult && localResult.value) localGames = JSON.parse(localResult.value);
+          } catch (e) { /* nothing local yet on this device */ }
+
+          const docRef = doc(db, "users", currentUser.uid);
+          const snapshot = await getDoc(docRef);
+          const cloudGames = (snapshot.exists() && snapshot.data().manualGames) ? snapshot.data().manualGames : [];
+
+          // Union by GameID so a game added on either side survives — never
+          // a blind overwrite in either direction.
+          const cloudIds = new Set(cloudGames.map(g => g.GameID));
+          const merged = [...cloudGames, ...localGames.filter(g => !cloudIds.has(g.GameID))];
+
+          await window.storage.set(storageKey, JSON.stringify(merged), false);
+          await setDoc(docRef, { manualGames: merged }, { merge: true });
+
+          if (typeof loadAll === "function") { loadAll(); }
+        }
+      } catch (e) { console.error("Cloud synchronization failed:", e); }
     } else {
       currentUser = null;
       const loggedOutDiv = document.getElementById('auth-logged-out');
