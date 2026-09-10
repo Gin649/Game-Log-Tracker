@@ -1717,6 +1717,7 @@
 
   $('#btn-refresh').addEventListener('click', loadAll);
   $('#btn-disconnect').addEventListener('click', async () => {
+    try {
     creds = null;
     await clearCreds();
     await clearIndexedDBPersistence(db); 
@@ -1725,7 +1726,7 @@
         console.error("Error clearing persistence:", error);
     } finally {
     showConnect();
-  });
+  };
   $('#lib-search').addEventListener('input', renderLibrary);
 
   function closeDropdownMenu(){
