@@ -837,6 +837,7 @@
   async function saveCreds(username, apiKey){
     try{ await window.storage.set('ra-credentials', JSON.stringify({ username, apiKey }), false); }
     catch(e){ /* non-fatal */ }
+    if(window.syncSettingsToCloud){ try{ await window.syncSettingsToCloud({ raUsername: username, raApiKey: apiKey }); }catch(e){ /* non-fatal */ } }
   }
   async function loadCreds(){
     try{
@@ -946,6 +947,7 @@
   async function saveRawgCreds(apiKey){
     try{ await window.storage.set('rawg-credentials', JSON.stringify({ apiKey }), false); }
     catch(e){ /* non-fatal */ }
+    if(window.syncSettingsToCloud){ try{ await window.syncSettingsToCloud({ rawgApiKey: apiKey }); }catch(e){ /* non-fatal */ } }
   }
 
   async function rawgGet(url){
@@ -1692,6 +1694,24 @@
     $('#menu-wrap').style.display = 'none';
   }
 
+  async function connectToRa(username, apiKey){
+    creds = { username, apiKey };
+    try{
+      const profile = await raFetch('API_GetUserProfile.php', {});
+      if(!profile || !profile.User){ throw new Error('Unexpected response — check your username and key.'); }
+      await saveCreds(username, apiKey);
+      showDashboard();
+      loadAll();
+      return true;
+    }catch(e){
+      creds = null;
+      throw e;
+    }
+  }
+  // Exposed so the Firebase sync flow can auto-connect using RA credentials
+  // pulled down from the cloud, without the user re-typing them on this device.
+  window.autoConnectRa = connectToRa;
+
   $('#btn-connect').addEventListener('click', async () => {
     const username = $('#in-user').value.trim();
     const apiKey = $('#in-key').value.replace(/\s+/g, '');
@@ -1700,15 +1720,9 @@
 
     const btn = $('#btn-connect');
     btn.disabled = true; btn.textContent = 'Connecting…';
-    creds = { username, apiKey };
     try{
-      const profile = await raFetch('API_GetUserProfile.php', {});
-      if(!profile || !profile.User){ throw new Error('Unexpected response — check your username and key.'); }
-      await saveCreds(username, apiKey);
-      showDashboard();
-      loadAll();
+      await connectToRa(username, apiKey);
     }catch(e){
-      creds = null;
       showError(`Connection failed: ${e.message}. Double-check your username and Web API key.`);
     }finally{
       btn.disabled = false; btn.textContent = 'Connect';
@@ -1717,17 +1731,10 @@
 
   $('#btn-refresh').addEventListener('click', loadAll);
   $('#btn-disconnect').addEventListener('click', async () => {
-    try {
     creds = null;
     await clearCreds();
-    await clearIndexedDbPersistence(db); 
-        console.log("Cache cleared successfully!");
-    } catch (error) {
-        console.error("Error clearing persistence:", error);
-    } finally {
     showConnect();
-  }
-  });  
+  });
   $('#lib-search').addEventListener('input', renderLibrary);
 
   function closeDropdownMenu(){
@@ -1860,7 +1867,7 @@
 
   // 2. Add the Sync SDKs (Auth and Firestore Database)
   import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-  import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence, clearIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
   // 3. Your verified Web App Firebase Configuration
   const firebaseConfig = {
@@ -1908,7 +1915,49 @@
       const loggedInDiv = document.getElementById('auth-logged-in');
       if (loggedOutDiv) loggedOutDiv.style.display = 'none';
       if (loggedInDiv) loggedInDiv.style.display = 'block';
-      
+
+      // Reconcile RA credentials + RAWG key with the cloud copy, so signing
+      // into this account on a fresh device pulls in settings that were
+      // already configured elsewhere, instead of asking you to re-enter
+      // them everywhere. Whichever side already has a value wins — this
+      // never silently overwrites something already configured on THIS
+      // device with an empty/different value from the cloud.
+      try {
+        const docRef = doc(db, "users", currentUser.uid);
+        const snapshot = await getDoc(docRef);
+        const cloudSettings = (snapshot.exists() && snapshot.data().settings) ? snapshot.data().settings : {};
+
+        let localRaUsername = null, localRaApiKey = null, localRawgApiKey = null;
+        try {
+          const r = await window.storage.get('ra-credentials', false);
+          if (r && r.value) { const parsed = JSON.parse(r.value); localRaUsername = parsed.username; localRaApiKey = parsed.apiKey; }
+        } catch (e) { /* not connected on this device yet */ }
+        try {
+          const r = await window.storage.get('rawg-credentials', false);
+          if (r && r.value) { localRawgApiKey = JSON.parse(r.value).apiKey; }
+        } catch (e) { /* using the built-in default on this device so far */ }
+
+        const merged = {
+          raUsername: localRaUsername || cloudSettings.raUsername || null,
+          raApiKey: localRaApiKey || cloudSettings.raApiKey || null,
+          rawgApiKey: localRawgApiKey || cloudSettings.rawgApiKey || null,
+        };
+
+        // Adopt anything this device is missing that the cloud already has.
+        if (!localRaUsername && merged.raUsername && merged.raApiKey) {
+          await window.storage.set('ra-credentials', JSON.stringify({ username: merged.raUsername, apiKey: merged.raApiKey }), false);
+          if (typeof window.autoConnectRa === 'function') {
+            await window.autoConnectRa(merged.raUsername, merged.raApiKey).catch(e => console.error('Auto-connect from synced RA credentials failed:', e));
+          }
+        }
+        if (!localRawgApiKey && merged.rawgApiKey) {
+          await window.storage.set('rawg-credentials', JSON.stringify({ apiKey: merged.rawgApiKey }), false);
+        }
+
+        // Push the merged result back so both sides agree going forward.
+        await setDoc(docRef, { settings: merged }, { merge: true });
+      } catch (e) { console.error('Settings sync failed:', e); }
+
       // Reconcile this device's local manual-games list with the cloud copy.
       // Previously this only ever downloaded from the cloud, which meant any
       // game added while NOT signed in (or before Google sign-in was working)
@@ -1965,6 +2014,23 @@
       await setDoc(docRef, { manualGames: list }, { merge: true });
       console.log("Cloud dynamic tracker save operation succeeded.");
     } catch (error) { console.error("Cloud document save failed:", error); }
+  };
+
+  // Pushes RA credentials / RAWG key up whenever they're saved locally on
+  // any signed-in device, so other devices pick them up on next sign-in
+  // instead of the user re-entering them everywhere. Merges shallowly —
+  // only the keys actually passed in are updated, everything else in the
+  // existing settings object is left alone.
+  window.syncSettingsToCloud = async function(partialSettings) {
+    if (!currentUser) return;
+    try {
+      const docRef = doc(db, "users", currentUser.uid);
+      const snapshot = await getDoc(docRef);
+      const existing = (snapshot.exists() && snapshot.data().settings) ? snapshot.data().settings : {};
+      const merged = { ...existing, ...partialSettings };
+      await setDoc(docRef, { settings: merged }, { merge: true });
+      console.log("Cloud settings save succeeded.");
+    } catch (error) { console.error("Cloud settings save failed:", error); }
   };
 </script>
 
