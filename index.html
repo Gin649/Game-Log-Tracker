@@ -1756,24 +1756,24 @@
       const errEl = document.getElementById('auth-error');
       if(errEl){ errEl.style.display = 'none'; errEl.textContent = ''; }
       if (window.doGoogleSignIn) {
-        btn.disabled = true; btn.textContent = 'Opening sign-in…';
+        btn.disabled = true; btn.textContent = 'Redirecting to Google…';
+        // On success this navigates away immediately — nothing after this
+        // point runs. Errors here are pre-redirect failures only (e.g. an
+        // unauthorized domain); anything that happens after Google redirects
+        // back is caught by getRedirectResult() in the module script instead.
         window.doGoogleSignIn()
           .catch(err => {
-            console.error("Login popup blocked:", err);
+            console.error("Sign-in redirect failed to start:", err);
             if(errEl){
               let msg = err && err.message ? err.message : String(err);
               if(err && err.code === 'auth/unauthorized-domain'){
                 msg = 'This domain isn\'t authorized for sign-in yet. In Firebase console → Authentication → Settings → Authorized domains, add this site\'s exact domain (e.g. yourname.github.io).';
-              } else if(err && err.code === 'auth/popup-blocked'){
-                msg = 'Your browser blocked the sign-in popup. Allow popups for this site and try again.';
-              } else if(err && err.code === 'auth/popup-closed-by-user'){
-                msg = 'Sign-in window was closed before finishing.';
               }
               errEl.textContent = msg;
               errEl.style.display = 'block';
             }
-          })
-          .finally(() => { btn.disabled = false; btn.textContent = 'Sign In with Google'; });
+            btn.disabled = false; btn.textContent = 'Sign In with Google';
+          });
       } else {
         if(errEl){
           errEl.textContent = 'Sign-in isn\'t ready yet — the Firebase script may have failed to load (check the browser console for errors).';
@@ -1801,7 +1801,7 @@
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-analytics.js";
 
   // 2. Add the Sync SDKs (Auth and Firestore Database)
-  import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+  import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
   import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
   // 3. Your verified Web App Firebase Configuration
@@ -1825,14 +1825,32 @@
 
   // Module scripts have their own scope — these were never reachable from
   // the classic <script> below without being explicitly attached to window.
-  // Note: the modular SDK's signInWithPopup/signOut are standalone functions
-  // that take `auth` as an argument — they are NOT methods on the auth
-  // object (that's the older compat/v8 API shape), so we expose ready-to-call
-  // wrapper functions instead of raw auth/provider to avoid that mismatch.
   window.auth = auth;
   window.provider = provider;
-  window.doGoogleSignIn = () => signInWithPopup(auth, provider);
+  // signInWithRedirect instead of signInWithPopup: popups are unreliable on
+  // mobile browsers (often the popup opens but the original page never
+  // receives the sign-in result), which is the near-certain cause of sign-in
+  // silently doing nothing on phones while working fine on desktop. Redirect
+  // navigates away to Google and back instead, which works consistently
+  // everywhere — the tradeoff is a full page reload rather than a popup.
+  window.doGoogleSignIn = () => signInWithRedirect(auth, provider);
   window.doGoogleSignOut = () => signOut(auth);
+
+  // Redirect-based sign-in returns here on a fresh page load rather than
+  // resolving a promise in the original click handler, so any error from
+  // that flow (e.g. unauthorized domain) has to be caught separately here.
+  getRedirectResult(auth).catch(err => {
+    console.error("Redirect sign-in failed:", err);
+    const errEl = document.getElementById('auth-error');
+    if (errEl) {
+      let msg = err && err.message ? err.message : String(err);
+      if (err && err.code === 'auth/unauthorized-domain') {
+        msg = 'This domain isn\'t authorized for sign-in yet. In Firebase console → Authentication → Settings → Authorized domains, add this site\'s exact domain.';
+      }
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+    }
+  });
 
   // Enable local caching so your phone handles spotty cell coverage offline gracefully
   enableIndexedDbPersistence(db).catch((err) => {
