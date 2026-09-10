@@ -22,7 +22,7 @@
     });
   }
 </script>
-
+  
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&family=Metal+Mania&display=swap');
 
@@ -1584,9 +1584,6 @@
   });
 
   async function loadAll(){
-     // ➕ FORCE APPARATUS ENGINE TO WIPE STALE SESSIONS SO CLOUD CAN DRAW
-    libraryData = []; 
-    
     await enqueueTask(async () => {
     $('#recent-games').innerHTML = '<div class="loading">Loading</div>';
     $('#recent-unlocks').innerHTML = '<div class="loading">Loading</div>';
@@ -1866,12 +1863,12 @@
       currentUser = user;
       const emailSpan = document.getElementById('user-email');
       if (emailSpan) emailSpan.textContent = user.email;
-
+      
       const loggedOutDiv = document.getElementById('auth-logged-out');
       const loggedInDiv = document.getElementById('auth-logged-in');
       if (loggedOutDiv) loggedOutDiv.style.display = 'none';
       if (loggedInDiv) loggedInDiv.style.display = 'block';
-
+      
       // Reconcile this device's local manual-games list with the cloud copy.
       // Previously this only ever downloaded from the cloud, which meant any
       // game added while NOT signed in (or before Google sign-in was working)
