@@ -1719,7 +1719,7 @@
   $('#btn-disconnect').addEventListener('click', async () => {
     creds = null;
     await clearCreds();
-    await clearPersistence(db); 
+    await clearIndexedDBPersistence(db); 
         console.log("Cache cleared successfully!");
     } catch (error) {
         console.error("Error clearing persistence:", error);
@@ -1858,7 +1858,7 @@
 
   // 2. Add the Sync SDKs (Auth and Firestore Database)
   import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-  import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence, clearPersistence } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence, clearIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
   // 3. Your verified Web App Firebase Configuration
   const firebaseConfig = {
