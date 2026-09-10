@@ -9,40 +9,30 @@ const ASSETS_TO_CACHE = [
 './apple-touch-icon.png'
 ]; 
 
-// Install Event: Cache interface elements & Skip Waiting
+// Install Event: Cache interface elements
 self.addEventListener('install', (event) => {
-  // ⚡ Force the new service worker to activate immediately without waiting for tabs to close
-  self.skipWaiting();
-
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('Caching tracker shell assets');
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
-  );
+event.waitUntil(
+caches.open(CACHE_NAME).then((cache) => {
+console.log('Caching tracker shell assets');
+return cache.addAll(ASSETS_TO_CACHE);
+})
+);
 }); 
 
-// Activate Event: Delete older cache versions & Claim Clients
+// Activate Event: Delete older cache versions
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    Promise.all([
-      // 1. Delete older cache profiles (Your existing logic)
-      caches.keys().then((keys) => {
-        return Promise.all(
-          keys.map((key) => {
-            if (key !== CACHE_NAME) {
-              console.log('Clearing old service worker cache matrix:', key);
-              return caches.delete(key);
-            }
-          })
-        );
-      }),
-      // 2. ⚡ Force the service worker to take control of the page immediately on load
-      self.clients.claim()
-    ])
-  );
-});
-
+event.waitUntil(
+caches.keys().then((keys) => {
+return Promise.all(
+keys.map((key) => {
+if (key !== CACHE_NAME) {
+return caches.delete(key);
+}
+})
+);
+})
+);
+}); 
 
 // Fetch Event: Serve cached assets offline, fetch network copies when online
 self.addEventListener('fetch', (event) => {
