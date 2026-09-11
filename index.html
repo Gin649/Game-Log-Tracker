@@ -419,73 +419,74 @@
         <span class="bar"></span><span class="bar"></span><span class="bar"></span>
       </button>
       <div class="dropdown-menu" id="dropdown-menu">
+        <button class="dropdown-item" id="btn-ra-connect-open">Connect RetroAchievements</button>
         <button class="dropdown-item" id="btn-rawg-settings">Ratings</button>
         <button class="dropdown-item" id="btn-refresh">Refresh</button>
-        <button class="dropdown-item" id="btn-disconnect">Disconnect</button>
+        <button class="dropdown-item" id="btn-disconnect">Disconnect RA</button>
+        <button class="dropdown-item" id="btn-cloud-signout">Sign Out</button>
       </div>
     </div>
   </div>
 
-  <!-- Cloud sync (Google account) is independent of RA login, so this stays
-       visible on BOTH the connect screen and the dashboard — it used to live
-       inside #connect, which is hidden the moment you log into RA, making
-       the sign-in button permanently unreachable after that. -->
-  <section id="firebase-sync-section" style="background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 24px; text-align: center; max-width: 440px; margin-left: auto; margin-right: auto;">
-      <h3 style="font-family: 'Space Mono', monospace; font-size: 13px; margin: 0 0 10px; color: var(--gold);">☁️ Cloud Sync (Cross-Device)</h3>
-
-      <!-- Displayed when logged out -->
-      <div id="auth-logged-out">
-          <p style="font-size: 11.5px; color: var(--muted); margin: 0 0 12px; line-height: 1.4;">Sign in to sync your manual game library between your phone and desktop.</p>
-          <div style="text-align: left; margin-bottom: 10px;">
-            <label style="display:block; font-size: 10.5px; color: var(--muted); font-family: 'Space Mono', monospace; margin-bottom: 4px;">Email</label>
-            <input id="auth-email" type="email" autocomplete="email" style="width: 100%; padding: 8px 10px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 3px; color: var(--text); font-size: 13px; box-sizing: border-box;">
-          </div>
-          <div style="text-align: left; margin-bottom: 12px;">
-            <label style="display:block; font-size: 10.5px; color: var(--muted); font-family: 'Space Mono', monospace; margin-bottom: 4px;">Password</label>
-            <input id="auth-password" type="password" autocomplete="current-password" style="width: 100%; padding: 8px 10px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 3px; color: var(--text); font-size: 13px; box-sizing: border-box;">
-          </div>
-          <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-            <button id="btn-login" style="flex:1; background: var(--gold); color: #1a1424; padding: 8px 10px; font-size: 11px; font-weight: bold; border-radius: 3px; cursor: pointer; border: none; font-family: 'Space Mono', monospace;">
-                Log In
-            </button>
-            <button id="btn-signup" style="flex:1; background: transparent; border: 1px solid var(--gold); color: var(--gold); padding: 8px 10px; font-size: 11px; font-weight: bold; border-radius: 3px; cursor: pointer; font-family: 'Space Mono', monospace;">
-                Sign Up
-            </button>
-          </div>
-          <p style="margin: 0;"><a id="btn-forgot-password" style="font-size: 11px; color: var(--teal); cursor: pointer;">Forgot password?</a></p>
-          <p id="auth-error" style="color: var(--danger); font-size: 11px; margin: 10px 0 0; line-height: 1.4; display: none;"></p>
-          <p id="auth-status" style="color: var(--teal); font-size: 11px; margin: 10px 0 0; line-height: 1.4; display: none;"></p>
-      </div>
-
-      <!-- Displayed when logged in -->
-      <div id="auth-logged-in" style="display: none;">
-          <p style="font-size: 11.5px; margin: 0 0 8px;">Sync Account: <strong id="user-email" style="color: var(--teal);"></strong></p>
-          <p style="color: var(--teal); font-size: 11px; margin: 0 0 12px; font-family: 'Space Mono', monospace;">✓ Real-time sync active.</p>
-          <button id="btn-logout" style="background: var(--panel); border: 1px solid var(--border); color: var(--danger); padding: 6px 12px; font-size: 10.5px; cursor: pointer; border-radius: 3px; width: 100%; font-family: 'Space Mono', monospace;">
-              Sign Out
-          </button>
-      </div>
-  </section>
-
   <div id="connect" class="connect">
-    <h1>Connect your RetroAchievements account</h1>
-    <p>Enter your username and Web API key to pull your library, progress, and recent unlocks.</p>
+    <h1>Game Log — Tracker</h1>
+    <p>Sign in to access your synced RetroAchievements game log.</p>
+
     <div class="field">
-      <label>Username</label>
-      <input id="in-user" type="text" placeholder="e.g. xelnia" autocomplete="off">
+      <label>Email</label>
+      <input id="auth-email" type="email" autocomplete="email">
     </div>
     <div class="field">
-      <label>Web API Key</label>
-      <input id="in-key" type="password" placeholder="paste your key" autocomplete="off">
-      <div class="hint">Find it on your <a href="https://retroachievements.org/controlpanel.php" target="_blank" rel="noopener">control panel</a>, under Keys. Stored only for this app, never shared.</div>
+      <label>Password</label>
+      <input id="auth-password" type="password" autocomplete="current-password">
+      <div class="hint"><a id="btn-forgot-password" style="color: var(--teal); cursor: pointer;">Forgot password?</a></div>
     </div>
-    <button class="btn-primary" id="btn-connect">Connect</button>
-    <div id="connect-error"></div>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn-primary" id="btn-login" style="flex:1;">Log In</button>
+      <button id="btn-signup" style="flex:1; background: transparent; border: 1px solid var(--gold); color: var(--gold); border-radius: var(--radius); font-family: 'Space Mono', monospace; font-weight: 700; font-size: 13px; cursor: pointer;">Sign Up</button>
+    </div>
+    <p id="auth-error" style="color: var(--danger); font-size: 12px; margin: 14px 0 0; line-height: 1.4; display: none;"></p>
+    <p id="auth-status" style="color: var(--teal); font-size: 12px; margin: 14px 0 0; line-height: 1.4; display: none;"></p>
+  </div>
+
+  <!-- Hidden always — kept only so existing JS that reads it doesn't need
+       changes. The real "you're signed in" state now shows via the
+       dashboard itself (menu becomes available, RA content unlocks). -->
+  <div id="auth-logged-in" style="display: none;">
+    <strong id="user-email"></strong>
+  </div>
+
+  <!-- RetroAchievements connect modal — moved out of the front screen and
+       into settings, opened from the hamburger menu instead. -->
+  <div id="ra-connect-backdrop" class="modal-backdrop">
+    <div class="modal-card" id="ra-connect-card">
+      <button class="modal-close" id="ra-connect-close-btn">✕</button>
+      <div class="modal-body">
+        <h2 style="margin-bottom:4px;">Connect RetroAchievements</h2>
+        <p class="sub" style="margin-bottom:18px;">Enter your username and Web API key to pull your library, progress, and recent unlocks.</p>
+        <div class="field">
+          <label>Username</label>
+          <input id="in-user" type="text" placeholder="e.g. xelnia" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Web API Key</label>
+          <input id="in-key" type="password" placeholder="paste your key" autocomplete="off">
+          <div class="hint">Find it on your <a href="https://retroachievements.org/controlpanel.php" target="_blank" rel="noopener">control panel</a>, under Keys. Stored only for this app, never shared.</div>
+        </div>
+        <button class="btn-primary" id="btn-connect">Connect</button>
+        <div id="connect-error"></div>
+      </div>
+    </div>
   </div>
 
   <div id="dashboard">
 
+    <div id="ra-placeholder" style="display:none; text-align:center; max-width: 440px; margin: 60px auto; padding: 0 20px;">
+      <p style="font-size: 14px; color: var(--text); line-height: 1.6;">Please click the settings menu to connect your RetroAchievements account and start tracking your gaming.</p>
+      <p style="font-size: 12px; color: var(--muted); margin-top: 8px;">Tap the <strong style="color: var(--gold);">☰</strong> menu above → <strong style="color: var(--gold);">Connect RetroAchievements</strong>.</p>
+    </div>
 
+    <div id="ra-content" style="display:none;">
     <div class="profile-hero" id="profile-hero"></div>
 
     <div class="tabs">
@@ -515,6 +516,7 @@
 
     <div id="tab-year" class="tab-panel">
       <div id="year-wrap"><div class="loading">Loading</div></div>
+    </div>
     </div>
   </div>
 
@@ -1426,7 +1428,7 @@
     if(e.target.id === 'modal-backdrop') closeGameModal();
   });
   document.addEventListener('keydown', (e) => {
-    if(e.key === 'Escape'){ closeGameModal(); closeAddGameModal(); closeRawgModal(); closeDropdownMenu(); }
+    if(e.key === 'Escape'){ closeGameModal(); closeAddGameModal(); closeRawgModal(); closeRaConnectModal(); closeDropdownMenu(); }
   });
 
   // --- Add game manually ---
@@ -1683,16 +1685,27 @@
     });
   }
 
+  function updateRaConnectionView(){
+    const hasRa = !!creds;
+    $('#ra-placeholder').style.display = hasRa ? 'none' : 'block';
+    $('#ra-content').style.display = hasRa ? 'block' : 'none';
+  }
   function showDashboard(){
     $('#connect').style.display = 'none';
     $('#dashboard').style.display = 'block';
     $('#menu-wrap').style.display = 'block';
+    updateRaConnectionView();
   }
   function showConnect(){
     $('#connect').style.display = 'block';
     $('#dashboard').style.display = 'none';
     $('#menu-wrap').style.display = 'none';
   }
+  // Driven by Firebase auth state (module script) — signing into the cloud
+  // account is now the front gate for the whole app; RA connection status
+  // is checked separately, after that, via updateRaConnectionView().
+  window.onCloudSignedIn = showDashboard;
+  window.onCloudSignedOut = showConnect;
 
   async function connectToRa(username, apiKey){
     creds = { username, apiKey };
@@ -1712,6 +1725,19 @@
   // pulled down from the cloud, without the user re-typing them on this device.
   window.autoConnectRa = connectToRa;
 
+  function openRaConnectModal(){
+    $('#connect-error').innerHTML = '';
+    $('#ra-connect-backdrop').classList.add('open');
+  }
+  function closeRaConnectModal(){
+    $('#ra-connect-backdrop').classList.remove('open');
+  }
+  $('#btn-ra-connect-open').addEventListener('click', openRaConnectModal);
+  $('#ra-connect-close-btn').addEventListener('click', closeRaConnectModal);
+  $('#ra-connect-backdrop').addEventListener('click', (e) => {
+    if(e.target.id === 'ra-connect-backdrop') closeRaConnectModal();
+  });
+
   $('#btn-connect').addEventListener('click', async () => {
     const username = $('#in-user').value.trim();
     const apiKey = $('#in-key').value.replace(/\s+/g, '');
@@ -1722,6 +1748,7 @@
     btn.disabled = true; btn.textContent = 'Connecting…';
     try{
       await connectToRa(username, apiKey);
+      closeRaConnectModal();
     }catch(e){
       showError(`Connection failed: ${e.message}. Double-check your username and Web API key.`);
     }finally{
@@ -1733,7 +1760,10 @@
   $('#btn-disconnect').addEventListener('click', async () => {
     creds = null;
     await clearCreds();
-    showConnect();
+    updateRaConnectionView(); // stay on the dashboard shell — just drops back to the "connect RA" placeholder
+  });
+  $('#btn-cloud-signout').addEventListener('click', () => {
+    if (window.doSignOut) { window.doSignOut().catch(err => console.error("Sign-out failure:", err)); }
   });
   $('#lib-search').addEventListener('input', renderLibrary);
 
@@ -1770,15 +1800,18 @@
     });
   });
 
-  // Auto-connect if we have saved credentials
+  // Restore RA credentials into memory if previously connected — this no
+  // longer shows the dashboard directly. Firebase sign-in is now the front
+  // gate for the whole app; updateRaConnectionView() just makes sure that
+  // if the dashboard is already visible (e.g. an already-signed-in Firebase
+  // session), it reflects whatever we just restored here.
   (async () => {
     const saved = await loadCreds();
     if(saved && saved.username && saved.apiKey){
       creds = saved;
       $('#in-user').value = saved.username;
-      showDashboard();
-      loadAll();
     }
+    updateRaConnectionView();
     function showAuthError(msg){
       const errEl = document.getElementById('auth-error');
       const statusEl = document.getElementById('auth-status');
@@ -1847,14 +1880,6 @@
       }
     });
   }
-
-  if (document.getElementById('btn-logout')) {
-    document.getElementById('btn-logout').addEventListener('click', () => {
-      if (window.doSignOut) {
-        window.doSignOut().catch(err => console.error("Sign-out failure:", err));
-      }
-    });
-  }
   })();
 })(); // closes the outer main app IIFE opened at the top of this script — this
       // was missing entirely, which made the whole script fail to parse
@@ -1910,11 +1935,11 @@
       currentUser = user;
       const emailSpan = document.getElementById('user-email');
       if (emailSpan) emailSpan.textContent = user.email;
-      
-      const loggedOutDiv = document.getElementById('auth-logged-out');
-      const loggedInDiv = document.getElementById('auth-logged-in');
-      if (loggedOutDiv) loggedOutDiv.style.display = 'none';
-      if (loggedInDiv) loggedInDiv.style.display = 'block';
+
+      // Show the dashboard shell right away (placeholder if RA isn't
+      // connected yet on this device) rather than waiting on the cloud
+      // round-trips below to finish first.
+      if (typeof window.onCloudSignedIn === 'function') { window.onCloudSignedIn(); }
 
       // Reconcile RA credentials + RAWG key with the cloud copy, so signing
       // into this account on a fresh device pulls in settings that were
@@ -1944,6 +1969,8 @@
         };
 
         // Adopt anything this device is missing that the cloud already has.
+        // autoConnectRa() internally re-runs the same dashboard/placeholder
+        // toggle, so the UI updates the moment this resolves.
         if (!localRaUsername && merged.raUsername && merged.raApiKey) {
           await window.storage.set('ra-credentials', JSON.stringify({ username: merged.raUsername, apiKey: merged.raApiKey }), false);
           if (typeof window.autoConnectRa === 'function') {
@@ -1999,10 +2026,7 @@
       } catch (e) { console.error("Cloud synchronization failed:", e); }
     } else {
       currentUser = null;
-      const loggedOutDiv = document.getElementById('auth-logged-out');
-      const loggedInDiv = document.getElementById('auth-logged-in');
-      if (loggedOutDiv) loggedOutDiv.style.display = 'block';
-      if (loggedInDiv) loggedInDiv.style.display = 'none';
+      if (typeof window.onCloudSignedOut === 'function') { window.onCloudSignedOut(); }
     }
   });
 
