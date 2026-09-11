@@ -42,7 +42,7 @@
   }
 
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--bg);}
+  html,body{margin:0;padding:0;background:var(--bg);overscroll-behavior-y:contain;}
   body{
     font-family:'Inter',sans-serif;
     color:var(--text);
@@ -139,6 +139,13 @@
   }
   .dropdown-item:hover{background:var(--bg-alt);}
   .dropdown-item + .dropdown-item{border-top:1px solid var(--border);}
+
+  .pull-refresh-indicator{
+    position:fixed;top:0;left:0;right:0;height:0;overflow:hidden;
+    display:flex;justify-content:center;align-items:center;
+    color:var(--gold);font-family:'Space Mono',monospace;font-size:11.5px;
+    background:var(--bg);z-index:60;transition:height 0.15s ease-out;
+  }
 
   .error-box{
     background:rgba(226,104,92,0.1);border:1px solid var(--danger);
@@ -611,6 +618,7 @@
   window.getRaUsername = () => (creds && creds.username) ? creds.username : null;
   let libraryData = [];
   let recentGamesData = [];
+  let lastProfile = null; // re-used to recompute profile stats once library data loads
   let libraryIndex = {}; // GameID -> library entry, for looking up beaten status
   let librarySort = { key: 'lastPlayed', dir: 'desc' };
   const estHoursCache = {}; // in-memory, keyed by GameID, for this session — { hours, beaten }
@@ -1065,6 +1073,31 @@
 
   // --- Rendering ---
   function renderProfile(p){
+    lastProfile = p;
+
+    // Both stats below are computed from the library data this app already
+    // pulls (RA's public API has no direct field for either) — so they're
+    // only accurate once library data has loaded; renderProfile() gets
+    // called again after that finishes to fill these in for real.
+    let casualUnlocksLabel = '—';
+    let startedBeatenLabel = '—';
+    if(libraryData && libraryData.length > 0){
+      let casualUnlocks = 0;
+      let startedCount = 0;
+      let beatenCount = 0;
+      libraryData.forEach(g => {
+        const awarded = Number(g.NumAwarded || 0);
+        const hardcore = Number(g.NumAwardedHardcore || 0);
+        casualUnlocks += Math.max(0, awarded - hardcore);
+        if(awarded > 0){
+          startedCount++;
+          if(g.HighestAwardKind) beatenCount++;
+        }
+      });
+      casualUnlocksLabel = casualUnlocks.toLocaleString();
+      startedBeatenLabel = startedCount > 0 ? ((beatenCount / startedCount) * 100).toFixed(2) + '%' : '0%';
+    }
+
     $('#profile-hero').innerHTML = `
       <img class="avatar" src="${imgUrl(p.UserPic)}" alt="${p.User}">
       <div class="who">
@@ -1073,6 +1106,8 @@
       </div>
       <div class="stat-row">
         <div class="stat"><div class="num" style="color:var(--teal)">${Number(p.TotalSoftcorePoints || 0).toLocaleString()}</div><div class="lbl">casual pts</div></div>
+        <div class="stat"><div class="num" style="color:var(--teal)">${casualUnlocksLabel}</div><div class="lbl">achievements unlocked (casual)</div></div>
+        <div class="stat"><div class="num" style="color:var(--teal)">${startedBeatenLabel}</div><div class="lbl">started games beaten</div></div>
       </div>
     `;
   }
@@ -1080,7 +1115,7 @@
   function awardPill(kind){
     const map = {
       'mastered':        { label: 'Mastered',    cls: 'pill-gold' },
-      'completed':       { label: 'Completed',   cls: 'pill-teal' },
+      'completed':       { label: 'Mastered',    cls: 'pill-gold' },
       'beaten-hardcore': { label: 'Beaten (HC)',  cls: 'pill-gold' },
       'beaten-softcore': { label: 'Beaten',       cls: 'pill-teal' },
     };
@@ -1646,6 +1681,7 @@
       const stillManual = manual.filter(g => !realIds.has(g.GameID));
       if(stillManual.length !== manual.length) await saveManualGames(stillManual);
       libraryData = [...libraryData, ...stillManual];
+      if(lastProfile) renderProfile(lastProfile);
     }catch(e){
       console.error('Failed to load live library data:', e);
       // Still show whatever's manually tracked — a proxy hiccup shouldn't
@@ -1661,6 +1697,7 @@
         $('#year-wrap').innerHTML = `<div class="error-box">Could not load completions: ${e.message}</div>`;
         return;
       }
+      if(lastProfile) renderProfile(lastProfile);
     }
 
     try{ renderSystemChips(); }
@@ -1767,6 +1804,49 @@
   });
   $('#lib-search').addEventListener('input', renderLibrary);
 
+  // Custom pull-to-refresh: refreshes app data instead of the browser doing
+  // a full native page reload (which was resetting in-memory state and
+  // looking like it signed you out of RetroAchievements).
+  (function(){
+    let touchStartY = 0;
+    let pulling = false;
+    let currentPull = 0;
+    const PULL_THRESHOLD = 70;
+    const MAX_PULL = 100;
+
+    const indicator = document.createElement('div');
+    indicator.className = 'pull-refresh-indicator';
+    indicator.textContent = 'Pull to refresh';
+    document.body.insertBefore(indicator, document.body.firstChild);
+
+    document.addEventListener('touchstart', (e) => {
+      pulling = window.scrollY === 0 && !!creds && $('#dashboard').style.display === 'block';
+      if(pulling) touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      if(!pulling) return;
+      const delta = e.touches[0].clientY - touchStartY;
+      if(delta > 0 && window.scrollY === 0){
+        currentPull = Math.min(delta, MAX_PULL);
+        indicator.style.height = currentPull + 'px';
+        indicator.textContent = currentPull > PULL_THRESHOLD ? 'Release to refresh' : 'Pull to refresh';
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchend', () => {
+      if(!pulling) return;
+      pulling = false;
+      if(currentPull > PULL_THRESHOLD){
+        indicator.textContent = 'Refreshing…';
+        Promise.resolve(loadAll()).finally(() => { indicator.style.height = '0px'; });
+      } else {
+        indicator.style.height = '0px';
+      }
+      currentPull = 0;
+    }, { passive: true });
+  })();
+
   function closeDropdownMenu(){
     $('#dropdown-menu').classList.remove('open');
   }
@@ -1810,6 +1890,7 @@
     if(saved && saved.username && saved.apiKey){
       creds = saved;
       $('#in-user').value = saved.username;
+      loadAll(); // was previously only toggling visibility, never actually fetching data on restore
     }
     updateRaConnectionView();
     function showAuthError(msg){
