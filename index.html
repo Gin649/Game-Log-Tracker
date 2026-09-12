@@ -139,6 +139,16 @@
   }
   .dropdown-item:hover{background:var(--bg-alt);}
   .dropdown-item + .dropdown-item{border-top:1px solid var(--border);}
+  .dropdown-heading{
+    display:flex;justify-content:space-between;align-items:center;
+    color:var(--gold);font-weight:700;
+  }
+  .dropdown-heading #ra-heading-arrow{font-size:10px;color:var(--muted);}
+  .dropdown-subitem{
+    padding-left:26px;font-size:11.5px;color:var(--muted);background:var(--bg-alt);
+  }
+  .dropdown-subitem:hover{color:var(--text);}
+  #ra-submenu .dropdown-subitem + .dropdown-subitem{border-top:1px solid var(--border);}
 
   .pull-refresh-indicator{
     position:fixed;top:0;left:0;right:0;height:0;overflow:hidden;
@@ -225,7 +235,7 @@
   .cart .hours{
     font-size:9.5px;color:var(--muted);font-family:'Space Mono',monospace;margin-top:3px;
   }
-  .cart .hours .val{color:var(--teal);}
+  .cart .hours .val{color:var(--gold);}
 
   .unlock-list{display:flex;flex-direction:column;gap:1px;background:var(--border);border-radius:6px;overflow:hidden;border:1px solid var(--border);}
   .unlock{
@@ -426,10 +436,13 @@
         <span class="bar"></span><span class="bar"></span><span class="bar"></span>
       </button>
       <div class="dropdown-menu" id="dropdown-menu">
-        <button class="dropdown-item" id="btn-ra-connect-open">Connect RetroAchievements</button>
-        <button class="dropdown-item" id="btn-rawg-settings">Ratings</button>
-        <button class="dropdown-item" id="btn-refresh">Refresh</button>
-        <button class="dropdown-item" id="btn-disconnect">Disconnect RA</button>
+        <button class="dropdown-item dropdown-heading" id="btn-ra-heading">RetroAchievements <span id="ra-heading-arrow">▸</span></button>
+        <div id="ra-submenu" style="display:none;">
+          <button class="dropdown-item dropdown-subitem" id="btn-ra-connect-open">Connect RA</button>
+          <button class="dropdown-item dropdown-subitem" id="btn-disconnect">Disconnect RA</button>
+          <button class="dropdown-item dropdown-subitem" id="btn-hardcore-toggle">Switch to Hardcore Mode</button>
+        </div>
+        <button class="dropdown-item" id="btn-rawg-settings">RAWG Ratings</button>
         <button class="dropdown-item" id="btn-cloud-signout">Sign Out</button>
       </div>
     </div>
@@ -619,6 +632,7 @@
   let libraryData = [];
   let recentGamesData = [];
   let lastProfile = null; // re-used to recompute profile stats once library data loads
+  let statsMode = 'casual'; // 'casual' | 'hardcore' — toggled from the menu
   let libraryIndex = {}; // GameID -> library entry, for looking up beaten status
   let librarySort = { key: 'lastPlayed', dir: 'desc' };
   const estHoursCache = {}; // in-memory, keyed by GameID, for this session — { hours, beaten }
@@ -740,13 +754,18 @@
     return path.startsWith('http') ? path : MEDIA + path;
   }
 
-  // --- Playtime, derived from achievement-unlock timing ---
-  // RetroAchievements has no real playtime stat. For a game you've beaten,
-  // completed, or mastered, we show the span from your first unlock to the
-  // one that earned the award — how long it took to beat, not active hours.
-  // For a game still in progress, we instead estimate active playtime by
-  // grouping unlock timestamps into "sessions" (a gap under 30 minutes
-  // counts as continuous play) and summing them. Both are rough proxies.
+  // --- Playtime ---
+  // RetroAchievements now tracks real playtime directly (UserTotalPlaytime,
+  // in seconds) for accounts with this feature enabled, returned by the
+  // same GetGameInfoAndUserProgress call we already make per game — so this
+  // costs no extra requests. Some games can still come back with 0/no value
+  // if RA hasn't computed real time for that play history yet (e.g. it
+  // predates the feature), in which case we fall back to our own estimate:
+  // for a beaten/completed/mastered game, the calendar span from first
+  // unlock to the one that earned the award; otherwise, unlock timestamps
+  // grouped into "sessions" (gaps under 30 minutes count as continuous
+  // play) and summed. Both fallbacks are rough proxies — real data is used
+  // whenever RA actually has it.
   const SESSION_GAP_MIN = 30;
   const SESSION_START_MIN = 5;
 
@@ -770,13 +789,9 @@
   function formatDuration(entry){
     if(!entry || entry.hours == null) return '—';
     const h = entry.hours;
-    if(entry.beaten){
-      if(h < 1) return Math.round(h * 60) + 'm';
-      if(h < 48) return h.toFixed(1) + 'h';
-      return (h / 24).toFixed(1) + 'd';
-    }
     if(h < 1) return Math.round(h * 60) + 'm';
-    return h.toFixed(1) + 'h';
+    if(h < 48) return h.toFixed(1) + 'h';
+    return (h / 24).toFixed(1) + 'd';
   }
 
   async function getEstimatedHours(gameId){
@@ -787,38 +802,47 @@
     // RA only assigns an official "beaten" award when the achievement set's
     // author tagged specific win-condition achievements — many sets never
     // do. A 100%-complete game is functionally beaten either way, so treat
-    // it the same regardless of whether that formal tag exists.
+    // it the same regardless of whether that formal tag exists. (Only
+    // matters for the estimate fallback below, not for real RA data.)
     const fullyCompleted = !!(localGame && Number(localGame.MaxPossible) > 0 &&
       Number(localGame.NumAwarded) >= Number(localGame.MaxPossible));
     const beaten = officialAward || fullyCompleted;
-    const cacheKey = `ra-hours:${creds.username}:${gameId}:${beaten ? 'beaten' : 'progress'}`;
+    const cacheKey = `ra-hours:${creds.username}:${gameId}`;
     try{
       const r = await window.storage.get(cacheKey, false);
       if(r && r.value){
         const parsed = JSON.parse(r.value);
         if(Date.now() - parsed.ts < 12 * 60 * 60 * 1000){
-          estHoursCache[gameId] = { hours: parsed.hours, beaten };
+          estHoursCache[gameId] = { hours: parsed.hours, beaten, real: !!parsed.real };
           return estHoursCache[gameId];
         }
       }
     }catch(e){ /* not cached yet */ }
 
     let hours = null;
+    let real = false;
     try{
       const data = await raFetch('API_GetGameInfoAndUserProgress.php', { g: gameId, a: 1 });
-      const achievements = (data && data.Achievements) ? Object.values(data.Achievements) : [];
-      const dates = [];
-      achievements.forEach(a => {
-        const d1 = parseRADate(a.DateEarned);
-        const d2 = parseRADate(a.DateEarnedHardcore);
-        if(d1) dates.push(d1.getTime());
-        if(d2) dates.push(d2.getTime());
-      });
-      hours = beaten ? beatenSpanHoursFromTimestamps(dates) : estimateHoursFromTimestamps(dates);
+
+      const realSeconds = Number(data && data.UserTotalPlaytime);
+      if(realSeconds > 0){
+        hours = realSeconds / 3600;
+        real = true;
+      }else{
+        const achievements = (data && data.Achievements) ? Object.values(data.Achievements) : [];
+        const dates = [];
+        achievements.forEach(a => {
+          const d1 = parseRADate(a.DateEarned);
+          const d2 = parseRADate(a.DateEarnedHardcore);
+          if(d1) dates.push(d1.getTime());
+          if(d2) dates.push(d2.getTime());
+        });
+        hours = beaten ? beatenSpanHoursFromTimestamps(dates) : estimateHoursFromTimestamps(dates);
+      }
     }catch(e){ hours = null; }
 
-    estHoursCache[gameId] = { hours, beaten };
-    try{ await window.storage.set(cacheKey, JSON.stringify({ hours, ts: Date.now() }), false); }catch(e){ /* non-fatal */ }
+    estHoursCache[gameId] = { hours, beaten, real };
+    try{ await window.storage.set(cacheKey, JSON.stringify({ hours, real, ts: Date.now() }), false); }catch(e){ /* non-fatal */ }
     return estHoursCache[gameId];
   }
 
@@ -1075,28 +1099,43 @@
   function renderProfile(p){
     lastProfile = p;
 
-    // Both stats below are computed from the library data this app already
-    // pulls (RA's public API has no direct field for either) — so they're
-    // only accurate once library data has loaded; renderProfile() gets
-    // called again after that finishes to fill these in for real.
-    let casualUnlocksLabel = '—';
+    // Both computed stats below are derived from the library data this app
+    // already pulls (RA's public API has no direct field for either) — so
+    // they're only accurate once library data has loaded; renderProfile()
+    // gets called again after that finishes to fill these in for real.
+    let unlocksLabel = '—';
     let startedBeatenLabel = '—';
     if(libraryData && libraryData.length > 0){
-      let casualUnlocks = 0;
-      let startedCount = 0;
-      let beatenCount = 0;
+      let casualUnlocks = 0, hardcoreUnlocks = 0;
+      let startedCasual = 0, beatenCasual = 0;
+      let startedHardcore = 0, beatenHardcore = 0;
       libraryData.forEach(g => {
         const awarded = Number(g.NumAwarded || 0);
         const hardcore = Number(g.NumAwardedHardcore || 0);
         casualUnlocks += Math.max(0, awarded - hardcore);
+        hardcoreUnlocks += hardcore;
         if(awarded > 0){
-          startedCount++;
-          if(g.HighestAwardKind) beatenCount++;
+          startedCasual++;
+          if(g.HighestAwardKind) beatenCasual++;
+        }
+        if(hardcore > 0){
+          startedHardcore++;
+          if(g.HighestAwardKind === 'beaten-hardcore' || g.HighestAwardKind === 'mastered') beatenHardcore++;
         }
       });
-      casualUnlocksLabel = casualUnlocks.toLocaleString();
-      startedBeatenLabel = startedCount > 0 ? ((beatenCount / startedCount) * 100).toFixed(2) + '%' : '0%';
+      const unlocks = statsMode === 'hardcore' ? hardcoreUnlocks : casualUnlocks;
+      const started = statsMode === 'hardcore' ? startedHardcore : startedCasual;
+      const beaten = statsMode === 'hardcore' ? beatenHardcore : beatenCasual;
+      unlocksLabel = unlocks.toLocaleString();
+      startedBeatenLabel = started > 0 ? ((beaten / started) * 100).toFixed(2) + '%' : '0%';
     }
+
+    const points = statsMode === 'hardcore'
+      ? Math.max(0, Number(p.TotalPoints || 0) - Number(p.TotalSoftcorePoints || 0))
+      : Number(p.TotalSoftcorePoints || 0);
+    const modeColor = statsMode === 'hardcore' ? 'var(--gold)' : 'var(--teal)';
+    const ptsLabel = statsMode === 'hardcore' ? 'hardcore pts' : 'casual pts';
+    const unlocksLbl = statsMode === 'hardcore' ? 'achievements unlocked (hardcore)' : 'achievements unlocked (casual)';
 
     $('#profile-hero').innerHTML = `
       <img class="avatar" src="${imgUrl(p.UserPic)}" alt="${p.User}">
@@ -1105,9 +1144,9 @@
         <p class="motto">${p.Motto ? p.Motto : 'Member since ' + (parseRADate(p.MemberSince) ? parseRADate(p.MemberSince).toLocaleDateString() : '—')}</p>
       </div>
       <div class="stat-row">
-        <div class="stat"><div class="num" style="color:var(--teal)">${Number(p.TotalSoftcorePoints || 0).toLocaleString()}</div><div class="lbl">casual pts</div></div>
-        <div class="stat"><div class="num" style="color:var(--teal)">${casualUnlocksLabel}</div><div class="lbl">achievements unlocked (casual)</div></div>
-        <div class="stat"><div class="num" style="color:var(--teal)">${startedBeatenLabel}</div><div class="lbl">started games beaten</div></div>
+        <div class="stat"><div class="num" style="color:${modeColor}">${points.toLocaleString()}</div><div class="lbl">${ptsLabel}</div></div>
+        <div class="stat"><div class="num" style="color:${modeColor}">${unlocksLabel}</div><div class="lbl">${unlocksLbl}</div></div>
+        <div class="stat"><div class="num" style="color:${modeColor}">${startedBeatenLabel}</div><div class="lbl">started games beaten</div></div>
       </div>
     `;
   }
@@ -1133,7 +1172,7 @@
       const pct = total ? Math.round((earned/total)*100) : 0;
       const est = estHoursCache[g.GameID];
       const hoursHtml = est
-        ? `<span class="val" style="color:${est.beaten ? 'var(--gold)' : 'var(--teal)'}">${est.beaten ? '' : '≈ '}${formatDuration(est)}</span>`
+        ? `<span class="val" style="color:var(--gold)">${est.real ? '' : '≈ '}${formatDuration(est)}</span>`
         : (Number(g.NumAchieved || 0) > 0 ? 'estimating…' : '—');
       return `
         <div class="cart" data-game-id="${g.GameID}">
@@ -1237,7 +1276,7 @@
             const est = estHoursCache[g.GameID];
             const earned = Number(g.NumAwarded || 0);
             const hoursLabel = est ? formatDuration(est) : (earned > 0 ? '…' : '—');
-            const hoursColor = est && est.beaten ? 'var(--gold)' : 'var(--teal)';
+            const hoursColor = 'var(--gold)';
             return `
             <tr data-game-id="${g.GameID}">
               <td><div class="g-title"><img src="${imgUrl(g.ImageIcon)}" alt=""><span>${g.Title}</span>${g.manual ? `<button class="manual-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : ''}</div></td>
@@ -1410,7 +1449,7 @@
       <div class="modal-progress">
         <div class="row"><span>Your progress</span><span>${earned}/${totalAch || '?'} · ${pct}%</span></div>
         <div class="row"><span>Status</span><span>${awardPill(awardKind)}</span></div>
-        <div class="row"><span>${est && est.beaten ? 'Time to beat' : 'Est. playtime'}</span><span style="color:${est && est.beaten ? 'var(--gold)' : 'var(--teal)'}">${est ? formatDuration(est) : '—'}</span></div>
+        <div class="row"><span>${est && est.real ? 'Playtime' : (est && est.beaten ? 'Time to beat' : 'Est. playtime')}</span><span style="color:var(--gold)">${est ? formatDuration(est) : '—'}</span></div>
       </div>
 
       <div class="modal-links">
@@ -1793,7 +1832,6 @@
     }
   });
 
-  $('#btn-refresh').addEventListener('click', loadAll);
   $('#btn-disconnect').addEventListener('click', async () => {
     creds = null;
     await clearCreds();
@@ -1801,6 +1839,11 @@
   });
   $('#btn-cloud-signout').addEventListener('click', () => {
     if (window.doSignOut) { window.doSignOut().catch(err => console.error("Sign-out failure:", err)); }
+  });
+  $('#btn-hardcore-toggle').addEventListener('click', () => {
+    statsMode = statsMode === 'hardcore' ? 'casual' : 'hardcore';
+    $('#btn-hardcore-toggle').textContent = statsMode === 'hardcore' ? 'Switch to Casual Mode' : 'Switch to Hardcore Mode';
+    if(lastProfile) renderProfile(lastProfile);
   });
   $('#lib-search').addEventListener('input', renderLibrary);
 
@@ -1858,8 +1901,15 @@
     const wrap = $('#menu-wrap');
     if(wrap && !wrap.contains(e.target)) closeDropdownMenu();
   });
-  document.querySelectorAll('.dropdown-item').forEach(item => {
+  document.querySelectorAll('.dropdown-item:not(.dropdown-heading)').forEach(item => {
     item.addEventListener('click', closeDropdownMenu);
+  });
+  $('#btn-ra-heading').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const submenu = $('#ra-submenu');
+    const isOpen = submenu.style.display === 'block';
+    submenu.style.display = isOpen ? 'none' : 'block';
+    $('#ra-heading-arrow').textContent = isOpen ? '▸' : '▾';
   });
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
