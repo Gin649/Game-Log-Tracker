@@ -551,11 +551,16 @@
     <button class="modal-close" id="addgame-close-btn">✕</button>
     <div class="modal-body">
       <h2 style="margin-bottom:4px;">Add a game</h2>
-      <p class="sub" style="margin-bottom:18px;">Search RetroAchievements' game list and add one to your library with no progress yet.</p>
+      <p class="sub" style="margin-bottom:18px;">Search RetroAchievements' game list, or add a game from a system RA doesn't track.</p>
 
       <div class="field">
         <label>System</label>
         <select id="addgame-system"><option>Loading systems…</option></select>
+      </div>
+      <div class="field" id="addgame-custom-console-field" style="display:none;">
+        <label>Console name</label>
+        <input id="addgame-custom-console" type="text" placeholder="e.g. Nintendo 3DS" autocomplete="off">
+        <div class="hint">Not on RetroAchievements — box art and details are pulled from RAWG instead, and this game won't count toward any RetroAchievements-based stats.</div>
       </div>
       <div class="field">
         <label>Game title</label>
@@ -1273,22 +1278,32 @@
         </tr></thead>
         <tbody>
           ${rows.map(g => {
+            const isCustom = g.customConsole === true;
             const est = estHoursCache[g.GameID];
             const earned = Number(g.NumAwarded || 0);
-            const hoursLabel = est ? formatDuration(est) : (earned > 0 ? '…' : '—');
+            const hoursLabel = isCustom ? '—' : (est ? formatDuration(est) : (earned > 0 ? '…' : '—'));
             const hoursColor = 'var(--gold)';
-            return `
-            <tr data-game-id="${g.GameID}">
-              <td><div class="g-title"><img src="${imgUrl(g.ImageIcon)}" alt=""><span>${g.Title}</span>${g.manual ? `<button class="manual-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : ''}</div></td>
-              <td>${awardPill(g.HighestAwardKind)}</td>
-              <td>
+            const awardCell = isCustom
+              ? (g.manualBeaten ? '<span class="pill pill-teal">Beaten</span>' : '<span class="pill pill-muted">In progress</span>')
+              : awardPill(g.HighestAwardKind);
+            const progressCell = isCustom
+              ? '<span style="color:var(--muted);font-size:12px;">—</span>'
+              : `
                 <div class="bar">
                   <div class="progress-track"><div class="progress-fill ${g.pct>=100?'complete':''}" style="width:${g.pct}%"></div></div>
                 </div>
                 <span style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)">${g.NumAwarded}/${g.MaxPossible} · ${g.pct}%</span>
-              </td>
+              `;
+            const lastPlayedLabel = isCustom
+              ? (g.manualBeatenDate ? new Date(g.manualBeatenDate).toLocaleDateString() : 'Never')
+              : (g.lastPlayed ? timeAgo(g.lastPlayed) : 'Never');
+            return `
+            <tr data-game-id="${g.GameID}">
+              <td><div class="g-title"><img src="${imgUrl(g.ImageIcon)}" alt=""><span>${g.Title}</span>${g.manual ? `<button class="manual-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : ''}</div></td>
+              <td>${awardCell}</td>
+              <td>${progressCell}</td>
               <td style="font-family:'Space Mono',monospace;font-size:12px;color:${hoursColor}">${hoursLabel}</td>
-              <td style="color:var(--muted);font-size:12px;">${g.lastPlayed ? timeAgo(g.lastPlayed) : 'Never'}</td>
+              <td style="color:var(--muted);font-size:12px;">${lastPlayedLabel}</td>
             </tr>
           `;
           }).join('')}
@@ -1317,10 +1332,15 @@
 
   function renderByYear(){
     const el = $('#year-wrap');
-    const done = libraryData.filter(g =>
-      g.HighestAwardKind && g.HighestAwardDate &&
+    const raBeaten = libraryData.filter(g =>
+      !g.customConsole && g.HighestAwardKind && g.HighestAwardDate &&
       (systemFilter === 'All' || g.ConsoleName === systemFilter)
     );
+    const manualBeaten = libraryData.filter(g =>
+      g.customConsole && g.manualBeaten && g.manualBeatenDate &&
+      (systemFilter === 'All' || g.ConsoleName === systemFilter)
+    );
+    const done = [...raBeaten, ...manualBeaten];
     if(done.length === 0){
       el.innerHTML = '<div class="empty">No completions yet — beat or master a game and it\'ll show up here.</div>';
       return;
@@ -1329,9 +1349,16 @@
     const casualFirst = { 'beaten-softcore': 0, 'completed': 1, 'beaten-hardcore': 2, 'mastered': 3 };
     const byYear = {};
     done.forEach(g => {
-      const parsed = parseRADate(g.HighestAwardDate);
-      if(!parsed) return;
-      const year = parsed.getFullYear();
+      let year;
+      if(g.customConsole){
+        const d = new Date(g.manualBeatenDate);
+        if(isNaN(d.getTime())) return;
+        year = d.getFullYear();
+      }else{
+        const parsed = parseRADate(g.HighestAwardDate);
+        if(!parsed) return;
+        year = parsed.getFullYear();
+      }
       if(!byYear[year]) byYear[year] = [];
       byYear[year].push(g);
     });
@@ -1339,7 +1366,7 @@
     const years = Object.keys(byYear).sort((a,b) => b - a);
     el.innerHTML = years.map(year => {
       const games = byYear[year].slice().sort((a,b) =>
-        (casualFirst[a.HighestAwardKind] ?? 9) - (casualFirst[b.HighestAwardKind] ?? 9)
+        (casualFirst[a.HighestAwardKind] ?? (a.customConsole ? -1 : 9)) - (casualFirst[b.HighestAwardKind] ?? (b.customConsole ? -1 : 9))
       );
       return `
         <div class="year-group">
@@ -1349,7 +1376,7 @@
               <div class="year-item" data-game-id="${g.GameID}" title="${g.Title}">
                 <img src="${imgUrl(g.ImageIcon)}" alt="">
                 <div class="yt">${g.Title}</div>
-                ${awardPill(g.HighestAwardKind)}
+                ${g.customConsole ? '<span class="pill pill-teal">Beaten</span>' : awardPill(g.HighestAwardKind)}
               </div>
             `).join('')}
           </div>
@@ -1391,6 +1418,123 @@
     return libraryData.find(g => g.GameID === gameId) || recentGamesData.find(g => g.GameID === gameId) || null;
   }
 
+  async function attachRawgLookup(gameId, title, card){
+    if(!rawgCreds) rawgCreds = await loadRawgCreds();
+    if(!rawgCreds){
+      const note = card.querySelector('.modal-note');
+      if(note) note.insertAdjacentHTML('afterend', `<p class="rawg-setup-note"><a id="rawg-setup-link">Set up RAWG</a> to show review scores here.</p>`);
+      const link = card.querySelector('#rawg-setup-link');
+      if(link) link.addEventListener('click', () => { closeGameModal(); openRawgModal(); });
+    }else{
+      const badge = card.querySelector('#rawg-badge');
+      if(badge) badge.innerHTML = `<span class="rawg-score tier-muted">…</span>`;
+
+      const runRawgLookup = (force) => {
+        getRawgRating(title, force).then(rating => {
+          if(card.dataset.gameId !== String(gameId)) return; // modal moved on to another game
+          const badgeEl = card.querySelector('#rawg-badge');
+          if(!badgeEl) return;
+
+          const label = rating ? String(rating.score) : 'N/A';
+          const tier = !rating ? 'tier-muted' : rating.score >= 80 ? 'tier-green' : rating.score >= 50 ? 'tier-yellow' : 'tier-red';
+          badgeEl.innerHTML = `<span class="rawg-score ${tier}" id="rawg-retry" title="Tap to look up again">${label}</span>`;
+
+          const retryEl = card.querySelector('#rawg-retry');
+          if(retryEl){
+            retryEl.style.cursor = 'pointer';
+            retryEl.addEventListener('click', () => {
+              badgeEl.innerHTML = `<span class="rawg-score tier-muted">…</span>`;
+              runRawgLookup(true);
+            });
+          }
+        });
+      };
+      runRawgLookup(false);
+    }
+  }
+
+  async function updateManualBeatenStatus(gameId, beaten, dateStr){
+    return enqueueTask(async () => {
+      const idx = libraryData.findIndex(g => g.GameID === gameId);
+      if(idx === -1) return;
+      libraryData[idx] = { ...libraryData[idx], manualBeaten: beaten, manualBeatenDate: beaten ? dateStr : null };
+
+      const manual = await loadManualGames();
+      const manualIdx = manual.findIndex(g => g.GameID === gameId);
+      if(manualIdx !== -1){
+        manual[manualIdx] = { ...manual[manualIdx], manualBeaten: beaten, manualBeatenDate: beaten ? dateStr : null };
+        await saveManualGames(manual);
+      }
+      renderLibrary();
+      renderByYear();
+    });
+  }
+
+  function renderCustomGameModal(gameId, local, card){
+    const boxArt = imgUrl(local.ImageBoxArt || local.ImageIcon || '');
+    card.querySelector('.modal-art').src = boxArt;
+
+    let releasedLabel = '—';
+    if(local.released){
+      const d = new Date(local.released);
+      releasedLabel = isNaN(d.getTime()) ? local.released : d.toLocaleDateString();
+    }
+    const beatenDateValue = local.manualBeatenDate || '';
+
+    card.querySelector('.modal-body').innerHTML = `
+      <h2>${local.Title}</h2>
+      <p class="sub">${local.ConsoleName}</p>
+
+      <div class="modal-meta">
+        <div class="mi"><div class="k">GENRE</div><div class="v">${local.genre || '—'}</div></div>
+        <div class="mi"><div class="k">RELEASED</div><div class="v">${releasedLabel}</div></div>
+      </div>
+
+      <div class="modal-progress">
+        <div class="row"><span>Progress</span><span style="color:var(--muted)">—</span></div>
+        <div class="row"><span>Playtime</span><span style="color:var(--muted)">—</span></div>
+        <div class="row"><span>Status</span><span>${local.manualBeaten ? '<span class="pill pill-teal">Beaten</span>' : '<span class="pill pill-muted">In progress</span>'}</span></div>
+      </div>
+
+      <div class="field" style="text-align:left;margin-bottom:14px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-family:inherit; font-size:13px; color:var(--text);">
+          <input type="checkbox" id="manual-beaten-checkbox" ${local.manualBeaten ? 'checked' : ''} style="width:16px;height:16px;">
+          <span>Mark as beaten</span>
+        </label>
+        <div id="manual-beaten-date-wrap" style="margin-top:10px; ${local.manualBeaten ? '' : 'display:none;'}">
+          <label>Date beaten</label>
+          <input type="date" id="manual-beaten-date" value="${beatenDateValue}">
+        </div>
+      </div>
+
+      <div class="modal-links">
+        <a href="https://www.metacritic.com/search/${encodeURIComponent(local.Title)}/" target="_blank" rel="noopener">Search Metacritic ↗</a>
+        <a href="https://howlongtobeat.com/?q=${encodeURIComponent(local.Title)}" target="_blank" rel="noopener">Search HowLongToBeat ↗</a>
+      </div>
+
+      <p class="modal-note">Not on RetroAchievements — tracked manually, and not included in any RetroAchievements-based stats. Ratings via <a href="https://rawg.io" target="_blank" rel="noopener" style="color:var(--teal)">RAWG</a>.</p>
+    `;
+
+    const checkbox = card.querySelector('#manual-beaten-checkbox');
+    const dateWrap = card.querySelector('#manual-beaten-date-wrap');
+    const dateInput = card.querySelector('#manual-beaten-date');
+
+    checkbox.addEventListener('change', async () => {
+      dateWrap.style.display = checkbox.checked ? 'block' : 'none';
+      if(checkbox.checked && !dateInput.value){
+        dateInput.value = new Date().toISOString().slice(0, 10);
+      }
+      await updateManualBeatenStatus(gameId, checkbox.checked, dateInput.value || null);
+    });
+    dateInput.addEventListener('change', async () => {
+      if(checkbox.checked){
+        await updateManualBeatenStatus(gameId, true, dateInput.value || null);
+      }
+    });
+
+    attachRawgLookup(gameId, local.Title, card);
+  }
+
   async function openGameModal(gameId){
     const card = $('#modal-card');
     const local = findGameLocal(gameId);
@@ -1403,6 +1547,11 @@
       <div class="modal-body"><div class="loading">Loading game info</div></div>
     `;
     $('#modal-close-btn').addEventListener('click', closeGameModal);
+
+    if(local && local.customConsole){
+      renderCustomGameModal(gameId, local, card);
+      return;
+    }
 
     let ext;
     try{
@@ -1460,38 +1609,7 @@
       <p class="modal-note">Ratings via <a href="https://rawg.io" target="_blank" rel="noopener" style="color:var(--teal)">RAWG</a>.</p>
     `;
 
-    if(!rawgCreds) rawgCreds = await loadRawgCreds();
-    if(!rawgCreds){
-      const note = card.querySelector('.modal-note');
-      if(note) note.insertAdjacentHTML('afterend', `<p class="rawg-setup-note"><a id="rawg-setup-link">Set up RAWG</a> to show review scores here.</p>`);
-      const link = card.querySelector('#rawg-setup-link');
-      if(link) link.addEventListener('click', () => { closeGameModal(); openRawgModal(); });
-    }else{
-      const badge = card.querySelector('#rawg-badge');
-      if(badge) badge.innerHTML = `<span class="rawg-score tier-muted">…</span>`;
-
-      const runRawgLookup = (force) => {
-        getRawgRating(title, force).then(rating => {
-          if(card.dataset.gameId !== String(gameId)) return; // modal moved on to another game
-          const badgeEl = card.querySelector('#rawg-badge');
-          if(!badgeEl) return;
-
-          const label = rating ? String(rating.score) : 'N/A';
-          const tier = !rating ? 'tier-muted' : rating.score >= 80 ? 'tier-green' : rating.score >= 50 ? 'tier-yellow' : 'tier-red';
-          badgeEl.innerHTML = `<span class="rawg-score ${tier}" id="rawg-retry" title="Tap to look up again">${label}</span>`;
-
-          const retryEl = card.querySelector('#rawg-retry');
-          if(retryEl){
-            retryEl.style.cursor = 'pointer';
-            retryEl.addEventListener('click', () => {
-              badgeEl.innerHTML = `<span class="rawg-score tier-muted">…</span>`;
-              runRawgLookup(true);
-            });
-          }
-        });
-      };
-      runRawgLookup(false);
-    }
+    attachRawgLookup(gameId, title, card);
   }
 
   function closeGameModal(){
@@ -1527,6 +1645,8 @@
   async function openAddGameModal(){
     $('#addgame-backdrop').classList.add('open');
     $('#addgame-title').value = '';
+    $('#addgame-custom-console').value = '';
+    $('#addgame-custom-console-field').style.display = 'none';
     $('#addgame-results').innerHTML = '';
     const sel = $('#addgame-system');
     sel.innerHTML = '<option>Loading systems…</option>';
@@ -1536,11 +1656,17 @@
         .map(c => ({ id: c.ID ?? c.id, name: c.Name ?? c.name }))
         .filter(c => c.id != null && c.name)
         .sort((a, b) => a.name.localeCompare(b.name));
-      sel.innerHTML = sorted.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      sel.innerHTML = sorted.map(c => `<option value="${c.id}">${c.name}</option>`).join('')
+        + `<option value="__custom__">Other system (not on RetroAchievements)…</option>`;
     }catch(e){
-      sel.innerHTML = '<option value="">Could not load systems</option>';
+      sel.innerHTML = '<option value="">Could not load systems</option><option value="__custom__">Other system (not on RetroAchievements)…</option>';
     }
   }
+
+  $('#addgame-system').addEventListener('change', () => {
+    const isCustom = $('#addgame-system').value === '__custom__';
+    $('#addgame-custom-console-field').style.display = isCustom ? 'block' : 'none';
+  });
 
   function closeAddGameModal(){
     $('#addgame-backdrop').classList.remove('open');
@@ -1551,6 +1677,40 @@
     const consoleId = sel.value;
     const query = $('#addgame-title').value.trim();
     const resultsEl = $('#addgame-results');
+
+    if(consoleId === '__custom__'){
+      const customConsole = $('#addgame-custom-console').value.trim();
+      if(!query || !customConsole){
+        resultsEl.innerHTML = '<div class="ag-empty">Enter a console name and a title.</div>';
+        return;
+      }
+      resultsEl.innerHTML = '<div class="loading">Searching RAWG</div>';
+      try{
+        const results = await searchRawgForAddGame(query);
+        if(results.length === 0){
+          resultsEl.innerHTML = '<div class="ag-empty">No matching games found on RAWG.</div>';
+          return;
+        }
+        resultsEl.innerHTML = results.map(g => `
+          <div class="ag-result" data-rawg-id="${g.id}">
+            <img src="${g.background_image || ''}" alt="">
+            <span class="t">${g.name}</span>
+            <span class="n">${g.released ? g.released.slice(0,4) : ''}</span>
+          </div>
+        `).join('');
+        resultsEl.querySelectorAll('.ag-result').forEach(el => {
+          el.addEventListener('click', () => {
+            const id = Number(el.getAttribute('data-rawg-id'));
+            const match = results.find(g => g.id === id);
+            if(match) addManualGameFromRawg(match, customConsole);
+          });
+        });
+      }catch(e){
+        resultsEl.innerHTML = `<div class="error-box">Search failed: ${e.message}</div>`;
+      }
+      return;
+    }
+
     if(!query || !consoleId){
       resultsEl.innerHTML = '<div class="ag-empty">Pick a system and enter a title.</div>';
       return;
@@ -1589,6 +1749,14 @@
     }
   }
 
+  async function searchRawgForAddGame(title){
+    if(!rawgCreds) rawgCreds = await loadRawgCreds();
+    if(!rawgCreds || !rawgCreds.apiKey) throw new Error('RAWG isn\'t set up — add a key under RAWG Ratings in the menu first.');
+    const url = `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgCreds.apiKey)}&search=${encodeURIComponent(title)}&page_size=10`;
+    const json = await rawgGet(url);
+    return (json && json.results) || [];
+  }
+
   async function addManualGame(g, consoleId, consoleName){
     return enqueueTask(async () => {
       const gameId = Number(g.ID ?? g.id);
@@ -1611,6 +1779,46 @@
         pct: 0,
         lastPlayed: null,
         manual: true,
+      };
+      libraryData = [...libraryData, entry];
+      const manual = await loadManualGames();
+      await saveManualGames([...manual, entry]);
+      renderSystemChips();
+      renderLibrary();
+      renderByYear();
+      closeAddGameModal();
+    });
+  }
+
+  async function addManualGameFromRawg(rawgGame, customConsole){
+    return enqueueTask(async () => {
+      const gameId = -Date.now(); // synthetic, always negative — never collides with a real RA GameID
+      if(libraryData.some(x => x.GameID === gameId)){
+        closeAddGameModal();
+        return;
+      }
+      const genre = (rawgGame.genres && rawgGame.genres.length) ? rawgGame.genres.map(g => g.name).join(', ') : null;
+      const entry = {
+        GameID: gameId,
+        Title: rawgGame.name,
+        ConsoleID: null,
+        ConsoleName: customConsole,
+        ImageIcon: rawgGame.background_image || null,
+        ImageBoxArt: rawgGame.background_image || null,
+        MaxPossible: 0,
+        NumAwarded: 0,
+        NumAwardedHardcore: 0,
+        HighestAwardKind: null,
+        HighestAwardDate: null,
+        MostRecentAwardedDate: null,
+        pct: 0,
+        lastPlayed: null,
+        manual: true,
+        customConsole: true, // not on RA at all — no achievement data will ever exist for this entry
+        genre: genre,
+        released: rawgGame.released || null,
+        manualBeaten: false,
+        manualBeatenDate: null,
       };
       libraryData = [...libraryData, entry];
       const manual = await loadManualGames();
