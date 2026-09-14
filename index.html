@@ -60,16 +60,9 @@
   }
   .brand .menu-wrap{margin-left:auto;}
   .brand .mark{
-    font-family:'Space Mono',monospace;
-    font-weight:700;
-    font-size:20px;
-    letter-spacing:1px;
-    color:var(--gold);
-    border:2px solid var(--gold);
-    padding:2px 7px;
-    border-radius:var(--radius);
+    width:34px;height:34px;border-radius:8px;flex-shrink:0;display:block;
   }
-  .brand .name{font-family:'Space Mono',monospace;font-size:15px;color:var(--muted);}
+  .brand .name{font-family:'Space Mono',monospace;font-size:14px;color:var(--muted);}
 
   /* ---- Connect panel ---- */
   .connect{
@@ -228,6 +221,7 @@
   }
   .progress-fill{height:100%;background:var(--teal);border-radius:20px;}
   .progress-fill.complete{background:var(--gold);}
+  .progress-fill.hardcore{background:var(--gold);}
   .cart .prog-lbl{
     display:flex;justify-content:space-between;font-size:9.5px;color:var(--muted);
     font-family:'Space Mono',monospace;
@@ -430,7 +424,7 @@
 <div class="wrap">
 
   <div class="brand">
-    <span class="mark">RA</span><span class="name">Game Log</span>
+    <img class="mark" src="icon-192.png" alt="Game Log Tracker"><span class="name">What will you beat Today?</span>
     <div class="menu-wrap" id="menu-wrap" style="display:none;">
       <button class="btn-hamburger" id="btn-menu" aria-label="Menu">
         <span class="bar"></span><span class="bar"></span><span class="bar"></span>
@@ -511,8 +505,8 @@
 
     <div class="tabs">
       <button class="tab-btn active" data-tab="overview">Overview</button>
-      <button class="tab-btn" data-tab="library">Library</button>
-      <button class="tab-btn" data-tab="year">By year</button>
+      <button class="tab-btn" data-tab="library">Game Library</button>
+      <button class="tab-btn" data-tab="year">Beaten by Year</button>
     </div>
 
     <div id="tab-overview" class="tab-panel active">
@@ -526,7 +520,7 @@
     <div id="system-chips" class="chip-row"></div>
 
     <div id="tab-library" class="tab-panel">
-      <div class="section-title">Full library <span class="count" id="lib-count"></span></div>
+      <div class="section-title">Game Library <span class="count" id="lib-count"></span></div>
       <div class="lib-search-row">
         <input class="lib-search" id="lib-search" type="text" placeholder="Search your games...">
         <button class="btn-ghost" id="btn-add-game">+ Add game</button>
@@ -585,7 +579,10 @@
         <input id="rawg-api-key" type="text" autocomplete="off">
         <div class="hint">Free — get a key at <a href="https://rawg.io/apidocs" target="_blank" rel="noopener">rawg.io/apidocs</a> (20,000 requests/month free, no OAuth, just this one key).</div>
       </div>
-      <button class="btn-primary" id="rawg-save-btn">Save</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-primary" id="rawg-save-btn" style="flex:1;">Save</button>
+        <button id="rawg-remove-btn" style="flex:1; background: transparent; border: 1px solid var(--danger); color: var(--danger); border-radius: var(--radius); font-family: 'Space Mono', monospace; font-weight: 700; font-size: 13px; cursor: pointer;">Remove key</button>
+      </div>
       <div id="rawg-status"></div>
     </div>
   </div>
@@ -637,6 +634,7 @@
   let libraryData = [];
   let recentGamesData = [];
   let lastProfile = null; // re-used to recompute profile stats once library data loads
+  let userPoints = null; // { Points (hardcore), SoftcorePoints } from API_GetUserPoints.php — these are disjoint, not overlapping subsets
   let statsMode = 'casual'; // 'casual' | 'hardcore' — toggled from the menu
   let libraryIndex = {}; // GameID -> library entry, for looking up beaten status
   let librarySort = { key: 'lastPlayed', dir: 'desc' };
@@ -973,7 +971,6 @@
   // RAWG auths with a plain API key as a URL query param, and — unlike RA —
   // actually supports CORS for direct browser calls, so this tries direct
   // first and only falls back to proxies if that fails.
-  const RAWG_DEFAULT_API_KEY = 'a8bf350bf38d4e6a87a32967e345e384';
   let rawgCreds = null; // { apiKey }, lazy-loaded
 
   async function loadRawgCreds(){
@@ -981,12 +978,17 @@
       const r = await window.storage.get('rawg-credentials', false);
       if(r && r.value) return JSON.parse(r.value);
     }catch(e){ /* not set up yet */ }
-    return { apiKey: RAWG_DEFAULT_API_KEY }; // built-in default — overridable via the Ratings button
+    return null;
   }
   async function saveRawgCreds(apiKey){
     try{ await window.storage.set('rawg-credentials', JSON.stringify({ apiKey }), false); }
     catch(e){ /* non-fatal */ }
     if(window.syncSettingsToCloud){ try{ await window.syncSettingsToCloud({ rawgApiKey: apiKey }); }catch(e){ /* non-fatal */ } }
+  }
+  async function removeRawgCreds(){
+    rawgCreds = null;
+    try{ await window.storage.delete('rawg-credentials', false); }catch(e){ /* non-fatal */ }
+    if(window.syncSettingsToCloud){ try{ await window.syncSettingsToCloud({ rawgApiKey: null }); }catch(e){ /* non-fatal */ } }
   }
 
   async function rawgGet(url){
@@ -1115,6 +1117,7 @@
       let startedCasual = 0, beatenCasual = 0;
       let startedHardcore = 0, beatenHardcore = 0;
       libraryData.forEach(g => {
+        if(g.customConsole) return; // manually-tracked, non-RA games never count toward RA stats
         const awarded = Number(g.NumAwarded || 0);
         const hardcore = Number(g.NumAwardedHardcore || 0);
         casualUnlocks += Math.max(0, awarded - hardcore);
@@ -1135,9 +1138,14 @@
       startedBeatenLabel = started > 0 ? ((beaten / started) * 100).toFixed(2) + '%' : '0%';
     }
 
-    const points = statsMode === 'hardcore'
-      ? Math.max(0, Number(p.TotalPoints || 0) - Number(p.TotalSoftcorePoints || 0))
-      : Number(p.TotalSoftcorePoints || 0);
+    // Real hardcore/softcore points from API_GetUserPoints.php — these are
+    // disjoint totals RA tracks directly (NOT TotalPoints minus softcore;
+    // that undercounts, since hardcore points aren't a subset of TotalPoints
+    // the way the profile endpoint's field naming might suggest).
+    const points = userPoints
+      ? (statsMode === 'hardcore' ? Number(userPoints.Points || 0) : Number(userPoints.SoftcorePoints || 0))
+      : (statsMode === 'hardcore' ? null : Number(p.TotalSoftcorePoints || 0)); // fallback casual-only, before the points endpoint has loaded
+    const pointsLabel = points == null ? '—' : points.toLocaleString();
     const modeColor = statsMode === 'hardcore' ? 'var(--gold)' : 'var(--teal)';
     const ptsLabel = statsMode === 'hardcore' ? 'hardcore pts' : 'casual pts';
     const unlocksLbl = statsMode === 'hardcore' ? 'achievements unlocked (hardcore)' : 'achievements unlocked (casual)';
@@ -1149,7 +1157,7 @@
         <p class="motto">${p.Motto ? p.Motto : 'Member since ' + (parseRADate(p.MemberSince) ? parseRADate(p.MemberSince).toLocaleDateString() : '—')}</p>
       </div>
       <div class="stat-row">
-        <div class="stat"><div class="num" style="color:${modeColor}">${points.toLocaleString()}</div><div class="lbl">${ptsLabel}</div></div>
+        <div class="stat"><div class="num" style="color:${modeColor}">${pointsLabel}</div><div class="lbl">${ptsLabel}</div></div>
         <div class="stat"><div class="num" style="color:${modeColor}">${unlocksLabel}</div><div class="lbl">${unlocksLbl}</div></div>
         <div class="stat"><div class="num" style="color:${modeColor}">${startedBeatenLabel}</div><div class="lbl">started games beaten</div></div>
       </div>
@@ -1157,9 +1165,16 @@
   }
 
   function awardPill(kind){
+    if(statsMode === 'hardcore'){
+      // From a hardcore-only lens, softcore-earned completions don't count —
+      // only games actually beaten/mastered in hardcore mode show as done.
+      if(kind === 'mastered') return '<span class="pill pill-gold">Mastered</span>';
+      if(kind === 'beaten-hardcore') return '<span class="pill pill-gold">Beaten (HC)</span>';
+      return '<span class="pill pill-muted">In progress</span>';
+    }
     const map = {
-      'mastered':        { label: 'Mastered',    cls: 'pill-gold' },
-      'completed':       { label: 'Mastered',    cls: 'pill-gold' },
+      'mastered':        { label: 'Mastered',    cls: 'pill-teal' },
+      'completed':       { label: 'Mastered',    cls: 'pill-teal' },
       'beaten-hardcore': { label: 'Beaten (HC)',  cls: 'pill-gold' },
       'beaten-softcore': { label: 'Beaten',       cls: 'pill-teal' },
     };
@@ -1221,7 +1236,12 @@
     const chipRow = $('#system-chips');
     const counts = {};
     const source = activeTab === 'year'
-      ? libraryData.filter(g => g.HighestAwardKind && g.HighestAwardDate)
+      ? libraryData.filter(g => {
+          if(g.customConsole) return g.manualBeaten && g.manualBeatenDate;
+          if(!g.HighestAwardKind || !g.HighestAwardDate) return false;
+          if(statsMode === 'hardcore') return g.HighestAwardKind === 'beaten-hardcore' || g.HighestAwardKind === 'mastered';
+          return true;
+        })
       : libraryData;
     source.forEach(g => { counts[g.ConsoleName] = (counts[g.ConsoleName] || 0) + 1; });
     const systems = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
@@ -1286,13 +1306,16 @@
             const awardCell = isCustom
               ? (g.manualBeaten ? '<span class="pill pill-teal">Beaten</span>' : '<span class="pill pill-muted">In progress</span>')
               : awardPill(g.HighestAwardKind);
+            const isHardcoreMode = statsMode === 'hardcore';
+            const awardedForMode = isHardcoreMode ? Number(g.NumAwardedHardcore || 0) : Number(g.NumAwarded || 0);
+            const pctForMode = Number(g.MaxPossible) ? Math.round((awardedForMode / Number(g.MaxPossible)) * 100) : 0;
             const progressCell = isCustom
               ? '<span style="color:var(--muted);font-size:12px;">—</span>'
               : `
                 <div class="bar">
-                  <div class="progress-track"><div class="progress-fill ${g.pct>=100?'complete':''}" style="width:${g.pct}%"></div></div>
+                  <div class="progress-track"><div class="progress-fill ${pctForMode>=100?'complete':''} ${isHardcoreMode?'hardcore':''}" style="width:${pctForMode}%"></div></div>
                 </div>
-                <span style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)">${g.NumAwarded}/${g.MaxPossible} · ${g.pct}%</span>
+                <span style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)">${awardedForMode}/${g.MaxPossible} · ${pctForMode}%</span>
               `;
             const lastPlayedLabel = isCustom
               ? (g.manualBeatenDate ? new Date(g.manualBeatenDate).toLocaleDateString() : 'Never')
@@ -1332,10 +1355,14 @@
 
   function renderByYear(){
     const el = $('#year-wrap');
-    const raBeaten = libraryData.filter(g =>
-      !g.customConsole && g.HighestAwardKind && g.HighestAwardDate &&
-      (systemFilter === 'All' || g.ConsoleName === systemFilter)
-    );
+    const raBeaten = libraryData.filter(g => {
+      if(g.customConsole || !g.HighestAwardKind || !g.HighestAwardDate) return false;
+      if(systemFilter !== 'All' && g.ConsoleName !== systemFilter) return false;
+      if(statsMode === 'hardcore'){
+        return g.HighestAwardKind === 'beaten-hardcore' || g.HighestAwardKind === 'mastered';
+      }
+      return true;
+    });
     const manualBeaten = libraryData.filter(g =>
       g.customConsole && g.manualBeaten && g.manualBeatenDate &&
       (systemFilter === 'All' || g.ConsoleName === systemFilter)
@@ -1508,7 +1535,6 @@
       </div>
 
       <div class="modal-links">
-        <a href="https://www.metacritic.com/search/${encodeURIComponent(local.Title)}/" target="_blank" rel="noopener">Search Metacritic ↗</a>
         <a href="https://howlongtobeat.com/?q=${encodeURIComponent(local.Title)}" target="_blank" rel="noopener">Search HowLongToBeat ↗</a>
       </div>
 
@@ -1574,7 +1600,8 @@
 
     const totalAch = Number(ext.NumAchievements || (local && (local.MaxPossible || local.NumPossibleAchievements)) || 0);
 
-    const earned = local ? Number(local.NumAwarded ?? local.NumAchieved ?? 0) : 0;
+    const isHardcoreMode = statsMode === 'hardcore';
+    const earned = local ? (isHardcoreMode ? Number(local.NumAwardedHardcore ?? 0) : Number(local.NumAwarded ?? local.NumAchieved ?? 0)) : 0;
     const pct = totalAch ? Math.round((earned/totalAch)*100) : 0;
     const est = estHoursCache[gameId];
     const awardKind = local ? local.HighestAwardKind : null;
@@ -1884,6 +1911,12 @@
     }
   });
 
+  $('#rawg-remove-btn').addEventListener('click', async () => {
+    await removeRawgCreds();
+    $('#rawg-api-key').value = '';
+    $('#rawg-status').innerHTML = '<p style="color:var(--muted);font-size:12.5px;margin-top:10px;">RAWG key removed — ratings will stop showing until a new key is saved.</p>';
+  });
+
   async function loadAll(){
     await enqueueTask(async () => {
     $('#recent-games').innerHTML = '<div class="loading">Loading</div>';
@@ -1895,6 +1928,14 @@
       renderProfile(profile);
     }catch(e){
       $('#profile-hero').innerHTML = `<div class="error-box">Could not load profile: ${e.message}</div>`;
+    }
+
+    try{
+      const points = await raFetch('API_GetUserPoints.php', {});
+      userPoints = points; // { Points (hardcore-only), SoftcorePoints }
+      if(lastProfile) renderProfile(lastProfile); // refresh now that real points are in
+    }catch(e){
+      console.error('Failed to load user points:', e);
     }
 
     try{
@@ -1959,7 +2000,7 @@
     try{ renderByYear(); }
     catch(e){
       console.error('renderByYear failed:', e);
-      $('#year-wrap').innerHTML = `<div class="error-box">Couldn't display completions by year: ${e.message}</div>`;
+      $('#year-wrap').innerHTML = `<div class="error-box">Couldn't display beaten by year: ${e.message}</div>`;
     }
     }); // end of queued task — everything above this point is fully serialized
 
@@ -2052,6 +2093,9 @@
     statsMode = statsMode === 'hardcore' ? 'casual' : 'hardcore';
     $('#btn-hardcore-toggle').textContent = statsMode === 'hardcore' ? 'Switch to Casual Mode' : 'Switch to Hardcore Mode';
     if(lastProfile) renderProfile(lastProfile);
+    renderSystemChips();
+    renderLibrary();
+    renderByYear();
   });
   $('#lib-search').addEventListener('input', renderLibrary);
 
