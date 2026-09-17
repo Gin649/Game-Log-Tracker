@@ -437,6 +437,7 @@
           <button class="dropdown-item dropdown-subitem" id="btn-hardcore-toggle">Switch to Hardcore Mode</button>
         </div>
         <button class="dropdown-item" id="btn-rawg-settings">RAWG Ratings</button>
+        <button class="dropdown-item" id="btn-data-settings-open">Data</button>
         <button class="dropdown-item" id="btn-cloud-signout">Sign Out</button>
       </div>
     </div>
@@ -588,42 +589,136 @@
   </div>
 </div>
 
+<div id="data-backdrop" class="modal-backdrop">
+  <div class="modal-card" id="data-card">
+    <button class="modal-close" id="data-close-btn">✕</button>
+    <div class="modal-body">
+      <h2 style="margin-bottom:4px;">Data</h2>
+      <p class="sub" style="margin-bottom:18px;">Everything — RA credentials, RAWG key, and your manually-added games — lives only on this device. Export a backup before switching devices, clearing browser data, or reinstalling, and import it wherever you want that data to show up next.</p>
+
+      <div class="field">
+        <label>Export</label>
+        <button class="btn-primary" id="data-export-btn" style="width:100%;">Download backup (.json)</button>
+        <div class="hint">Saves a file containing everything stored locally by this app.</div>
+      </div>
+
+      <div class="field">
+        <label>Import</label>
+        <input type="file" id="data-import-file" accept="application/json" style="display:none;">
+        <button id="data-import-btn" style="width:100%; background: transparent; border: 1px solid var(--gold); color: var(--gold); border-radius: var(--radius); font-family: 'Space Mono', monospace; font-weight: 700; font-size: 13px; cursor: pointer; padding: 11px 20px;">Choose backup file…</button>
+        <div class="hint">Loads a previously exported backup into this device. Existing local data with matching keys will be overwritten.</div>
+      </div>
+
+      <div id="data-status"></div>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
-  // --- window.storage shim (localStorage-backed) ---
-  // window.storage is a Claude-artifact-only API — it does not exist in a
-  // normal browser. Every persistence call in this app (RA credentials,
-  // manually-added games, ratings cache, playtime cache) depends on it, so
-  // without this shim NONE of that works once hosted standalone (every call
-  // throws immediately, which is also why cloud sync below never fired —
-  // saveManualGames() writes locally first and only calls the cloud sync
-  // function afterward, so a throw on the first line skipped it entirely).
+  // --- window.storage: IndexedDB-backed, with Persistent Storage API ---
+  // All app data (RA credentials, RAWG key, manually-added games, caches)
+  // lives here now — entirely on-device, no cloud copy. IndexedDB is far
+  // more resistant to the browser silently clearing storage under space
+  // pressure than localStorage is, and requesting persistent storage below
+  // asks the browser not to evict this data automatically at all.
   if(!window.storage){
+    const IDB_NAME = 'GameLogTrackerDB';
+    const IDB_VERSION = 1;
+    const IDB_STORE = 'kv';
     const nsKey = (key, shared) => (shared ? 'shared:' : 'priv:') + key;
+    const stripNs = (key, shared) => key.slice((shared ? 'shared:' : 'priv:').length);
+
+    let idbOpenPromise = null;
+    function openIdb(){
+      if(idbOpenPromise) return idbOpenPromise;
+      idbOpenPromise = new Promise((resolve, reject) => {
+        const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if(!db.objectStoreNames.contains(IDB_STORE)){
+            db.createObjectStore(IDB_STORE, { keyPath: 'key' });
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      return idbOpenPromise;
+    }
+
     window.storage = {
       get: async (key, shared) => {
-        const v = localStorage.getItem(nsKey(key, shared));
-        if(v === null) throw new Error('No value found for key: ' + key);
-        return { key, value: v, shared: !!shared };
+        const db = await openIdb();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, 'readonly');
+          const req = tx.objectStore(IDB_STORE).get(nsKey(key, shared));
+          req.onsuccess = () => {
+            if(!req.result) reject(new Error('No value found for key: ' + key));
+            else resolve({ key, value: req.result.value, shared: !!shared });
+          };
+          req.onerror = () => reject(req.error);
+        });
       },
       set: async (key, value, shared) => {
-        localStorage.setItem(nsKey(key, shared), value);
-        return { key, value, shared: !!shared };
+        const db = await openIdb();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).put({ key: nsKey(key, shared), value });
+          tx.oncomplete = () => resolve({ key, value, shared: !!shared });
+          tx.onerror = () => reject(tx.error);
+        });
       },
       delete: async (key, shared) => {
-        localStorage.removeItem(nsKey(key, shared));
-        return { key, deleted: true, shared: !!shared };
+        const db = await openIdb();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).delete(nsKey(key, shared));
+          tx.oncomplete = () => resolve({ key, deleted: true, shared: !!shared });
+          tx.onerror = () => reject(tx.error);
+        });
       },
       list: async (prefix, shared) => {
+        const db = await openIdb();
         const p = nsKey(prefix || '', shared);
-        const keys = [];
-        for(let i = 0; i < localStorage.length; i++){
-          const k = localStorage.key(i);
-          if(k.startsWith(p)) keys.push(k.slice(((shared ? 'shared:' : 'priv:')).length));
-        }
-        return { keys, prefix, shared: !!shared };
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, 'readonly');
+          const req = tx.objectStore(IDB_STORE).getAllKeys();
+          req.onsuccess = () => {
+            const keys = req.result.filter(k => String(k).startsWith(p)).map(k => stripNs(k, shared));
+            resolve({ keys, prefix, shared: !!shared });
+          };
+          req.onerror = () => reject(req.error);
+        });
+      },
+      // Not part of the standard interface — used only by the Data export/
+      // import feature to work with the whole store at once.
+      _getAllRaw: async () => {
+        const db = await openIdb();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, 'readonly');
+          const req = tx.objectStore(IDB_STORE).getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => reject(req.error);
+        });
+      },
+      _putAllRaw: async (rawEntries) => {
+        const db = await openIdb();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, 'readwrite');
+          rawEntries.forEach(entry => tx.objectStore(IDB_STORE).put(entry));
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
       },
     };
+  }
+
+  if(navigator.storage && navigator.storage.persist){
+    navigator.storage.persisted().then(already => {
+      if(!already) navigator.storage.persist().then(granted => {
+        console.log('Persistent storage request:', granted ? 'granted' : 'declined by browser');
+      });
+    });
   }
 
   const MEDIA = 'https://media.retroachievements.org';
@@ -870,11 +965,10 @@
     if(onProgress) onProgress(); // final render to catch any remainder
   }
 
-  // --- Persistence via window.storage ---
+  // --- Persistence via window.storage (local only — no cloud copy) ---
   async function saveCreds(username, apiKey){
     try{ await window.storage.set('ra-credentials', JSON.stringify({ username, apiKey }), false); }
     catch(e){ /* non-fatal */ }
-    if(window.syncSettingsToCloud){ try{ await window.syncSettingsToCloud({ raUsername: username, raApiKey: apiKey }); }catch(e){ /* non-fatal */ } }
   }
   async function loadCreds(){
     try{
@@ -918,10 +1012,7 @@
     return [];
   }
   async function saveManualGames(list){
-    try{ await window.storage.set(manualGamesKey(), JSON.stringify(list), false); 
-      if (window.syncManualGamesToCloud) { await window.syncManualGamesToCloud(list); }
-
-    }
+    try{ await window.storage.set(manualGamesKey(), JSON.stringify(list), false); }
     catch(e){ /* non-fatal */ }
   }
 
@@ -983,12 +1074,10 @@
   async function saveRawgCreds(apiKey){
     try{ await window.storage.set('rawg-credentials', JSON.stringify({ apiKey }), false); }
     catch(e){ /* non-fatal */ }
-    if(window.syncSettingsToCloud){ try{ await window.syncSettingsToCloud({ rawgApiKey: apiKey }); }catch(e){ /* non-fatal */ } }
   }
   async function removeRawgCreds(){
     rawgCreds = null;
     try{ await window.storage.delete('rawg-credentials', false); }catch(e){ /* non-fatal */ }
-    if(window.syncSettingsToCloud){ try{ await window.syncSettingsToCloud({ rawgApiKey: null }); }catch(e){ /* non-fatal */ } }
   }
 
   async function rawgGet(url){
@@ -1647,7 +1736,7 @@
     if(e.target.id === 'modal-backdrop') closeGameModal();
   });
   document.addEventListener('keydown', (e) => {
-    if(e.key === 'Escape'){ closeGameModal(); closeAddGameModal(); closeRawgModal(); closeRaConnectModal(); closeDropdownMenu(); }
+    if(e.key === 'Escape'){ closeGameModal(); closeAddGameModal(); closeRawgModal(); closeRaConnectModal(); closeDataModal(); closeDropdownMenu(); }
   });
 
   // --- Add game manually ---
@@ -1879,11 +1968,89 @@
     $('#rawg-backdrop').classList.remove('open');
   }
 
+  // --- Data export/import ---
+  function openDataModal(){
+    $('#data-backdrop').classList.add('open');
+    $('#data-status').innerHTML = '';
+  }
+  function closeDataModal(){
+    $('#data-backdrop').classList.remove('open');
+  }
+
+  async function exportLocalData(){
+    const entries = await window.storage._getAllRaw(); // [{key, value}, ...] — includes RA creds, RAWG key, manual games, caches
+    const payload = {
+      app: 'Game Log Tracker',
+      exportedAt: new Date().toISOString(),
+      version: 1,
+      entries,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `game-log-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  async function importLocalData(file){
+    const text = await file.text();
+    let payload;
+    try{ payload = JSON.parse(text); }
+    catch(e){ throw new Error('That file isn\'t valid JSON.'); }
+    if(!payload || !Array.isArray(payload.entries)){
+      throw new Error('This doesn\'t look like a Game Log Tracker backup file.');
+    }
+    await window.storage._putAllRaw(payload.entries);
+  }
+
   $('#btn-rawg-settings').addEventListener('click', openRawgModal);
   $('#rawg-close-btn').addEventListener('click', closeRawgModal);
   $('#rawg-backdrop').addEventListener('click', (e) => {
     if(e.target.id === 'rawg-backdrop') closeRawgModal();
   });
+
+  $('#btn-data-settings-open').addEventListener('click', openDataModal);
+  $('#data-close-btn').addEventListener('click', closeDataModal);
+  $('#data-backdrop').addEventListener('click', (e) => {
+    if(e.target.id === 'data-backdrop') closeDataModal();
+  });
+  $('#data-export-btn').addEventListener('click', async () => {
+    const btn = $('#data-export-btn');
+    const statusEl = $('#data-status');
+    statusEl.innerHTML = '';
+    btn.disabled = true; btn.textContent = 'Preparing download…';
+    try{
+      await exportLocalData();
+      statusEl.innerHTML = '<p style="color:var(--teal);font-size:12.5px;margin-top:10px;">Backup downloaded.</p>';
+    }catch(e){
+      statusEl.innerHTML = `<div class="error-box">Export failed: ${e.message}</div>`;
+    }finally{
+      btn.disabled = false; btn.textContent = 'Download backup (.json)';
+    }
+  });
+  $('#data-import-btn').addEventListener('click', () => {
+    $('#data-import-file').click();
+  });
+  $('#data-import-file').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    const statusEl = $('#data-status');
+    statusEl.innerHTML = '<p style="color:var(--muted);font-size:12.5px;margin-top:10px;">Importing…</p>';
+    try{
+      await importLocalData(file);
+      statusEl.innerHTML = '<p style="color:var(--teal);font-size:12.5px;margin-top:10px;">Import complete — reloading…</p>';
+      setTimeout(() => window.location.reload(), 900);
+    }catch(err){
+      statusEl.innerHTML = `<div class="error-box">Import failed: ${err.message}</div>`;
+    }finally{
+      e.target.value = '';
+    }
+  });
+
   $('#rawg-save-btn').addEventListener('click', async () => {
     const apiKey = $('#rawg-api-key').value.trim();
     const statusEl = $('#rawg-status');
@@ -2269,15 +2436,15 @@
 </script>
 
 <script type="module">
-  // 1. Import Firebase Core and Analytics (Your existing imports)
+  // Firebase is used ONLY for account sign-in now (to know how many people
+  // use the app, and potentially reach out by email later) — not for
+  // storing or syncing any app data. All of that (RA credentials, RAWG key,
+  // manually-added games, caches) lives in this device's local IndexedDB via
+  // window.storage, and stays on this device unless exported/imported by hand.
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-analytics.js";
-
-  // 2. Add the Sync SDKs (Auth and Firestore Database)
   import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-  import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
-  // 3. Your verified Web App Firebase Configuration
   const firebaseConfig = {
     apiKey: "AIzaSyBcLY-j69hBA-JxdX_GNWcye-B4qiFcmnk",
     authDomain: "gin649-gamelogtracker.firebaseapp.com",
@@ -2288,157 +2455,33 @@
     measurementId: "G-136RVSLC53"
   };
 
-  // 4. Initialize Core Engine services
   const app = initializeApp(firebaseConfig);
   const analytics = getAnalytics(app);
   const auth = getAuth(app);
-  const db = getFirestore(app);
   let currentUser = null;
 
   // Module scripts have their own scope — these were never reachable from
   // the classic <script> below without being explicitly attached to window.
-  // Email/password avoids the entire class of problem Google sign-in hit:
-  // no popup, no cross-domain redirect (your site -> Google -> firebaseapp.com
-  // -> your site), so no dependency on third-party storage/cookies surviving
-  // that hop — which is what kept breaking across different browsers.
   window.auth = auth;
   window.doEmailSignUp = (email, password) => createUserWithEmailAndPassword(auth, email, password);
   window.doEmailSignIn = (email, password) => signInWithEmailAndPassword(auth, email, password);
   window.doPasswordReset = (email) => sendPasswordResetEmail(auth, email);
   window.doSignOut = () => signOut(auth);
 
-  // Enable local caching so your phone handles spotty cell coverage offline gracefully
-  enableIndexedDbPersistence(db).catch((err) => {
-      console.warn("Offline caching enabled fallback code: ", err.code);
-  });
-
-  // Watch for sign-in state changes across browser tabs/devices
-  onAuthStateChanged(auth, async (user) => {
+  // Just toggles the dashboard shell — no data reconciliation happens here
+  // anymore, since there's nothing in the cloud to reconcile with. Whatever
+  // this device already has locally (or doesn't) is simply what's shown.
+  onAuthStateChanged(auth, (user) => {
     if (user) {
       currentUser = user;
       const emailSpan = document.getElementById('user-email');
       if (emailSpan) emailSpan.textContent = user.email;
-
-      // Show the dashboard shell right away (placeholder if RA isn't
-      // connected yet on this device) rather than waiting on the cloud
-      // round-trips below to finish first.
       if (typeof window.onCloudSignedIn === 'function') { window.onCloudSignedIn(); }
-
-      // Reconcile RA credentials + RAWG key with the cloud copy, so signing
-      // into this account on a fresh device pulls in settings that were
-      // already configured elsewhere, instead of asking you to re-enter
-      // them everywhere. Whichever side already has a value wins — this
-      // never silently overwrites something already configured on THIS
-      // device with an empty/different value from the cloud.
-      try {
-        const docRef = doc(db, "users", currentUser.uid);
-        const snapshot = await getDoc(docRef);
-        const cloudSettings = (snapshot.exists() && snapshot.data().settings) ? snapshot.data().settings : {};
-
-        let localRaUsername = null, localRaApiKey = null, localRawgApiKey = null;
-        try {
-          const r = await window.storage.get('ra-credentials', false);
-          if (r && r.value) { const parsed = JSON.parse(r.value); localRaUsername = parsed.username; localRaApiKey = parsed.apiKey; }
-        } catch (e) { /* not connected on this device yet */ }
-        try {
-          const r = await window.storage.get('rawg-credentials', false);
-          if (r && r.value) { localRawgApiKey = JSON.parse(r.value).apiKey; }
-        } catch (e) { /* using the built-in default on this device so far */ }
-
-        const merged = {
-          raUsername: localRaUsername || cloudSettings.raUsername || null,
-          raApiKey: localRaApiKey || cloudSettings.raApiKey || null,
-          rawgApiKey: localRawgApiKey || cloudSettings.rawgApiKey || null,
-        };
-
-        // Adopt anything this device is missing that the cloud already has.
-        // autoConnectRa() internally re-runs the same dashboard/placeholder
-        // toggle, so the UI updates the moment this resolves.
-        if (!localRaUsername && merged.raUsername && merged.raApiKey) {
-          await window.storage.set('ra-credentials', JSON.stringify({ username: merged.raUsername, apiKey: merged.raApiKey }), false);
-          if (typeof window.autoConnectRa === 'function') {
-            await window.autoConnectRa(merged.raUsername, merged.raApiKey).catch(e => console.error('Auto-connect from synced RA credentials failed:', e));
-          }
-        }
-        if (!localRawgApiKey && merged.rawgApiKey) {
-          await window.storage.set('rawg-credentials', JSON.stringify({ apiKey: merged.rawgApiKey }), false);
-        }
-
-        // Push the merged result back so both sides agree going forward.
-        await setDoc(docRef, { settings: merged }, { merge: true });
-      } catch (e) { console.error('Settings sync failed:', e); }
-
-      // Reconcile this device's local manual-games list with the cloud copy.
-      // Previously this only ever downloaded from the cloud, which meant any
-      // game added while NOT signed in (or before Google sign-in was working)
-      // stayed stranded on that one device forever, invisible everywhere else.
-      try {
-        async function waitForRaUsername(maxWaitMs, intervalMs){
-          const start = Date.now();
-          while (Date.now() - start < maxWaitMs) {
-            const u = window.getRaUsername ? window.getRaUsername() : null;
-            if (u) return u;
-            await new Promise(r => setTimeout(r, intervalMs));
-          }
-          return window.getRaUsername ? window.getRaUsername() : null;
-        }
-        const raUsername = await waitForRaUsername(3000, 200);
-        if (window.storage && raUsername) {
-          const storageKey = `ra-manual-games:${raUsername.trim().toLowerCase()}`;
-
-          let localGames = [];
-          try {
-            const localResult = await window.storage.get(storageKey, false);
-            if (localResult && localResult.value) localGames = JSON.parse(localResult.value);
-          } catch (e) { /* nothing local yet on this device */ }
-
-          const docRef = doc(db, "users", currentUser.uid);
-          const snapshot = await getDoc(docRef);
-          const cloudGames = (snapshot.exists() && snapshot.data().manualGames) ? snapshot.data().manualGames : [];
-
-          // Union by GameID so a game added on either side survives — never
-          // a blind overwrite in either direction.
-          const cloudIds = new Set(cloudGames.map(g => g.GameID));
-          const merged = [...cloudGames, ...localGames.filter(g => !cloudIds.has(g.GameID))];
-
-          await window.storage.set(storageKey, JSON.stringify(merged), false);
-          await setDoc(docRef, { manualGames: merged }, { merge: true });
-
-          if (typeof loadAll === "function") { loadAll(); }
-        }
-      } catch (e) { console.error("Cloud synchronization failed:", e); }
     } else {
       currentUser = null;
       if (typeof window.onCloudSignedOut === 'function') { window.onCloudSignedOut(); }
     }
   });
-
-  // Global Upstream Broadcaster Hook
-  window.syncManualGamesToCloud = async function(list) {
-    if (!currentUser) return;
-    try {
-      const docRef = doc(db, "users", currentUser.uid);
-      await setDoc(docRef, { manualGames: list }, { merge: true });
-      console.log("Cloud dynamic tracker save operation succeeded.");
-    } catch (error) { console.error("Cloud document save failed:", error); }
-  };
-
-  // Pushes RA credentials / RAWG key up whenever they're saved locally on
-  // any signed-in device, so other devices pick them up on next sign-in
-  // instead of the user re-entering them everywhere. Merges shallowly —
-  // only the keys actually passed in are updated, everything else in the
-  // existing settings object is left alone.
-  window.syncSettingsToCloud = async function(partialSettings) {
-    if (!currentUser) return;
-    try {
-      const docRef = doc(db, "users", currentUser.uid);
-      const snapshot = await getDoc(docRef);
-      const existing = (snapshot.exists() && snapshot.data().settings) ? snapshot.data().settings : {};
-      const merged = { ...existing, ...partialSettings };
-      await setDoc(docRef, { settings: merged }, { merge: true });
-      console.log("Cloud settings save succeeded.");
-    } catch (error) { console.error("Cloud settings save failed:", error); }
-  };
 </script>
 
 </body>
