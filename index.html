@@ -55,30 +55,32 @@
 
   .wrap{max-width:960px;margin:0 auto;}
 
+  .install-banner{
+    display:flex;align-items:center;gap:12px;justify-content:space-between;
+    background:var(--panel);border:1px solid var(--gold-dim);border-radius:6px;
+    padding:12px 14px;margin-bottom:18px;
+  }
+  .install-banner span{font-size:13px;color:var(--text);line-height:1.4;}
+  .install-banner-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+  .install-banner-close{
+    background:transparent;border:none;color:var(--muted);font-size:15px;
+    cursor:pointer;padding:4px;line-height:1;
+  }
+  .install-banner-close:hover{color:var(--text);}
+  @media (max-width:480px){
+    .install-banner{flex-direction:column;align-items:flex-start;}
+    .install-banner-actions{width:100%;justify-content:space-between;}
+  }
+
   .brand{
     display:flex;align-items:center;gap:10px;margin-bottom:28px;
   }
   .brand .menu-wrap{margin-left:auto;}
   .brand .mark{
-    width:34px;height:34px;border-radius:8px;flex-shrink:0;display:block;
+    width:72px;height:72px;border-radius:8px;flex-shrink:0;display:block;
   }
-  .brand .name{font-family:'Space Mono',monospace;font-size:14px;color:var(--muted);}
+  .brand .name{font-family:'Space Mono',monospace;font-size:17px;color:var(--muted);}
 
-  /* ---- Connect panel ---- */
-  .connect{
-    background:var(--panel);
-    border:1px solid var(--border);
-    border-radius:6px;
-    padding:28px;
-    max-width:440px;
-    margin:60px auto;
-  }
-  .connect h1{
-    font-family:'Space Mono',monospace;
-    font-size:19px;
-    margin:0 0 6px;
-  }
-  .connect p{color:var(--muted);font-size:14px;line-height:1.6;margin:0 0 22px;}
   .field{margin-bottom:16px;}
   .field label{
     display:block;font-size:12px;color:var(--muted);
@@ -423,6 +425,14 @@
 <body>
 <div class="wrap">
 
+  <div id="install-banner" class="install-banner" style="display:none;">
+    <span id="install-banner-msg">Install Game Log Tracker on your device for quick, offline access.</span>
+    <div class="install-banner-actions">
+      <button id="btn-install-app" class="btn-primary" style="display:none;width:auto;padding:7px 14px;">Install</button>
+      <button id="install-banner-dismiss" class="install-banner-close" aria-label="Dismiss">✕</button>
+    </div>
+  </div>
+
   <div class="brand">
     <img class="mark" src="icon-192.png" alt="Game Log Tracker"><span class="name">What will you beat Today?</span>
     <div class="menu-wrap" id="menu-wrap" style="display:none;">
@@ -438,41 +448,11 @@
         </div>
         <button class="dropdown-item" id="btn-rawg-settings">RAWG Ratings</button>
         <button class="dropdown-item" id="btn-data-settings-open">Data</button>
-        <button class="dropdown-item" id="btn-cloud-signout">Sign Out</button>
       </div>
     </div>
   </div>
 
-  <div id="connect" class="connect">
-    <h1>Game Log — Tracker</h1>
-    <p>Sign in to access your synced RetroAchievements game log.</p>
-
-    <div class="field">
-      <label>Email</label>
-      <input id="auth-email" type="email" autocomplete="email">
-    </div>
-    <div class="field">
-      <label>Password</label>
-      <input id="auth-password" type="password" autocomplete="current-password">
-      <div class="hint"><a id="btn-forgot-password" style="color: var(--teal); cursor: pointer;">Forgot password?</a></div>
-    </div>
-    <div style="display: flex; gap: 8px;">
-      <button class="btn-primary" id="btn-login" style="flex:1;">Log In</button>
-      <button id="btn-signup" style="flex:1; background: transparent; border: 1px solid var(--gold); color: var(--gold); border-radius: var(--radius); font-family: 'Space Mono', monospace; font-weight: 700; font-size: 13px; cursor: pointer;">Sign Up</button>
-    </div>
-    <p id="auth-error" style="color: var(--danger); font-size: 12px; margin: 14px 0 0; line-height: 1.4; display: none;"></p>
-    <p id="auth-status" style="color: var(--teal); font-size: 12px; margin: 14px 0 0; line-height: 1.4; display: none;"></p>
-  </div>
-
-  <!-- Hidden always — kept only so existing JS that reads it doesn't need
-       changes. The real "you're signed in" state now shows via the
-       dashboard itself (menu becomes available, RA content unlocks). -->
-  <div id="auth-logged-in" style="display: none;">
-    <strong id="user-email"></strong>
-  </div>
-
-  <!-- RetroAchievements connect modal — moved out of the front screen and
-       into settings, opened from the hamburger menu instead. -->
+  <!-- RetroAchievements connect modal -->
   <div id="ra-connect-backdrop" class="modal-backdrop">
     <div class="modal-card" id="ra-connect-card">
       <button class="modal-close" id="ra-connect-close-btn">✕</button>
@@ -616,12 +596,6 @@
 
 <script>
 (function(){
-  // --- window.storage: IndexedDB-backed, with Persistent Storage API ---
-  // All app data (RA credentials, RAWG key, manually-added games, caches)
-  // lives here now — entirely on-device, no cloud copy. IndexedDB is far
-  // more resistant to the browser silently clearing storage under space
-  // pressure than localStorage is, and requesting persistent storage below
-  // asks the browser not to evict this data automatically at all.
   if(!window.storage){
     const IDB_NAME = 'GameLogTrackerDB';
     const IDB_VERSION = 1;
@@ -721,11 +695,81 @@
     });
   }
 
+  // --- "Add to home screen" install prompt ---
+  // Chrome/Edge/Android stopped showing their own install UI automatically
+  // on most sites — a page has to capture beforeinstallprompt and offer its
+  // own button, or nothing visible happens at all, which is what was seen.
+  // iOS Safari never fires that event; there's no programmatic install API
+  // there, so it gets a manual "tap Share, then Add to Home Screen" message
+  // instead of a button.
+  (function(){
+    const banner = document.getElementById('install-banner');
+    const msgEl = document.getElementById('install-banner-msg');
+    const installBtn = document.getElementById('btn-install-app');
+    const dismissBtn = document.getElementById('install-banner-dismiss');
+    if(!banner) return;
+
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true; // iOS Safari's own installed-flag
+    if(isStandalone) return; // already installed — never show this
+
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+    let deferredPrompt = null;
+
+    async function wasDismissed(){
+      try{
+        const r = await window.storage.get('pwa-install-dismissed', false);
+        return !!(r && r.value);
+      }catch(e){ return false; } // nothing stored yet — not dismissed
+    }
+    async function setDismissed(){
+      try{ await window.storage.set('pwa-install-dismissed', 'true', false); }catch(e){}
+    }
+
+    (async () => {
+      if(await wasDismissed()) return;
+      if(isIOS){
+        msgEl.textContent = 'Install this app: tap the Share icon, then "Add to Home Screen".';
+        installBtn.style.display = 'none';
+        banner.style.display = 'flex';
+      }
+      // Non-iOS: stays hidden until (and unless) beforeinstallprompt fires below.
+    })();
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      wasDismissed().then(dismissed => {
+        if(dismissed) return;
+        msgEl.textContent = 'Install Game Log Tracker on your device for quick, offline access.';
+        installBtn.style.display = 'inline-block';
+        banner.style.display = 'flex';
+      });
+    });
+
+    installBtn.addEventListener('click', async () => {
+      if(!deferredPrompt) return;
+      installBtn.disabled = true;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      banner.style.display = 'none';
+      installBtn.disabled = false;
+    });
+
+    window.addEventListener('appinstalled', () => {
+      banner.style.display = 'none';
+      setDismissed();
+    });
+
+    dismissBtn.addEventListener('click', () => {
+      banner.style.display = 'none';
+      setDismissed();
+    });
+  })();
+
   const MEDIA = 'https://media.retroachievements.org';
   let creds = null; // { username, apiKey }
-  // Exposed so the separate Firebase module script (different scope entirely
-  // — it cannot see this closure's variables) can build the same storage key.
-  window.getRaUsername = () => (creds && creds.username) ? creds.username : null;
   let libraryData = [];
   let recentGamesData = [];
   let lastProfile = null; // re-used to recompute profile stats once library data loads
@@ -1277,7 +1321,7 @@
     if(!games || games.length === 0){ el.innerHTML = '<div class="empty">No recently played games found.</div>'; return; }
     el.innerHTML = games.slice(0, 12).map(g => {
       const total = Number(g.NumPossibleAchievements || g.AchievementsTotal || 0);
-      const earned = Number(g.NumAchieved || 0);
+      const earned = statsMode === 'hardcore' ? Number(g.NumAchievedHardcore || 0) : Number(g.NumAchieved || 0);
       const pct = total ? Math.round((earned/total)*100) : 0;
       const est = estHoursCache[g.GameID];
       const hoursHtml = est
@@ -1289,7 +1333,7 @@
           <div class="body">
             <p class="title">${g.Title}</p>
             <p class="console">${g.ConsoleName}</p>
-            <div class="progress-track"><div class="progress-fill ${pct>=100?'complete':''}" style="width:${pct}%"></div></div>
+            <div class="progress-track"><div class="progress-fill ${pct>=100?'complete':''} ${statsMode==='hardcore'?'hardcore':''}" style="width:${pct}%"></div></div>
             <div class="prog-lbl"><span>${earned}/${total}</span><span>${pct}%</span></div>
             <div class="hours">${hoursHtml}</div>
           </div>
@@ -2183,21 +2227,10 @@
     $('#ra-content').style.display = hasRa ? 'block' : 'none';
   }
   function showDashboard(){
-    $('#connect').style.display = 'none';
     $('#dashboard').style.display = 'block';
     $('#menu-wrap').style.display = 'block';
     updateRaConnectionView();
   }
-  function showConnect(){
-    $('#connect').style.display = 'block';
-    $('#dashboard').style.display = 'none';
-    $('#menu-wrap').style.display = 'none';
-  }
-  // Driven by Firebase auth state (module script) — signing into the cloud
-  // account is now the front gate for the whole app; RA connection status
-  // is checked separately, after that, via updateRaConnectionView().
-  window.onCloudSignedIn = showDashboard;
-  window.onCloudSignedOut = showConnect;
 
   async function connectToRa(username, apiKey){
     creds = { username, apiKey };
@@ -2213,9 +2246,6 @@
       throw e;
     }
   }
-  // Exposed so the Firebase sync flow can auto-connect using RA credentials
-  // pulled down from the cloud, without the user re-typing them on this device.
-  window.autoConnectRa = connectToRa;
 
   function openRaConnectModal(){
     $('#connect-error').innerHTML = '';
@@ -2253,13 +2283,11 @@
     await clearCreds();
     updateRaConnectionView(); // stay on the dashboard shell — just drops back to the "connect RA" placeholder
   });
-  $('#btn-cloud-signout').addEventListener('click', () => {
-    if (window.doSignOut) { window.doSignOut().catch(err => console.error("Sign-out failure:", err)); }
-  });
   $('#btn-hardcore-toggle').addEventListener('click', () => {
     statsMode = statsMode === 'hardcore' ? 'casual' : 'hardcore';
     $('#btn-hardcore-toggle').textContent = statsMode === 'hardcore' ? 'Switch to Casual Mode' : 'Switch to Hardcore Mode';
     if(lastProfile) renderProfile(lastProfile);
+    renderRecentGames(recentGamesData);
     renderSystemChips();
     renderLibrary();
     renderByYear();
@@ -2349,139 +2377,20 @@
     });
   });
 
-  // Restore RA credentials into memory if previously connected — this no
-  // longer shows the dashboard directly. Firebase sign-in is now the front
-  // gate for the whole app; updateRaConnectionView() just makes sure that
-  // if the dashboard is already visible (e.g. an already-signed-in Firebase
-  // session), it reflects whatever we just restored here.
+  // Restore RA credentials into memory if previously connected, and show
+  // the dashboard right away — there's no login gate in front of it anymore.
   (async () => {
+    showDashboard();
     const saved = await loadCreds();
     if(saved && saved.username && saved.apiKey){
       creds = saved;
       $('#in-user').value = saved.username;
-      loadAll(); // was previously only toggling visibility, never actually fetching data on restore
+      loadAll();
     }
     updateRaConnectionView();
-    function showAuthError(msg){
-      const errEl = document.getElementById('auth-error');
-      const statusEl = document.getElementById('auth-status');
-      if(statusEl) statusEl.style.display = 'none';
-      if(errEl){ errEl.textContent = msg; errEl.style.display = 'block'; }
-    }
-    function showAuthStatus(msg){
-      const errEl = document.getElementById('auth-error');
-      const statusEl = document.getElementById('auth-status');
-      if(errEl) errEl.style.display = 'none';
-      if(statusEl){ statusEl.textContent = msg; statusEl.style.display = 'block'; }
-    }
-    function friendlyAuthError(err){
-      const code = err && err.code;
-      if(code === 'auth/email-already-in-use') return 'An account already exists with that email — try Log In instead.';
-      if(code === 'auth/invalid-email') return 'That email address doesn\'t look valid.';
-      if(code === 'auth/weak-password') return 'Password must be at least 6 characters.';
-      if(code === 'auth/user-not-found' || code === 'auth/invalid-credential') return 'No account found with that email and password.';
-      if(code === 'auth/wrong-password') return 'Incorrect password.';
-      if(code === 'auth/too-many-requests') return 'Too many attempts — wait a moment and try again.';
-      return (err && err.message) ? err.message : String(err);
-    }
-
-    if (document.getElementById('btn-login')) {
-    document.getElementById('btn-login').addEventListener('click', () => {
-      const btn = document.getElementById('btn-login');
-      const email = (document.getElementById('auth-email').value || '').trim();
-      const password = document.getElementById('auth-password').value || '';
-      if(!email || !password){ showAuthError('Enter both email and password.'); return; }
-      if (window.doEmailSignIn) {
-        btn.disabled = true; btn.textContent = 'Logging in…';
-        window.doEmailSignIn(email, password)
-          .catch(err => showAuthError(friendlyAuthError(err)))
-          .finally(() => { btn.disabled = false; btn.textContent = 'Log In'; });
-      } else {
-        showAuthError('Sign-in isn\'t ready yet — the Firebase script may have failed to load (check the browser console).');
-      }
-    });
-  }
-
-  if (document.getElementById('btn-signup')) {
-    document.getElementById('btn-signup').addEventListener('click', () => {
-      const btn = document.getElementById('btn-signup');
-      const email = (document.getElementById('auth-email').value || '').trim();
-      const password = document.getElementById('auth-password').value || '';
-      if(!email || !password){ showAuthError('Enter both email and password.'); return; }
-      if (window.doEmailSignUp) {
-        btn.disabled = true; btn.textContent = 'Creating account…';
-        window.doEmailSignUp(email, password)
-          .catch(err => showAuthError(friendlyAuthError(err)))
-          .finally(() => { btn.disabled = false; btn.textContent = 'Sign Up'; });
-      } else {
-        showAuthError('Sign-in isn\'t ready yet — the Firebase script may have failed to load (check the browser console).');
-      }
-    });
-  }
-
-  if (document.getElementById('btn-forgot-password')) {
-    document.getElementById('btn-forgot-password').addEventListener('click', () => {
-      const email = (document.getElementById('auth-email').value || '').trim();
-      if(!email){ showAuthError('Enter your email above first, then tap "Forgot password?"'); return; }
-      if (window.doPasswordReset) {
-        window.doPasswordReset(email)
-          .then(() => showAuthStatus('Password reset email sent — check your inbox.'))
-          .catch(err => showAuthError(friendlyAuthError(err)));
-      }
-    });
-  }
   })();
 })(); // closes the outer main app IIFE opened at the top of this script — this
       // was missing entirely, which made the whole script fail to parse
-</script>
-
-<script type="module">
-  // Firebase is used ONLY for account sign-in now (to know how many people
-  // use the app, and potentially reach out by email later) — not for
-  // storing or syncing any app data. All of that (RA credentials, RAWG key,
-  // manually-added games, caches) lives in this device's local IndexedDB via
-  // window.storage, and stays on this device unless exported/imported by hand.
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-analytics.js";
-  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBcLY-j69hBA-JxdX_GNWcye-B4qiFcmnk",
-    authDomain: "gin649-gamelogtracker.firebaseapp.com",
-    projectId: "gin649-gamelogtracker",
-    storageBucket: "gin649-gamelogtracker.firebasestorage.app",
-    messagingSenderId: "354999963330",
-    appId: "1:354999963330:web:b7f8113c7bcafdd671f55b",
-    measurementId: "G-136RVSLC53"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
-  const auth = getAuth(app);
-  let currentUser = null;
-
-  // Module scripts have their own scope — these were never reachable from
-  // the classic <script> below without being explicitly attached to window.
-  window.auth = auth;
-  window.doEmailSignUp = (email, password) => createUserWithEmailAndPassword(auth, email, password);
-  window.doEmailSignIn = (email, password) => signInWithEmailAndPassword(auth, email, password);
-  window.doPasswordReset = (email) => sendPasswordResetEmail(auth, email);
-  window.doSignOut = () => signOut(auth);
-
-  // Just toggles the dashboard shell — no data reconciliation happens here
-  // anymore, since there's nothing in the cloud to reconcile with. Whatever
-  // this device already has locally (or doesn't) is simply what's shown.
-  onAuthStateChanged(auth, (user) => {
-    if (user) {
-      currentUser = user;
-      const emailSpan = document.getElementById('user-email');
-      if (emailSpan) emailSpan.textContent = user.email;
-      if (typeof window.onCloudSignedIn === 'function') { window.onCloudSignedIn(); }
-    } else {
-      currentUser = null;
-      if (typeof window.onCloudSignedOut === 'function') { window.onCloudSignedOut(); }
-    }
-  });
 </script>
 
 </body>
