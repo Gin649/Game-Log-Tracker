@@ -235,8 +235,9 @@
 
   .unlock-list{display:flex;flex-direction:column;gap:1px;background:var(--border);border-radius:6px;overflow:hidden;border:1px solid var(--border);}
   .unlock{
-    background:var(--panel);padding:10px 14px;display:flex;align-items:center;gap:12px;
+    background:var(--panel);padding:10px 14px;cursor:pointer;
   }
+  .unlock-row{display:flex;align-items:center;gap:12px;}
   .unlock img{width:40px;height:40px;border-radius:var(--radius);flex-shrink:0;image-rendering:pixelated;}
   .unlock .info{flex:1;min-width:0;}
   .unlock .info .t{font-size:13.5px;font-weight:600;margin:0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -246,6 +247,11 @@
     flex-shrink:0;
   }
   .unlock .when{font-size:11px;color:var(--muted);flex-shrink:0;width:70px;text-align:right;}
+  .unlock-desc{
+    display:none;margin:8px 0 0;padding-left:52px;
+    font-size:12.5px;color:var(--muted);line-height:1.5;
+  }
+  .unlock.expanded .unlock-desc{display:block;}
 
   .lib-search{
     width:100%;padding:9px 12px;background:var(--bg-alt);border:1px solid var(--border);
@@ -334,6 +340,29 @@
   }
   .modal-links a:hover{border-color:var(--teal);}
   .modal-note{font-size:11px;color:var(--muted);margin-top:14px;line-height:1.5;}
+
+  .btn-view-achievements{
+    width:100%;margin-top:14px;background:var(--bg-alt);border:1px solid var(--border);
+    color:var(--text);border-radius:6px;padding:10px;font-family:'Space Mono',monospace;
+    font-size:12.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;
+  }
+  .btn-view-achievements:hover{border-color:var(--gold);}
+  .btn-view-achievements .arrow{transition:transform 0.15s;}
+  .btn-view-achievements.open .arrow{transform:rotate(90deg);}
+  .achievements-list{margin-top:12px;display:flex;flex-direction:column;gap:1px;background:var(--border);border-radius:6px;overflow:hidden;border:1px solid var(--border);}
+  .ach-row{background:var(--panel);padding:10px 12px;display:flex;align-items:center;gap:10px;}
+  .ach-row.locked{opacity:0.55;}
+  .ach-row img{width:36px;height:36px;border-radius:var(--radius);flex-shrink:0;image-rendering:pixelated;}
+  .ach-row .info{flex:1;min-width:0;}
+  .ach-row .info .t{font-size:13px;font-weight:600;margin:0 0 2px;}
+  .ach-row .info .d{font-size:11.5px;color:var(--muted);margin:0;line-height:1.4;}
+  .ach-row .info .when{font-size:10.5px;color:var(--teal);margin:3px 0 0;}
+  .ach-row .pts{
+    font-family:'Space Mono',monospace;color:var(--gold);font-size:12px;font-weight:700;flex-shrink:0;
+  }
+  .ach-row.locked .pts{color:var(--muted);}
+  .achievements-list-loading{padding:14px;text-align:center;color:var(--muted);font-size:12.5px;}
+
 
   .rawg-badge-row{
     display:flex;justify-content:flex-end;padding:10px 16px 0;min-height:14px;
@@ -785,6 +814,7 @@
   let libraryIndex = {}; // GameID -> library entry, for looking up beaten status
   let librarySort = { key: 'lastPlayed', dir: 'desc' };
   const estHoursCache = {}; // in-memory, keyed by GameID, for this session — { hours, beaten }
+  const achievementsListCache = {}; // in-memory, keyed by GameID — full per-achievement list with earn dates, opportunistically filled by getEstimatedHours()
   let systemFilter = 'All';
 
   // Serializes loadAll() against manual add/remove operations so they can
@@ -935,12 +965,23 @@
     return (sorted[sorted.length - 1] - sorted[0]) / 3600000;
   }
 
-  function formatDuration(entry){
+  function formatDuration(entry, short){
     if(!entry || entry.hours == null) return '—';
-    const h = entry.hours;
-    if(h < 1) return Math.round(h * 60) + 'm';
-    if(h < 48) return h.toFixed(1) + 'h';
-    return (h / 24).toFixed(1) + 'd';
+    const totalMinutes = Math.round(entry.hours * 60);
+    if(totalMinutes < 60){
+      return short ? `${totalMinutes}m` : `${totalMinutes} min${totalMinutes === 1 ? '' : 's'}`;
+    }
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const mins = totalMinutes % 60;
+    if(days > 0){
+      if(short) return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+      const hrPart = hours > 0 ? ` ${hours} hr${hours === 1 ? '' : 's'}` : '';
+      return `${days} day${days === 1 ? '' : 's'}${hrPart}`;
+    }
+    if(short) return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    const minPart = mins > 0 ? ` ${mins} min${mins === 1 ? '' : 's'}` : '';
+    return `${hours} hr${hours === 1 ? '' : 's'}${minPart}`;
   }
 
   async function getEstimatedHours(gameId, force){
@@ -979,6 +1020,11 @@
     let real = false;
     try{
       const data = await raFetch('API_GetGameInfoAndUserProgress.php', { g: gameId, a: 1 });
+
+      if(data && data.Achievements){
+        achievementsListCache[gameId] = Object.values(data.Achievements)
+          .sort((a,b) => (a.DisplayOrder ?? 0) - (b.DisplayOrder ?? 0));
+      }
 
       const realSeconds = Number(data && data.UserTotalPlaytime);
       if(realSeconds > 0){
@@ -1021,6 +1067,45 @@
     }
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker));
     if(onProgress) onProgress(); // final render to catch any remainder
+  }
+
+  // Almost always already populated by getEstimatedHours() above (it fetches
+  // this exact endpoint for every game in the library on load) — this only
+  // hits the network itself if that hasn't happened yet for this game.
+  async function getAchievementsList(gameId){
+    if(achievementsListCache[gameId]) return achievementsListCache[gameId];
+    const data = await raFetch('API_GetGameInfoAndUserProgress.php', { g: gameId, a: 1 });
+    const list = (data && data.Achievements)
+      ? Object.values(data.Achievements).sort((a,b) => (a.DisplayOrder ?? 0) - (b.DisplayOrder ?? 0))
+      : [];
+    achievementsListCache[gameId] = list;
+    return list;
+  }
+
+  function renderAchievementsList(list, isHardcoreMode){
+    if(!list || list.length === 0) return '<div class="achievements-list-loading">No achievement data available.</div>';
+    // Match the rest of the app's hardcore/casual convention: hardcore mode
+    // only counts an achievement as earned if it was unlocked in hardcore
+    // (DateEarnedHardcore); casual mode counts any unlock at all
+    // (DateEarned is set on every unlock, hardcore or not).
+    const earned = list.filter(a => isHardcoreMode ? a.DateEarnedHardcore : a.DateEarned);
+    const locked = list.filter(a => isHardcoreMode ? !a.DateEarnedHardcore : !a.DateEarned);
+    const row = (a, isLocked) => {
+      const badge = imgUrl('/Badge/' + a.BadgeName + (isLocked ? '_lock' : '') + '.png');
+      const earnedDate = isHardcoreMode ? a.DateEarnedHardcore : a.DateEarned;
+      return `
+        <div class="ach-row ${isLocked ? 'locked' : ''}">
+          <img src="${badge}" alt="">
+          <div class="info">
+            <p class="t">${a.Title || 'Untitled'}</p>
+            <p class="d">${a.Description || ''}</p>
+            ${!isLocked ? `<p class="when">Unlocked ${timeAgo(earnedDate)}</p>` : ''}
+          </div>
+          <div class="pts">${a.Points ?? ''}</div>
+        </div>
+      `;
+    };
+    return earned.map(a => row(a, false)).join('') + locked.map(a => row(a, true)).join('');
   }
 
   // --- Persistence via window.storage (local only — no cloud copy) ---
@@ -1366,17 +1451,23 @@
       const isHardcore = Number(a.HardcoreMode) === 1;
       return `
       <div class="unlock">
-        <img src="${imgUrl('/Badge/' + a.BadgeName + '.png')}" alt="">
-        <div class="info">
-          <p class="t">${a.Title}</p>
-          <p class="g">${a.GameTitle}</p>
+        <div class="unlock-row">
+          <img src="${imgUrl('/Badge/' + a.BadgeName + '.png')}" alt="">
+          <div class="info">
+            <p class="t">${a.Title}</p>
+            <p class="g">${a.GameTitle}</p>
+          </div>
+          ${isHardcore ? '<span class="pill pill-muted">HC</span>' : ''}
+          <div class="pts" style="color:${isHardcore ? 'var(--muted)' : 'var(--teal)'}">${a.Points}</div>
+          <div class="when">${timeAgo(a.Date)}</div>
         </div>
-        ${isHardcore ? '<span class="pill pill-muted">HC</span>' : ''}
-        <div class="pts" style="color:${isHardcore ? 'var(--muted)' : 'var(--teal)'}">${a.Points}</div>
-        <div class="when">${timeAgo(a.Date)}</div>
+        <p class="unlock-desc">${a.Description || 'No description available.'}</p>
       </div>
     `;
     }).join('');
+    el.querySelectorAll('.unlock').forEach(row => {
+      row.addEventListener('click', () => row.classList.toggle('expanded'));
+    });
   }
 
   function renderSystemChips(){
@@ -1448,7 +1539,7 @@
             const isCustom = g.customConsole === true;
             const est = estHoursCache[g.GameID];
             const earned = Number(g.NumAwarded || 0);
-            const hoursLabel = isCustom ? '—' : (est ? formatDuration(est) : '…');
+            const hoursLabel = isCustom ? '—' : (est ? formatDuration(est, true) : '…');
             const hoursColor = 'var(--gold)';
             const awardCell = isCustom
               ? (g.manualBeaten ? '<span class="pill pill-teal">Beaten</span>' : '<span class="pill pill-muted">In progress</span>')
@@ -1708,10 +1799,13 @@
     attachRawgLookup(gameId, local.Title, card);
   }
 
+  let openAchievementsGameId = null; // gameId whose achievements panel is currently rendered in the modal, if any — lets the hardcore toggle refresh it in place without re-fetching
+
   async function openGameModal(gameId){
     const card = $('#modal-card');
     const local = findGameLocal(gameId);
     card.dataset.gameId = gameId;
+    openAchievementsGameId = null;
     $('#modal-backdrop').classList.add('open');
     card.innerHTML = `
       <button class="modal-close" id="modal-close-btn">✕</button>
@@ -1780,14 +1874,42 @@
         <a href="${hltbUrl}" target="_blank" rel="noopener">Search HowLongToBeat ↗</a>
       </div>
 
+      <button class="btn-view-achievements" id="modal-view-ach-btn"><span class="arrow">▸</span> View Achievements</button>
+      <div class="achievements-list" id="modal-achievements" style="display:none;"></div>
+
       <p class="modal-note">Ratings via <a href="https://rawg.io" target="_blank" rel="noopener" style="color:var(--teal)">RAWG</a>.</p>
     `;
 
     attachRawgLookup(gameId, title, card);
+
+    const achBtn = card.querySelector('#modal-view-ach-btn');
+    const achWrap = card.querySelector('#modal-achievements');
+    let achLoaded = false;
+    achBtn.addEventListener('click', async () => {
+      const nowOpen = achWrap.style.display === 'none';
+      achWrap.style.display = nowOpen ? 'flex' : 'none';
+      achWrap.style.flexDirection = 'column';
+      achBtn.classList.toggle('open', nowOpen);
+      if(nowOpen && !achLoaded){
+        achLoaded = true;
+        achWrap.innerHTML = '<div class="achievements-list-loading">Loading achievements…</div>';
+        try{
+          const list = await getAchievementsList(gameId);
+          if(card.dataset.gameId !== String(gameId)) return; // user moved on
+          achWrap.innerHTML = renderAchievementsList(list, statsMode === 'hardcore');
+          openAchievementsGameId = gameId;
+        }catch(e){
+          if(card.dataset.gameId !== String(gameId)) return;
+          achWrap.innerHTML = `<div class="achievements-list-loading">Could not load achievements: ${e.message}</div>`;
+          achLoaded = false; // allow retry on next click
+        }
+      }
+    });
   }
 
   function closeGameModal(){
     $('#modal-backdrop').classList.remove('open');
+    openAchievementsGameId = null;
   }
 
   $('#modal-backdrop').addEventListener('click', (e) => {
@@ -2322,6 +2444,11 @@
     renderSystemChips();
     renderLibrary();
     renderByYear();
+    if(openAchievementsGameId != null){
+      const list = achievementsListCache[openAchievementsGameId];
+      const achWrap = document.getElementById('modal-achievements');
+      if(achWrap && list) achWrap.innerHTML = renderAchievementsList(list, statsMode === 'hardcore');
+    }
   });
   $('#lib-search').addEventListener('input', renderLibrary);
 
