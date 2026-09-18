@@ -2,7 +2,7 @@
 
 A lightweight, installable Progressive Web App for tracking your [RetroAchievements](https://retroachievements.org) library — recent activity, in-progress games, completions by year, and playtime — with **no account, no login, and no cloud sync**. Everything stays on your device.
 
-**Live app:** `[https://gin649.github.io/Game-Log-Tracker/]`
+**Live app:** <https://gin649.github.io/Game-Log-Tracker>
 
 ## Features
 
