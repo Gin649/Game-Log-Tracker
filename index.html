@@ -452,7 +452,8 @@
     </div>
   </div>
 
-  <!-- RetroAchievements connect modal -->
+  <!-- RetroAchievements connect modal — moved out of the front screen and
+       into settings, opened from the hamburger menu instead. -->
   <div id="ra-connect-backdrop" class="modal-backdrop">
     <div class="modal-card" id="ra-connect-card">
       <button class="modal-close" id="ra-connect-close-btn">✕</button>
@@ -596,6 +597,12 @@
 
 <script>
 (function(){
+  // --- window.storage: IndexedDB-backed, with Persistent Storage API ---
+  // All app data (RA credentials, RAWG key, manually-added games, caches)
+  // lives here now — entirely on-device, no cloud copy. IndexedDB is far
+  // more resistant to the browser silently clearing storage under space
+  // pressure than localStorage is, and requesting persistent storage below
+  // asks the browser not to evict this data automatically at all.
   if(!window.storage){
     const IDB_NAME = 'GameLogTrackerDB';
     const IDB_VERSION = 1;
@@ -936,8 +943,8 @@
     return (h / 24).toFixed(1) + 'd';
   }
 
-  async function getEstimatedHours(gameId){
-    if(estHoursCache[gameId] !== undefined) return estHoursCache[gameId];
+  async function getEstimatedHours(gameId, force){
+    if(!force && estHoursCache[gameId] !== undefined) return estHoursCache[gameId];
 
     const localGame = libraryIndex[gameId];
     const officialAward = !!(localGame && localGame.HighestAwardKind);
@@ -950,16 +957,23 @@
       Number(localGame.NumAwarded) >= Number(localGame.MaxPossible));
     const beaten = officialAward || fullyCompleted;
     const cacheKey = `ra-hours:${creds.username}:${gameId}`;
+    if(!force){
     try{
       const r = await window.storage.get(cacheKey, false);
       if(r && r.value){
         const parsed = JSON.parse(r.value);
-        if(Date.now() - parsed.ts < 12 * 60 * 60 * 1000){
+        // Only trust a cached *miss* (hours: null) for a much shorter window —
+        // RA may simply not have finished computing playtime for this game
+        // yet, and we don't want that temporary gap sticking around for the
+        // full 12h once RA does have it.
+        const ttl = parsed.hours == null ? 5 * 60 * 1000 : 12 * 60 * 60 * 1000;
+        if(Date.now() - parsed.ts < ttl){
           estHoursCache[gameId] = { hours: parsed.hours, beaten, real: !!parsed.real };
           return estHoursCache[gameId];
         }
       }
     }catch(e){ /* not cached yet */ }
+    }
 
     let hours = null;
     let real = false;
@@ -988,19 +1002,19 @@
     return estHoursCache[gameId];
   }
 
-  async function loadEstimatedHoursFor(games, onProgress){
+  async function loadEstimatedHoursFor(games, onProgress, forceIds){
     const CONCURRENCY = 8;
     const targets = games.filter(g =>
       g && g.GameID != null &&
-      Number(g.NumAwarded ?? g.NumAchieved ?? 0) > 0 &&
-      estHoursCache[g.GameID] === undefined
+      (estHoursCache[g.GameID] === undefined || (forceIds && forceIds.has(g.GameID)))
     );
     let idx = 0;
     let doneSinceRender = 0;
     async function worker(){
       while(idx < targets.length){
         const g = targets[idx++];
-        await getEstimatedHours(g.GameID);
+        const force = !!(forceIds && forceIds.has(g.GameID));
+        await getEstimatedHours(g.GameID, force);
         doneSinceRender++;
         if(onProgress && doneSinceRender % 4 === 0) onProgress();
       }
@@ -1326,7 +1340,7 @@
       const est = estHoursCache[g.GameID];
       const hoursHtml = est
         ? `<span class="val" style="color:var(--gold)">${est.real ? '' : '≈ '}${formatDuration(est)}</span>`
-        : (Number(g.NumAchieved || 0) > 0 ? 'estimating…' : '—');
+        : 'estimating…';
       return `
         <div class="cart" data-game-id="${g.GameID}">
           <img class="art" src="${imgUrl(g.ImageIcon)}" alt="${g.Title}">
@@ -1434,7 +1448,7 @@
             const isCustom = g.customConsole === true;
             const est = estHoursCache[g.GameID];
             const earned = Number(g.NumAwarded || 0);
-            const hoursLabel = isCustom ? '—' : (est ? formatDuration(est) : (earned > 0 ? '…' : '—'));
+            const hoursLabel = isCustom ? '—' : (est ? formatDuration(est) : '…');
             const hoursColor = 'var(--gold)';
             const awardCell = isCustom
               ? (g.manualBeaten ? '<span class="pill pill-teal">Beaten</span>' : '<span class="pill pill-muted">In progress</span>')
@@ -2128,7 +2142,8 @@
     $('#rawg-status').innerHTML = '<p style="color:var(--muted);font-size:12.5px;margin-top:10px;">RAWG key removed — ratings will stop showing until a new key is saved.</p>';
   });
 
-  async function loadAll(){
+  async function loadAll(opts){
+    const forcePlaytimeRefresh = !!(opts && opts.forceRecentPlaytime);
     await enqueueTask(async () => {
     $('#recent-games').innerHTML = '<div class="loading">Loading</div>';
     $('#recent-unlocks').innerHTML = '<div class="loading">Loading</div>';
@@ -2215,10 +2230,26 @@
     }
     }); // end of queued task — everything above this point is fully serialized
 
+    // On an explicit refresh, force-refetch playtime for anything played in
+    // the last 24h, bypassing the normal 12h cache — a play session started
+    // right after that cache was last written could otherwise sit stale for
+    // up to ~12h, and 24h gives full coverage of that gap with room to
+    // spare. Cheap either way: this only ever touches the recently-played
+    // list (≤12 games), never the whole library.
+    let forceIds;
+    if(forcePlaytimeRefresh){
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      forceIds = new Set(
+        recentGamesData
+          .filter(g => { const d = parseRADate(g.LastPlayed); return d && d.getTime() >= cutoff; })
+          .map(g => g.GameID)
+      );
+    }
+
     loadEstimatedHoursFor([...recentGamesData, ...libraryData], () => {
       renderRecentGames(recentGamesData);
       try{ renderLibrary(); }catch(e){ console.error('renderLibrary failed:', e); }
-    });
+    }, forceIds);
   }
 
   function updateRaConnectionView(){
@@ -2329,7 +2360,7 @@
       pulling = false;
       if(currentPull > PULL_THRESHOLD){
         indicator.textContent = 'Refreshing…';
-        Promise.resolve(loadAll()).finally(() => { indicator.style.height = '0px'; });
+        Promise.resolve(loadAll({ forceRecentPlaytime: true })).finally(() => { indicator.style.height = '0px'; });
       } else {
         indicator.style.height = '0px';
       }
