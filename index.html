@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=0.75, minimum-scale=0.5, maximum-scale=5, user-scalable=yes, viewport-fit=cover">
 <title>Game Log — Tracker</title>
 
 <!-- Connects your PWA Settings and Service Worker registration -->
@@ -347,7 +347,7 @@
     max-width:480px;margin:20px auto 40px;background:var(--panel);
     border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;
   }
-  .modal-art{width:100%;aspect-ratio:4/3;object-fit:contain;background:var(--bg-alt);display:block;}
+  .modal-art{width:100%;aspect-ratio:4/3;object-fit:contain;background:var(--bg-alt);display:block;cursor:zoom-in;}
   .modal-art-wrap{position:relative;}
   .modal-body{padding:20px;overflow-wrap:anywhere;}
   .modal-close{
@@ -437,6 +437,29 @@
   .rawg-score.tier-muted{background:var(--panel-2);color:var(--muted);border-color:var(--border);box-shadow:none;transform:rotate(-3deg);font-size:20px;}
   .rawg-setup-note{font-size:11px;color:var(--muted);margin:2px 0 0;}
   .rawg-setup-note a{color:var(--teal);cursor:pointer;}
+
+  /* ---- Box art pinch-to-zoom viewer ----
+     Installed/fullscreen PWAs typically block native page pinch-zoom on most
+     platforms, so box art can't be zoomed the normal browser way. This is a
+     dedicated full-screen viewer with its own pinch/pan handling. */
+  .img-zoom-overlay{
+    display:none;position:fixed;inset:0;background:rgba(8,6,14,0.96);
+    z-index:300;overflow:hidden;touch-action:none;
+  }
+  .img-zoom-overlay.open{display:flex;align-items:center;justify-content:center;}
+  .img-zoom-overlay img{
+    max-width:100%;max-height:100%;touch-action:none;-webkit-user-drag:none;
+    user-select:none;-webkit-user-select:none;transform-origin:center center;
+  }
+  .img-zoom-overlay .modal-close{
+    top:calc(10px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));
+  }
+  .img-zoom-hint{
+    position:absolute;left:0;right:0;bottom:calc(18px + env(safe-area-inset-bottom));
+    text-align:center;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);
+    pointer-events:none;transition:opacity 0.3s;
+  }
+  .img-zoom-hint.hidden{opacity:0;}
 
   /* ---- Library search row + add game ---- */
   .lib-search-row{display:flex;gap:8px;margin-bottom:12px;}
@@ -600,6 +623,12 @@
 
 <div id="modal-backdrop" class="modal-backdrop game-profile-view">
   <div class="modal-card game-profile-card" id="modal-card"></div>
+</div>
+
+<div id="img-zoom-overlay" class="img-zoom-overlay">
+  <button class="modal-close" id="img-zoom-close">✕</button>
+  <div class="img-zoom-hint" id="img-zoom-hint">Pinch or double-tap to zoom</div>
+  <img id="img-zoom-target" src="" alt="">
 </div>
 
 <div id="addgame-backdrop" class="modal-backdrop">
@@ -1964,6 +1993,118 @@
     $('#modal-backdrop').classList.remove('open');
     openAchievementsGameId = null;
   }
+
+  // --- Box art pinch-to-zoom viewer ---
+  // Installed/fullscreen PWAs generally block native page pinch-zoom, so this
+  // gives the box art its own dedicated zoom/pan using Pointer Events (works
+  // for touch and mouse alike). Tap/click the box art to open it.
+  (function(){
+    const overlay = $('#img-zoom-overlay');
+    const img = $('#img-zoom-target');
+    const closeBtn = $('#img-zoom-close');
+    const hint = $('#img-zoom-hint');
+    if(!overlay || !img || !closeBtn) return;
+
+    const MIN_SCALE = 1, MAX_SCALE = 5;
+    let scale = 1, panX = 0, panY = 0;
+    const pointers = new Map();
+    let lastDist = null, lastMid = null, dragStart = null, lastTapTime = 0;
+
+    function applyTransform(){
+      img.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+    }
+    function resetTransform(){
+      scale = 1; panX = 0; panY = 0; applyTransform();
+    }
+    function openZoom(src){
+      if(!src) return;
+      img.src = src;
+      resetTransform();
+      overlay.classList.add('open');
+      if(hint) hint.classList.remove('hidden');
+    }
+    function closeZoom(){
+      overlay.classList.remove('open');
+      pointers.clear();
+      lastDist = null; lastMid = null; dragStart = null;
+    }
+
+    // Any box art image in the game profile opens the zoom viewer.
+    document.addEventListener('click', (e) => {
+      const art = e.target.closest('.modal-art');
+      if(art && art.src) openZoom(art.src);
+    });
+
+    closeBtn.addEventListener('click', closeZoom);
+    overlay.addEventListener('click', (e) => { if(e.target === overlay) closeZoom(); });
+
+    function dist(a, b){ return Math.hypot(a.x - b.x, a.y - b.y); }
+    function mid(a, b){ return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+
+    img.addEventListener('pointerdown', (e) => {
+      img.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if(pointers.size === 1){
+        const now = Date.now();
+        if(now - lastTapTime < 320){ // double-tap: toggle zoom
+          if(scale > MIN_SCALE){ resetTransform(); }
+          else { scale = 2.5; applyTransform(); }
+          lastTapTime = 0;
+        } else {
+          lastTapTime = now;
+        }
+        dragStart = { x: e.clientX - panX, y: e.clientY - panY };
+      } else if(pointers.size === 2){
+        if(hint) hint.classList.add('hidden');
+        const pts = [...pointers.values()];
+        lastDist = dist(pts[0], pts[1]);
+        lastMid = mid(pts[0], pts[1]);
+        dragStart = null;
+      }
+    });
+
+    img.addEventListener('pointermove', (e) => {
+      if(!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if(pointers.size === 2){
+        const pts = [...pointers.values()];
+        const newDist = dist(pts[0], pts[1]);
+        const newMid = mid(pts[0], pts[1]);
+        if(lastDist){
+          const factor = newDist / lastDist;
+          scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+          panX += newMid.x - lastMid.x;
+          panY += newMid.y - lastMid.y;
+          applyTransform();
+        }
+        lastDist = newDist; lastMid = newMid;
+      } else if(pointers.size === 1 && dragStart && scale > MIN_SCALE){
+        panX = e.clientX - dragStart.x;
+        panY = e.clientY - dragStart.y;
+        applyTransform();
+      }
+    });
+
+    function endPointer(e){
+      pointers.delete(e.pointerId);
+      if(pointers.size < 2){ lastDist = null; lastMid = null; }
+      if(pointers.size === 1){
+        const [p] = pointers.values();
+        dragStart = { x: p.x - panX, y: p.y - panY };
+      } else if(pointers.size === 0){
+        dragStart = null;
+        if(scale <= MIN_SCALE + 0.02) resetTransform();
+      }
+    }
+    img.addEventListener('pointerup', endPointer);
+    img.addEventListener('pointercancel', endPointer);
+
+    document.addEventListener('keydown', (e) => {
+      if(e.key === 'Escape' && overlay.classList.contains('open')) closeZoom();
+    });
+  })();
 
   $('#modal-backdrop').addEventListener('click', (e) => {
     if(e.target.id === 'modal-backdrop') closeGameModal();
