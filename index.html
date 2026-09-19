@@ -1170,6 +1170,22 @@
     return list;
   }
 
+  function achRowHtml(a, isLocked, isHardcoreMode){
+    const badge = imgUrl('/Badge/' + a.BadgeName + (isLocked ? '_lock' : '') + '.png');
+    const earnedDate = isHardcoreMode ? a.DateEarnedHardcore : a.DateEarned;
+    return `
+      <div class="ach-row ${isLocked ? 'locked' : ''}">
+        <img src="${badge}" alt="">
+        <div class="info">
+          <p class="t">${a.Title || 'Untitled'}</p>
+          <p class="d">${a.Description || ''}</p>
+          ${!isLocked ? `<p class="when">Unlocked ${timeAgo(earnedDate)}</p>` : ''}
+        </div>
+        <div class="pts">${a.Points ?? ''}</div>
+      </div>
+    `;
+  }
+
   function renderAchievementsList(list, isHardcoreMode){
     if(!list || list.length === 0) return '<div class="achievements-list-loading">No achievement data available.</div>';
     // Match the rest of the app's hardcore/casual convention: hardcore mode
@@ -1178,22 +1194,30 @@
     // (DateEarned is set on every unlock, hardcore or not).
     const earned = list.filter(a => isHardcoreMode ? a.DateEarnedHardcore : a.DateEarned);
     const locked = list.filter(a => isHardcoreMode ? !a.DateEarnedHardcore : !a.DateEarned);
-    const row = (a, isLocked) => {
-      const badge = imgUrl('/Badge/' + a.BadgeName + (isLocked ? '_lock' : '') + '.png');
-      const earnedDate = isHardcoreMode ? a.DateEarnedHardcore : a.DateEarned;
-      return `
-        <div class="ach-row ${isLocked ? 'locked' : ''}">
-          <img src="${badge}" alt="">
-          <div class="info">
-            <p class="t">${a.Title || 'Untitled'}</p>
-            <p class="d">${a.Description || ''}</p>
-            ${!isLocked ? `<p class="when">Unlocked ${timeAgo(earnedDate)}</p>` : ''}
-          </div>
-          <div class="pts">${a.Points ?? ''}</div>
-        </div>
-      `;
-    };
-    return earned.map(a => row(a, false)).join('') + locked.map(a => row(a, true)).join('');
+    return earned.map(a => achRowHtml(a, false, isHardcoreMode)).join('') + locked.map(a => achRowHtml(a, true, isHardcoreMode)).join('');
+  }
+
+  // RA marks a game "Beaten" once the player has earned every achievement
+  // typed as "progression", plus at least one typed as "win_condition" (if
+  // any exist) — per RA's own Progression & Win Condition guidelines. Not
+  // every game's set has been typed by RA's developer community yet, so an
+  // empty result here doesn't necessarily mean the game can't be beaten —
+  // just that this particular set hasn't been marked up with those types.
+  function getBeatenAchievements(list){
+    return (list || []).filter(a => {
+      const t = String(a.Type || a.type || '').toLowerCase();
+      return t === 'progression' || t === 'win_condition' || t === 'win';
+    });
+  }
+
+  function renderBeatenAchievementsList(list, isHardcoreMode){
+    const beaten = getBeatenAchievements(list);
+    if(beaten.length === 0){
+      return '<div class="achievements-list-loading">This game\'s achievement set hasn\'t been marked with progression/win-condition achievements on RetroAchievements yet.</div>';
+    }
+    const earned = beaten.filter(a => isHardcoreMode ? a.DateEarnedHardcore : a.DateEarned);
+    const locked = beaten.filter(a => isHardcoreMode ? !a.DateEarnedHardcore : !a.DateEarned);
+    return earned.map(a => achRowHtml(a, false, isHardcoreMode)).join('') + locked.map(a => achRowHtml(a, true, isHardcoreMode)).join('');
   }
 
   // --- Persistence via window.storage (local only — no cloud copy) ---
@@ -1888,12 +1912,14 @@
   }
 
   let openAchievementsGameId = null; // gameId whose achievements panel is currently rendered in the modal, if any — lets the hardcore toggle refresh it in place without re-fetching
+  let openBeatenAchievementsGameId = null; // same, for the Beaten Achievements panel
 
   async function openGameModal(gameId){
     const card = $('#modal-card');
     const local = findGameLocal(gameId);
     card.dataset.gameId = gameId;
     openAchievementsGameId = null;
+    openBeatenAchievementsGameId = null;
     $('#modal-backdrop').classList.add('open');
     card.innerHTML = `
       <button class="modal-close" id="modal-close-btn">✕</button>
@@ -1962,6 +1988,9 @@
       <button class="btn-view-achievements" id="modal-view-ach-btn"><span class="arrow">▸</span> View Achievements</button>
       <div class="achievements-list" id="modal-achievements" style="display:none;"></div>
 
+      <button class="btn-view-achievements" id="modal-view-beaten-ach-btn"><span class="arrow">▸</span> Beaten Achievements</button>
+      <div class="achievements-list" id="modal-beaten-achievements" style="display:none;"></div>
+
       <div class="modal-links">
         <a href="${raUrl}" target="_blank" rel="noopener">RetroAchievements page ↗</a>
         <a href="${hltbUrl}" target="_blank" rel="noopener">Search HowLongToBeat ↗</a>
@@ -1995,11 +2024,36 @@
         }
       }
     });
+
+    const beatenAchBtn = card.querySelector('#modal-view-beaten-ach-btn');
+    const beatenAchWrap = card.querySelector('#modal-beaten-achievements');
+    let beatenAchLoaded = false;
+    beatenAchBtn.addEventListener('click', async () => {
+      const nowOpen = beatenAchWrap.style.display === 'none';
+      beatenAchWrap.style.display = nowOpen ? 'flex' : 'none';
+      beatenAchWrap.style.flexDirection = 'column';
+      beatenAchBtn.classList.toggle('open', nowOpen);
+      if(nowOpen && !beatenAchLoaded){
+        beatenAchLoaded = true;
+        beatenAchWrap.innerHTML = '<div class="achievements-list-loading">Loading achievements…</div>';
+        try{
+          const list = await getAchievementsList(gameId);
+          if(card.dataset.gameId !== String(gameId)) return; // user moved on
+          beatenAchWrap.innerHTML = renderBeatenAchievementsList(list, statsMode === 'hardcore');
+          openBeatenAchievementsGameId = gameId;
+        }catch(e){
+          if(card.dataset.gameId !== String(gameId)) return;
+          beatenAchWrap.innerHTML = `<div class="achievements-list-loading">Could not load achievements: ${e.message}</div>`;
+          beatenAchLoaded = false; // allow retry on next click
+        }
+      }
+    });
   }
 
   function closeGameModal(){
     $('#modal-backdrop').classList.remove('open');
     openAchievementsGameId = null;
+    openBeatenAchievementsGameId = null;
   }
 
   // --- Box art pinch-to-zoom viewer ---
@@ -2650,6 +2704,11 @@
       const list = achievementsListCache[openAchievementsGameId];
       const achWrap = document.getElementById('modal-achievements');
       if(achWrap && list) achWrap.innerHTML = renderAchievementsList(list, statsMode === 'hardcore');
+    }
+    if(openBeatenAchievementsGameId != null){
+      const list = achievementsListCache[openBeatenAchievementsGameId];
+      const beatenAchWrap = document.getElementById('modal-beaten-achievements');
+      if(beatenAchWrap && list) beatenAchWrap.innerHTML = renderBeatenAchievementsList(list, statsMode === 'hardcore');
     }
   });
   $('#lib-search').addEventListener('input', renderLibrary);
