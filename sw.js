@@ -9,26 +9,13 @@ const ASSETS_TO_CACHE = [
 './apple-touch-icon.png'
 ];
 
-// How long the page waits on the network before falling back to the cached
-// copy (if there is one). Stops the app hanging on a weak/"lie-fi" connection.
-const PAGE_NETWORK_TIMEOUT_MS = 3000;
-
 // Install Event: cache interface assets, and take over immediately instead
 // of waiting for every open tab to fully close before this version applies.
-// Assets are cached one at a time so a single missing file (e.g. an icon not
-// yet pushed to the repo) doesn't fail the whole install the way
-// cache.addAll() would — the rest of the app still becomes available offline.
 self.addEventListener('install', (event) => {
 event.waitUntil(
 caches.open(CACHE_NAME).then((cache) => {
 console.log('Caching tracker shell assets');
-return Promise.all(
-ASSETS_TO_CACHE.map((asset) =>
-cache.add(asset).catch((err) => {
-console.warn('Could not cache', asset, err);
-})
-)
-);
+return cache.addAll(ASSETS_TO_CACHE);
 }).then(() => self.skipWaiting())
 );
 });
@@ -49,78 +36,38 @@ return caches.delete(key);
 );
 });
 
-// Network-first for the HTML page, with a timeout fallback to the cache.
-//  - Only successful (2xx) responses are written to the cache, so a 404/5xx
-//    from GitHub Pages mid-deploy can't become the offline fallback.
-//  - If the network is slow (> PAGE_NETWORK_TIMEOUT_MS) and a cached copy
-//    exists, the cached copy is served right away; the network request keeps
-//    going in the background and refreshes the cache for next load.
-//  - If there's no cached copy, we simply wait for the network.
-function pageNetworkFirst(event) {
-const request = event.request;
-return new Promise((resolve) => {
-let settled = false;
-const finish = (response) => {
-if (!settled) {
-settled = true;
-resolve(response);
-}
-};
-
-const timer = setTimeout(async () => {
-const cached = await caches.match(request, { ignoreSearch: true });
-if (cached) finish(cached);
-}, PAGE_NETWORK_TIMEOUT_MS);
-
-const networkWork = fetch(request)
-.then((networkResponse) => {
-clearTimeout(timer);
-if (networkResponse && networkResponse.ok) {
-const responseClone = networkResponse.clone();
-event.waitUntil(
-caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone)).catch(() => {})
-);
-}
-finish(networkResponse);
-})
-.catch(async () => {
-clearTimeout(timer);
-const cached = await caches.match(request, { ignoreSearch: true });
-finish(cached || Response.error());
-});
-
-// Keep the worker alive until the background fetch/cache update is done,
-// even if we already answered from the cache.
-event.waitUntil(networkWork);
-});
-}
-
 // Fetch Event:
-// - Anything that isn't a same-origin GET is left alone entirely (RetroAchievements
-//   and RAWG API calls, RA media images, fonts, etc.). This is an explicit
-//   origin check rather than matching "api" in the URL, which was
-//   case-sensitive (RA uses /API/) and could also match unrelated paths.
-// - The HTML page uses network-first (see above), so a deployed fix shows up
-//   on next load instead of being overridden by a stale cached copy.
+// - The HTML page itself uses network-first. This is the piece that was
+//   causing "it stopped working after I know it was fixed" — with a plain
+//   cache-first strategy, a code fix deployed to GitHub Pages would keep
+//   getting silently overridden by whatever HTML was cached from before,
+//   until the cache name changed. Network-first means a deployed fix shows
+//   up on next load, with the cached copy only used as an offline fallback.
 // - Static assets (icons, manifest) stay cache-first — they rarely change
 //   and this keeps the app fast and available offline.
 self.addEventListener('fetch', (event) => {
-const request = event.request;
-if (request.method !== 'GET') return;
+if (event.request.url.includes('api')) {
+return;
+}
 
-const url = new URL(request.url);
-if (url.origin !== self.location.origin) return;
-
-const isPageRequest = request.mode === 'navigate' || url.pathname.endsWith('index.html');
+const isPageRequest = event.request.mode === 'navigate' || event.request.url.endsWith('index.html');
 
 if (isPageRequest) {
-event.respondWith(pageNetworkFirst(event));
+event.respondWith(
+fetch(event.request)
+.then((networkResponse) => {
+const responseClone = networkResponse.clone();
+caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+return networkResponse;
+})
+.catch(() => caches.match(event.request))
+);
 return;
 }
 
 event.respondWith(
-caches.match(request).then((cachedResponse) => {
-return cachedResponse || fetch(request);
+caches.match(event.request).then((cachedResponse) => {
+return cachedResponse || fetch(event.request);
 })
 );
 });
