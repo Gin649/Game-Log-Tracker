@@ -435,6 +435,35 @@
   .guide-btn-danger{flex:1;background:transparent;border:1px solid var(--danger);color:var(--danger);font-size:11.6px;padding:8px;}
   .guide-btn:disabled{opacity:0.6;cursor:default;}
 
+  .guide-divider{display:flex;align-items:center;gap:10px;margin:2px 0;color:var(--muted);font-size:10.6px;letter-spacing:0.06em;text-transform:uppercase;}
+  .guide-divider::before,.guide-divider::after{content:'';flex:1;height:1px;background:var(--border);}
+  .guide-search-row{display:flex;gap:8px;}
+  .guide-search-row input{
+    flex:1;min-width:0;background:var(--bg-alt);border:1px solid var(--border);color:var(--text);
+    border-radius:6px;padding:9px 10px;font-family:'Space Mono',monospace;font-size:12.5px;box-sizing:border-box;
+  }
+  .guide-search-row button{
+    flex-shrink:0;background:var(--teal);border:none;color:#0f2a22;border-radius:6px;padding:0 14px;
+    font-family:'Space Mono',monospace;font-weight:700;font-size:12.5px;cursor:pointer;
+  }
+  .guide-search-row button:disabled{opacity:0.6;cursor:default;}
+  .guide-back-link{
+    background:none;border:none;color:var(--teal);font-family:'Space Mono',monospace;
+    font-size:11.6px;cursor:pointer;padding:2px 0;text-align:left;align-self:flex-start;
+  }
+  .guide-result-list{display:flex;flex-direction:column;gap:1px;background:var(--border);border-radius:6px;overflow:hidden;border:1px solid var(--border);max-height:260px;overflow-y:auto;}
+  .guide-result-row{background:var(--panel);padding:9px 11px;display:flex;align-items:center;gap:10px;}
+  .guide-result-row .info{flex:1;min-width:0;}
+  .guide-result-row .info .t1{font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .guide-result-row .info .t2{font-size:10.6px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .guide-result-row button{
+    flex-shrink:0;background:transparent;border:1px solid var(--gold);color:var(--gold);
+    border-radius:5px;padding:6px 10px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;
+  }
+  .guide-result-row button:disabled{opacity:0.55;cursor:default;}
+  .guide-status-text{font-size:11.6px;color:var(--muted);margin:0;line-height:1.5;}
+  .guide-status-text.err{color:var(--danger);}
+
   .patch-result-list{display:flex;flex-direction:column;gap:1px;background:var(--border);border-radius:6px;overflow:hidden;border:1px solid var(--border);margin-top:4px;}
   .patch-result-row{background:var(--panel);padding:9px 11px;display:flex;align-items:center;gap:10px;}
   .patch-result-row .info{flex:1;min-width:0;}
@@ -1371,6 +1400,199 @@
     return guide;
   }
 
+  // --- Fetch guides directly from GameFAQs, in-app (no external tab, no
+  // manual download+import step) ---
+  //
+  // GameFAQs doesn't send CORS headers, so a browser can't fetch it directly
+  // from our origin. We route through the same public CORS proxies already
+  // used for RetroAchievements/RAWG above (see raFetch), racing them and
+  // taking whichever answers first. These are third-party services outside
+  // our control — if every one of them is down or rate-limited, this whole
+  // feature degrades to "temporarily unavailable" and the manual import
+  // below still works as a fallback.
+  const GF_BASE = 'https://gamefaqs.gamespot.com';
+
+  async function gfProxyFetchText(url){
+    async function attempt(label, run){
+      let res;
+      try{ res = await run(); }
+      catch(networkErr){ throw new Error(`${label}: blocked (${networkErr.message})`); }
+      if(!res.ok) throw new Error(`${label}: HTTP ${res.status}`);
+      const text = await res.text();
+      if(!text || text.length < 50) throw new Error(`${label}: empty response`);
+      return text;
+    }
+    function raceFirstSuccess(promises){
+      return new Promise((resolve, reject) => {
+        let remaining = promises.length;
+        const errors = [];
+        promises.forEach(p => {
+          p.then(resolve, (err) => {
+            errors.push(err && err.message ? err.message : String(err));
+            remaining--;
+            if(remaining === 0) reject(new Error(errors.join('; ')));
+          });
+        });
+      });
+    }
+    const attempts = [
+      attempt('allorigins', () => fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url))),
+      attempt('codetabs',   () => fetch('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url))),
+      attempt('corsproxy',  () => fetch('https://corsproxy.io/?url=' + encodeURIComponent(url))),
+      attempt('thingproxy', () => fetch('https://thingproxy.freeboard.io/fetch/' + url)),
+      attempt('corseu',     () => fetch('https://cors.eu.org/' + url)),
+    ];
+    try{
+      return await raceFirstSuccess(attempts);
+    }catch(aggregateErr){
+      throw new Error('Could not reach GameFAQs through any available route — ' + aggregateErr.message);
+    }
+  }
+
+  function gfParseDoc(html){
+    return new DOMParser().parseFromString(html, 'text/html');
+  }
+
+  // Searches GameFAQs for games matching a title and returns
+  // [{ title, platform, path }], deduped, in page order.
+  async function gfSearchGames(query){
+    const url = `${GF_BASE}/search_advanced?game=${encodeURIComponent(query)}`;
+    const html = await gfProxyFetchText(url);
+    const doc = gfParseDoc(html);
+    const seen = new Set();
+    const results = [];
+    doc.querySelectorAll('a[href]').forEach(a => {
+      const href = a.getAttribute('href') || '';
+      // Game pages look like /snes/588447-game-name — one path segment (the
+      // platform slug) then a numeric id and a name slug. Search-result and
+      // guide/faq links share this same shape elsewhere on the site, so we
+      // additionally require it not to contain a second-level path segment
+      // like /faqs/ or /reviews/ that would mark it as a sub-page instead.
+      const m = href.match(/^\/([a-z0-9_]+)\/(\d+)-([a-z0-9-]+)\/?$/i);
+      if(!m) return;
+      const title = a.textContent.trim();
+      if(!title || title.length < 2) return;
+      const path = `/${m[1]}/${m[2]}-${m[3]}`;
+      if(seen.has(path)) return;
+      seen.add(path);
+      results.push({ title, platform: m[1].toUpperCase(), path });
+    });
+    return results.slice(0, 25);
+  }
+
+  // Lists guides/FAQs for a given game path, returning [{ title, path }].
+  async function gfListGuides(gamePath){
+    const url = `${GF_BASE}${gamePath}/faqs`;
+    const html = await gfProxyFetchText(url);
+    const doc = gfParseDoc(html);
+    const seen = new Set();
+    const results = [];
+    doc.querySelectorAll('a[href]').forEach(a => {
+      const href = a.getAttribute('href') || '';
+      const m = href.match(/^(\/[a-z0-9_]+\/\d+-[a-z0-9-]+\/faqs\/(\d+)[^"']*)$/i);
+      if(!m) return;
+      const title = a.textContent.trim();
+      if(!title || title.length < 2) return;
+      if(seen.has(m[2])) return;
+      seen.add(m[2]);
+      results.push({ title, path: m[1] });
+    });
+    return results.slice(0, 60);
+  }
+
+  // Pulls the readable body out of a GameFAQs FAQ page, independent of the
+  // site's exact class names (those change over time). Strategy: strip
+  // obvious chrome (script/style/nav/header/footer/ads), then prefer a <pre>
+  // block if one holds most of the text (classic plain-text FAQs), otherwise
+  // pick whichever remaining container has the most text relative to how
+  // link-heavy it is (real guide prose beats a sidebar full of nav links).
+  function gfExtractContent(doc, baseUrl){
+    doc.querySelectorAll('script,style,nav,header,footer,aside,iframe,noscript').forEach(el => el.remove());
+    doc.querySelectorAll('[class*="ad-" i],[class*="advert" i],[id*="ad-" i]').forEach(el => el.remove());
+
+    const pres = [...doc.querySelectorAll('pre')].sort((a,b) => b.textContent.length - a.textContent.length);
+    if(pres[0] && pres[0].textContent.trim().length > 400){
+      return { kind: 'text', content: pres[0].textContent };
+    }
+
+    const candidates = [...doc.querySelectorAll('div,article,section')];
+    let best = null, bestScore = 0;
+    candidates.forEach(el => {
+      const text = el.textContent || '';
+      const len = text.trim().length;
+      if(len < 500) return;
+      const linkChars = [...el.querySelectorAll('a')].reduce((n, a) => n + (a.textContent || '').length, 0);
+      const score = len - linkChars * 2 - el.querySelectorAll('div,section,article').length; // penalize link-heavy and deeply-nested containers
+      if(score > bestScore){ bestScore = score; best = el; }
+    });
+    if(!best) return null;
+
+    // Rewrite relative links/images to absolute so they still resolve once
+    // saved and rendered from our own origin.
+    best.querySelectorAll('[href],[src]').forEach(el => {
+      ['href','src'].forEach(attr => {
+        const v = el.getAttribute(attr);
+        if(!v) return;
+        try{ el.setAttribute(attr, new URL(v, baseUrl).href); }catch(e){ /* leave as-is */ }
+      });
+    });
+    return { kind: 'html', content: sanitizeGuideHtml(best.innerHTML) };
+  }
+
+  // Detects a GameFAQs page-selector and returns the total page count for a
+  // paginated HTML/text guide (1 if there's no pagination to find).
+  function gfDetectPageCount(doc){
+    let max = 1;
+    doc.querySelectorAll('a[href*="?page="], select option').forEach(el => {
+      const href = el.getAttribute ? (el.getAttribute('href') || el.getAttribute('value') || '') : '';
+      const m = href.match(/page=(\d+)/) || (el.value || '').match(/(\d+)/) || (el.textContent||'').match(/^\s*(\d+)\s*$/);
+      if(m){ const n = parseInt(m[1], 10); if(n > max && n < 200) max = n; }
+    });
+    return max;
+  }
+
+  // Fetches a full guide (all pages, concatenated) and saves it — the whole
+  // point being that this happens inside the PWA, on-device, with nothing
+  // for the person to download or import by hand.
+  async function gfFetchAndSaveGuide(gameId, guidePath, title, onProgress){
+    const firstUrl = `${GF_BASE}${guidePath}`;
+    const firstHtml = await gfProxyFetchText(firstUrl);
+    const firstDoc = gfParseDoc(firstHtml);
+    const pageCount = gfDetectPageCount(firstDoc);
+    const first = gfExtractContent(firstDoc, firstUrl);
+    if(!first) throw new Error("couldn't find guide text on that page — GameFAQs may have changed its layout");
+
+    if(first.kind === 'text'){
+      let full = first.content;
+      for(let p = 2; p <= pageCount; p++){
+        if(onProgress) onProgress(p, pageCount);
+        const pUrl = `${firstUrl}?page=${p}`;
+        try{
+          const html = await gfProxyFetchText(pUrl);
+          const extracted = gfExtractContent(gfParseDoc(html), pUrl);
+          if(extracted && extracted.kind === 'text') full += '\n\n' + extracted.content;
+        }catch(e){ break; } // partial guide beats none
+      }
+      const guide = { filename: `${title}.txt`, kind: 'text', content: full, scrollFrac: 0, savedAt: Date.now() };
+      await saveGuide(gameId, guide);
+      return guide;
+    }
+
+    let full = first.content;
+    for(let p = 2; p <= pageCount; p++){
+      if(onProgress) onProgress(p, pageCount);
+      const pUrl = `${firstUrl}?page=${p}`;
+      try{
+        const html = await gfProxyFetchText(pUrl);
+        const extracted = gfExtractContent(gfParseDoc(html), pUrl);
+        if(extracted && extracted.kind === 'html') full += '<hr>' + extracted.content;
+      }catch(e){ break; }
+    }
+    const guide = { filename: `${title}.html`, kind: 'html', content: full, scrollFrac: 0, savedAt: Date.now() };
+    await saveGuide(gameId, guide);
+    return guide;
+  }
+
   // --- Saved base ROMs (for the ROM patching feature below) ---
   // Stored as a raw { filename, bytes: Uint8Array } via structured clone —
   // deliberately NOT JSON-stringified like everything else here, since
@@ -2299,18 +2521,34 @@
   }
 
 
+  // The three sub-views of the "no guide saved yet" state: pick a game from
+  // GameFAQs search results, then pick a guide from that game's FAQ list,
+  // then (while gfFetchAndSaveGuide runs) a small in-progress readout.
+  function renderGuideSearchStep(title, searchValue){
+    return `
+      <p style="font-size:12.3px;color:var(--muted);margin:0;line-height:1.55;">Search GameFAQs and save a guide straight to this device — no external tab, no downloading a file yourself.</p>
+      <div class="guide-search-row">
+        <input type="text" id="guide-search-input" value="${(searchValue !== undefined ? searchValue : title).replace(/"/g,'&quot;')}" placeholder="Game title…">
+        <button id="guide-search-btn">Search</button>
+      </div>
+      <div id="guide-search-results"></div>
+    `;
+  }
+  function renderGuideNoGuidePanel(gameId, title){
+    return `
+      <div style="display:flex;flex-direction:column;gap:10px;" id="guide-empty-wrap">
+        ${renderGuideSearchStep(title)}
+        <div class="guide-divider">or</div>
+        <input type="file" id="guide-file-input" accept=".txt,.md,.html,.htm,.pdf" style="display:none;">
+        <button class="guide-btn guide-btn-outline" id="guide-import-btn">Import a Guide File You Already Have…</button>
+        <div id="guide-import-error"></div>
+      </div>
+    `;
+  }
+
   function renderGuidePanelInner(gameId, title, guide){
-    const findUrl = `https://gamefaqs.gamespot.com/search?game=${encodeURIComponent(title)}`;
     if(!guide){
-      return `
-        <div style="display:flex;flex-direction:column;gap:10px;">
-          <p style="font-size:12.3px;color:var(--muted);margin:0;line-height:1.55;">Import a guide you've downloaded (.txt, .html, or .pdf) from GameFAQs or anywhere else. It's saved on this device for offline reading, and your place is remembered.</p>
-          <a class="guide-btn guide-btn-outline" href="${findUrl}" target="_blank" rel="noopener">Find "${title}" on GameFAQs ↗</a>
-          <input type="file" id="guide-file-input" accept=".txt,.md,.html,.htm,.pdf" style="display:none;">
-          <button class="guide-btn guide-btn-primary" id="guide-import-btn">Import Guide File…</button>
-          <div id="guide-import-error"></div>
-        </div>
-      `;
+      return renderGuideNoGuidePanel(gameId, title);
     }
     return `
       <div style="display:flex;flex-direction:column;gap:8px;">
@@ -2340,6 +2578,97 @@
     let guide = null;
     let guideLoaded = false;
 
+    // Handles the "no guide yet" view: GameFAQs search box → game list →
+    // guide list → fetch-and-save-in-place, all inside the panel.
+    function wireGuideSearchUI(){
+      const searchInput = guideWrap.querySelector('#guide-search-input');
+      const searchBtn = guideWrap.querySelector('#guide-search-btn');
+      const resultsEl = guideWrap.querySelector('#guide-search-results');
+      if(!searchInput || !searchBtn || !resultsEl) return;
+
+      function setStatus(msg, isErr){
+        resultsEl.innerHTML = `<p class="guide-status-text${isErr ? ' err' : ''}">${msg}</p>`;
+      }
+
+      async function runSearch(){
+        const q = searchInput.value.trim();
+        if(!q) return;
+        searchBtn.disabled = true;
+        setStatus('Searching GameFAQs…');
+        try{
+          const games = await gfSearchGames(q);
+          if(guideWrap.querySelector('#guide-search-input') !== searchInput) return; // panel moved on
+          if(!games.length){ setStatus('No matches found on GameFAQs for that title.', true); return; }
+          resultsEl.innerHTML = `
+            <div class="guide-result-list">
+              ${games.map((g,i) => `
+                <div class="guide-result-row">
+                  <div class="info"><div class="t1">${g.title}</div><div class="t2">${g.platform}</div></div>
+                  <button data-i="${i}" class="guide-pick-game-btn">View Guides</button>
+                </div>
+              `).join('')}
+            </div>
+          `;
+          resultsEl.querySelectorAll('.guide-pick-game-btn').forEach(btn => {
+            btn.addEventListener('click', () => showGuideList(games[Number(btn.dataset.i)]));
+          });
+        }catch(e){
+          setStatus(`Search failed: ${e.message}`, true);
+        }finally{
+          searchBtn.disabled = false;
+        }
+      }
+
+      async function showGuideList(game){
+        setStatus('Loading guide list…');
+        try{
+          const guides = await gfListGuides(game.path);
+          if(guideWrap.querySelector('#guide-search-input') !== searchInput) return;
+          if(!guides.length){ setStatus(`No FAQs/guides listed for ${game.title} on GameFAQs.`, true); return; }
+          resultsEl.innerHTML = `
+            <button class="guide-back-link" id="guide-back-to-search">‹ Back to search</button>
+            <div class="guide-result-list">
+              ${guides.map((g,i) => `
+                <div class="guide-result-row">
+                  <div class="info"><div class="t1">${g.title}</div></div>
+                  <button data-i="${i}" class="guide-save-btn">Save</button>
+                </div>
+              `).join('')}
+            </div>
+          `;
+          resultsEl.querySelector('#guide-back-to-search').addEventListener('click', runSearch);
+          resultsEl.querySelectorAll('.guide-save-btn').forEach(btn => {
+            btn.addEventListener('click', () => saveFromGameFaqs(guides[Number(btn.dataset.i)], btn));
+          });
+        }catch(e){
+          setStatus(`Couldn't load guides for that game: ${e.message}`, true);
+        }
+      }
+
+      async function saveFromGameFaqs(guideEntry, btn){
+        const allBtns = resultsEl.querySelectorAll('button');
+        allBtns.forEach(b => b.disabled = true);
+        btn.textContent = 'Fetching…';
+        try{
+          guide = await gfFetchAndSaveGuide(gameId, guideEntry.path, guideEntry.title || title, (p, total) => {
+            btn.textContent = `Fetching ${p}/${total}…`;
+          });
+          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide);
+          wireGuidePanelButtons();
+        }catch(e){
+          allBtns.forEach(b => b.disabled = false);
+          btn.textContent = 'Save';
+          const errRow = document.createElement('p');
+          errRow.className = 'guide-status-text err';
+          errRow.textContent = `Could not save that guide: ${e.message}`;
+          resultsEl.appendChild(errRow);
+        }
+      }
+
+      searchBtn.addEventListener('click', runSearch);
+      searchInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') runSearch(); });
+    }
+
     function wireGuidePanelButtons(){
       const fileInput = guideWrap.querySelector('#guide-file-input');
       const importBtn = guideWrap.querySelector('#guide-import-btn');
@@ -2348,6 +2677,8 @@
       const removeBtn = guideWrap.querySelector('#guide-remove-btn');
       const errorEl = guideWrap.querySelector('#guide-import-error');
       const triggerBtn = importBtn || replaceBtn;
+
+      wireGuideSearchUI();
 
       if(triggerBtn) triggerBtn.addEventListener('click', () => fileInput.click());
       if(fileInput) fileInput.addEventListener('change', async () => {
