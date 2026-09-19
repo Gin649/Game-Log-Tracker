@@ -371,17 +371,25 @@
     overflow-x:hidden;
   }
   .game-profile-card .modal-art-wrap{max-width:min(70%, 672px);margin:0 auto;}
-  .game-profile-card .modal-body{max-width:960px;margin:0 auto;padding:24px 20px 40px;}
+  .game-profile-card .modal-body{max-width:960px;margin:0 auto;padding:12px 20px 40px;}
   .game-profile-card .modal-close{
     top:calc(10px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));
   }
+  /* Game profile text runs 10% larger than the shared modal baseline used by
+     the settings dialogs (Connect RA, Add game, RAWG, Data) — scoped so it
+     doesn't affect those. */
+  .game-profile-card .modal-body h2{font-size:21px;}
+  .game-profile-card .modal-body .sub{font-size:14.3px;}
+  .game-profile-card .modal-links a{font-size:12.7px;}
+  .game-profile-card .modal-note{font-size:12.1px;}
+  .game-profile-card .rawg-setup-note{font-size:12.1px;}
   .modal-body h2{font-family:'Space Mono',monospace;font-size:19px;margin:0 0 4px;overflow-wrap:anywhere;}
   .modal-body .sub{color:var(--muted);font-size:13px;margin:0 0 16px;}
   .modal-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-bottom:18px;}
-  .modal-meta .mi .k{font-size:10.5px;color:var(--muted);font-family:'Space Mono',monospace;margin-bottom:2px;}
-  .modal-meta .mi .v{font-size:13px;}
+  .modal-meta .mi .k{font-size:11.6px;color:var(--muted);font-family:'Space Mono',monospace;margin-bottom:2px;}
+  .modal-meta .mi .v{font-size:14.3px;}
   .modal-progress{background:var(--bg-alt);border-radius:6px;padding:14px;margin-bottom:16px;}
-  .modal-progress .row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;}
+  .modal-progress .row{display:flex;justify-content:space-between;font-size:14.3px;margin-bottom:8px;}
   .modal-progress .row:last-child{margin-bottom:0;}
   .modal-links{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
   .modal-links a{
@@ -394,7 +402,7 @@
   .btn-view-achievements{
     width:100%;margin-top:14px;background:var(--bg-alt);border:1px solid var(--border);
     color:var(--text);border-radius:6px;padding:10px;font-family:'Space Mono',monospace;
-    font-size:12.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;
+    font-size:13.8px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;
   }
   .btn-view-achievements:hover{border-color:var(--gold);}
   .btn-view-achievements .arrow{transition:transform 0.15s;}
@@ -404,14 +412,14 @@
   .ach-row.locked{opacity:0.55;}
   .ach-row img{width:36px;height:36px;border-radius:var(--radius);flex-shrink:0;image-rendering:pixelated;}
   .ach-row .info{flex:1;min-width:0;}
-  .ach-row .info .t{font-size:13px;font-weight:600;margin:0 0 2px;}
-  .ach-row .info .d{font-size:11.5px;color:var(--muted);margin:0;line-height:1.4;}
-  .ach-row .info .when{font-size:10.5px;color:var(--teal);margin:3px 0 0;}
+  .ach-row .info .t{font-size:14.3px;font-weight:600;margin:0 0 2px;}
+  .ach-row .info .d{font-size:12.7px;color:var(--muted);margin:0;line-height:1.4;}
+  .ach-row .info .when{font-size:11.6px;color:var(--teal);margin:3px 0 0;}
   .ach-row .pts{
-    font-family:'Space Mono',monospace;color:var(--gold);font-size:12px;font-weight:700;flex-shrink:0;
+    font-family:'Space Mono',monospace;color:var(--gold);font-size:13.2px;font-weight:700;flex-shrink:0;
   }
   .ach-row.locked .pts{color:var(--muted);}
-  .achievements-list-loading{padding:14px;text-align:center;color:var(--muted);font-size:12.5px;}
+  .achievements-list-loading{padding:14px;text-align:center;color:var(--muted);font-size:13.8px;}
 
 
   .rawg-badge-row{
@@ -420,7 +428,7 @@
   }
   .rawg-score{
     font-family:'Rubik Distressed', cursive;
-    font-size:31px;
+    font-size:34px;
     line-height:1;
     padding:6px 12px 8px;
     border-radius:5px;
@@ -434,7 +442,7 @@
   .rawg-score.tier-green{background:linear-gradient(135deg,#8fe0a8,#3fae5c);color:#0c2414;}
   .rawg-score.tier-yellow{background:linear-gradient(135deg,#f2df8a,#dcb52e);color:#3a2c05;}
   .rawg-score.tier-red{background:linear-gradient(135deg,#f0958a,#d8483a);color:#3a0a06;}
-  .rawg-score.tier-muted{background:var(--panel-2);color:var(--muted);border-color:var(--border);box-shadow:none;transform:rotate(-3deg);font-size:20px;}
+  .rawg-score.tier-muted{background:var(--panel-2);color:var(--muted);border-color:var(--border);box-shadow:none;transform:rotate(-3deg);font-size:22px;}
   .rawg-setup-note{font-size:11px;color:var(--muted);margin:2px 0 0;}
   .rawg-setup-note a{color:var(--teal);cursor:pointer;}
 
