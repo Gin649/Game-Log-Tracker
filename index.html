@@ -421,6 +421,61 @@
   .ach-row.locked .pts{color:var(--muted);}
   .achievements-list-loading{padding:14px;text-align:center;color:var(--muted);font-size:13.8px;}
 
+  .guide-panel{
+    margin-top:12px;background:var(--panel);border:1px solid var(--border);
+    border-radius:6px;padding:14px;
+  }
+  .guide-btn{
+    border-radius:6px;padding:9px;font-family:'Space Mono',monospace;font-weight:700;
+    font-size:12.5px;cursor:pointer;text-align:center;text-decoration:none;display:block;
+  }
+  .guide-btn-primary{background:var(--gold);border:none;color:#1a1408;}
+  .guide-btn-outline{background:transparent;border:1px solid var(--teal);color:var(--teal);}
+  .guide-btn-ghost{flex:1;background:transparent;border:1px solid var(--border);color:var(--text);font-size:11.6px;padding:8px;}
+  .guide-btn-danger{flex:1;background:transparent;border:1px solid var(--danger);color:var(--danger);font-size:11.6px;padding:8px;}
+  .guide-btn:disabled{opacity:0.6;cursor:default;}
+
+  .patch-result-list{display:flex;flex-direction:column;gap:1px;background:var(--border);border-radius:6px;overflow:hidden;border:1px solid var(--border);margin-top:4px;}
+  .patch-result-row{background:var(--panel);padding:9px 11px;display:flex;align-items:center;gap:10px;}
+  .patch-result-row .info{flex:1;min-width:0;}
+  .patch-result-row .info .fn{font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .patch-result-row .info .pth{font-size:10.8px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .patch-result-row button{
+    flex-shrink:0;background:transparent;border:1px solid var(--gold);color:var(--gold);
+    border-radius:5px;padding:6px 10px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;
+  }
+  .hash-status{font-size:11.6px;border-radius:5px;padding:8px 10px;line-height:1.45;}
+  .hash-status.ok{background:rgba(89,201,165,0.12);color:var(--teal);border:1px solid rgba(89,201,165,0.3);}
+  .hash-status.mismatch{background:rgba(226,104,92,0.12);color:var(--danger);border:1px solid rgba(226,104,92,0.3);}
+  .hash-status.unknown{background:rgba(148,141,179,0.12);color:var(--muted);border:1px solid var(--border);}
+
+  .guide-reader-overlay{
+    position:fixed;inset:0;background:#000;z-index:200;display:none;flex-direction:column;
+    padding-top:env(safe-area-inset-top, 0px);padding-bottom:env(safe-area-inset-bottom, 0px);
+  }
+  .guide-reader-overlay.open{display:flex;}
+  .guide-reader-header{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;
+    padding:12px 16px;border-bottom:1px solid #2a2a2a;
+  }
+  .guide-reader-header .guide-reader-fn{
+    font-family:'Space Mono',monospace;font-size:12px;color:#9a9a9a;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .guide-reader-close{
+    background:transparent;border:1px solid #444;color:#fff;border-radius:4px;flex-shrink:0;
+    padding:6px 14px;font-family:'Space Mono',monospace;font-size:12.5px;cursor:pointer;
+  }
+  .guide-reader-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 16px;}
+  .guide-reader-body pre{
+    font-family:'Space Mono',monospace;font-size:14px;line-height:1.65;color:#fff;
+    white-space:pre-wrap;word-break:break-word;margin:0;
+  }
+  .guide-reader-body.html-guide{font-family:'Space Mono',monospace;font-size:14px;line-height:1.65;color:#fff;}
+  .guide-reader-body.html-guide a{color:var(--teal);}
+  .guide-reader-body.html-guide img{max-width:100%;}
+  .guide-reader-body iframe{width:100%;height:100%;border:0;display:block;}
+
 
   .rawg-badge-row{
     position:absolute;right:14px;bottom:10px;display:flex;justify-content:flex-end;
@@ -639,6 +694,14 @@
   <img id="img-zoom-target" src="" alt="">
 </div>
 
+<div id="guide-reader-overlay" class="guide-reader-overlay">
+  <div class="guide-reader-header">
+    <span class="guide-reader-fn" id="guide-reader-fn"></span>
+    <button class="guide-reader-close" id="guide-reader-close">Close</button>
+  </div>
+  <div class="guide-reader-body" id="guide-reader-body"></div>
+</div>
+
 <div id="addgame-backdrop" class="modal-backdrop">
   <div class="modal-card" id="addgame-card">
     <button class="modal-close" id="addgame-close-btn">✕</button>
@@ -697,7 +760,7 @@
       <div class="field">
         <label>Export</label>
         <button class="btn-primary" id="data-export-btn" style="width:100%;">Download backup (.json)</button>
-        <div class="hint">Saves a file containing everything stored locally by this app. It includes your RetroAchievements API key in plain text, so keep it private and don't share it.</div>
+        <div class="hint">Saves a file containing everything stored locally by this app.</div>
       </div>
 
       <div class="field">
@@ -739,10 +802,7 @@
           }
         };
         req.onsuccess = () => resolve(req.result);
-        req.onerror = () => {
-          idbOpenPromise = null; // let the next call retry instead of reusing this failure
-          reject(req.error);
-        };
+        req.onerror = () => reject(req.error);
       });
       return idbOpenPromise;
     }
@@ -767,9 +827,6 @@
           tx.objectStore(IDB_STORE).put({ key: nsKey(key, shared), value });
           tx.oncomplete = () => resolve({ key, value, shared: !!shared });
           tx.onerror = () => reject(tx.error);
-          // A quota error at commit time aborts the transaction WITHOUT firing
-          // onerror, so without this the promise would never settle.
-          tx.onabort = () => reject(tx.error || new Error('Storage write was aborted (storage may be full).'));
         });
       },
       delete: async (key, shared) => {
@@ -779,7 +836,6 @@
           tx.objectStore(IDB_STORE).delete(nsKey(key, shared));
           tx.oncomplete = () => resolve({ key, deleted: true, shared: !!shared });
           tx.onerror = () => reject(tx.error);
-          tx.onabort = () => reject(tx.error || new Error('Storage delete was aborted.'));
         });
       },
       list: async (prefix, shared) => {
@@ -810,15 +866,9 @@
         const db = await openIdb();
         return new Promise((resolve, reject) => {
           const tx = db.transaction(IDB_STORE, 'readwrite');
+          rawEntries.forEach(entry => tx.objectStore(IDB_STORE).put(entry));
           tx.oncomplete = () => resolve();
           tx.onerror = () => reject(tx.error);
-          tx.onabort = () => reject(tx.error || new Error('Import was aborted (storage may be full). Nothing was changed.'));
-          try{
-            rawEntries.forEach(entry => tx.objectStore(IDB_STORE).put(entry));
-          }catch(err){
-            try{ tx.abort(); }catch(_){}
-            reject(err);
-          }
         });
       },
     };
@@ -1247,6 +1297,101 @@
   }
   async function clearCreds(){
     try{ await window.storage.delete('ra-credentials', false); }catch(e){}
+  }
+
+  // --- Game guides (manually imported — never fetched automatically; see
+  // the "Game Guide" panel in the game profile for why) ---
+  function guideKey(gameId){
+    return `guide:${creds.username.trim().toLowerCase()}:${gameId}`;
+  }
+  async function loadGuide(gameId){
+    try{
+      const r = await window.storage.get(guideKey(gameId), false);
+      if(r && r.value) return JSON.parse(r.value);
+    }catch(e){ /* none imported yet */ }
+    return null;
+  }
+  async function saveGuide(gameId, guide){
+    try{ await window.storage.set(guideKey(gameId), JSON.stringify(guide), false); }
+    catch(e){ /* non-fatal */ }
+  }
+  async function deleteGuide(gameId){
+    try{ await window.storage.delete(guideKey(gameId), false); }catch(e){}
+  }
+  function readFileAsText(file){
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error || new Error('Could not read file'));
+      r.readAsText(file);
+    });
+  }
+  function readFileAsDataURL(file){
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error || new Error('Could not read file'));
+      r.readAsDataURL(file);
+    });
+  }
+  // Strips anything that could execute when an imported HTML guide is later
+  // rendered — <script> tags, inline event handlers, javascript: URLs. This
+  // runs on every HTML import regardless of source, since a guide file is
+  // just an arbitrary file the person picked off their device.
+  function sanitizeGuideHtml(rawHtml){
+    const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+    doc.querySelectorAll('script').forEach(el => el.remove());
+    doc.querySelectorAll('*').forEach(el => {
+      [...el.attributes].forEach(attr => {
+        const n = attr.name.toLowerCase();
+        if(n.startsWith('on')) el.removeAttribute(attr.name);
+        if((n === 'href' || n === 'src') && /^\s*javascript:/i.test(attr.value)) el.removeAttribute(attr.name);
+      });
+    });
+    return doc.body ? doc.body.innerHTML : rawHtml;
+  }
+  async function importGuideFile(gameId, file){
+    const name = file.name || 'guide';
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    let kind, content;
+    if(ext === 'pdf'){
+      kind = 'pdf';
+      content = await readFileAsDataURL(file);
+    }else if(ext === 'html' || ext === 'htm'){
+      kind = 'html';
+      content = sanitizeGuideHtml(await readFileAsText(file));
+    }else{
+      // .txt, .md, or anything unrecognized — plain text is the safest
+      // default, and matches how GameFAQs guides are almost always shared
+      kind = 'text';
+      content = await readFileAsText(file);
+    }
+    const guide = { filename: name, kind, content, scrollFrac: 0, savedAt: Date.now() };
+    await saveGuide(gameId, guide);
+    return guide;
+  }
+
+  // --- Saved base ROMs (for the ROM patching feature below) ---
+  // Stored as a raw { filename, bytes: Uint8Array } via structured clone —
+  // deliberately NOT JSON-stringified like everything else here, since
+  // base64-encoding a multi-megabyte ROM would bloat it by another third
+  // for no reason. IndexedDB stores typed arrays natively.
+  function romKey(gameId){
+    return `rom:${creds.username.trim().toLowerCase()}:${gameId}`;
+  }
+  async function saveRom(gameId, filename, bytes){
+    try{ await window.storage.set(romKey(gameId), { filename, bytes }, false); }
+    catch(e){ /* non-fatal */ }
+  }
+  async function loadRom(gameId){
+    try{
+      const r = await window.storage.get(romKey(gameId), false);
+      if(r && r.value) return r.value; // { filename, bytes }
+    }catch(e){ /* none saved */ }
+    return null;
+  }
+  async function deleteRom(gameId){
+    try{ await window.storage.delete(romKey(gameId), false); }catch(e){}
   }
 
   // --- Manually added ("wishlist") games ---
@@ -1897,6 +2042,9 @@
         </div>
       </div>
 
+      <button class="btn-view-achievements" id="modal-guide-btn"><span class="arrow">▸</span> Game Guide</button>
+      <div class="guide-panel" id="modal-guide-panel" style="display:none;"></div>
+
       <div class="modal-links">
         <a href="https://howlongtobeat.com/?q=${encodeURIComponent(local.Title)}" target="_blank" rel="noopener">Search HowLongToBeat ↗</a>
       </div>
@@ -1922,7 +2070,382 @@
     });
 
     attachRawgLookup(gameId, local.Title, card);
+    setupGameGuideUI(gameId, local.Title, card);
   }
+
+  // --- ROM patch engine: CRC32 + BPS + IPS ---
+  // BPS format designed by byuu, released public domain
+  // (https://byuu.org/, spec: https://www.romhacking.net/documents/746/).
+  // IPS is the long-standing, unowned de facto standard for the format.
+  // Both implemented directly from their published specs below — this is
+  // deliberately NOT a port of any existing patcher's source (RomPatcher.js
+  // included), to keep this a from-spec implementation rather than a reuse
+  // of someone else's licensed code.
+  const CRC32_TABLE = (() => {
+    const table = new Uint32Array(256);
+    for(let n = 0; n < 256; n++){
+      let c = n;
+      for(let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      table[n] = c >>> 0;
+    }
+    return table;
+  })();
+  function crc32(bytes){
+    let c = 0xFFFFFFFF;
+    for(let i = 0; i < bytes.length; i++) c = CRC32_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function crc32Hex(bytes){ return crc32(bytes).toString(16).padStart(8, '0'); }
+
+  function readVLQ(bytes, pos){
+    let data = 0, shift = 1;
+    for(;;){
+      const x = bytes[pos.i++];
+      if(x === undefined) throw new Error('Unexpected end of patch file.');
+      data += (x & 0x7f) * shift;
+      if(x & 0x80) break;
+      shift <<= 7;
+      data += shift;
+    }
+    return data;
+  }
+
+  // Applies a BPS patch to sourceBytes and returns the result, plus whether
+  // the source/target matched the checksums embedded in the patch. Verifying
+  // BEFORE writing anything means a wrong base ROM fails with a clear
+  // message instead of silently producing garbage.
+  function applyBps(patchBytes, sourceBytes){
+    const p = patchBytes;
+    if(p.length < 16 || p[0] !== 0x42 || p[1] !== 0x50 || p[2] !== 0x53 || p[3] !== 0x31){
+      throw new Error('Not a valid BPS patch (missing "BPS1" header).');
+    }
+    const footerStart = p.length - 12;
+    const readU32LE = (off) => (p[off] | (p[off+1] << 8) | (p[off+2] << 16) | (p[off+3] << 24)) >>> 0;
+    const expectedSourceCrc = readU32LE(footerStart);
+    const expectedTargetCrc = readU32LE(footerStart + 4);
+    const expectedPatchCrc = readU32LE(footerStart + 8);
+
+    if(crc32(p.subarray(0, footerStart + 8)) !== expectedPatchCrc){
+      throw new Error('This patch file looks corrupted (patch checksum mismatch) — try re-downloading it.');
+    }
+
+    const pos = { i: 4 };
+    readVLQ(p, pos); // source-size — not needed directly, sourceBytes.length is used instead
+    const targetSize = readVLQ(p, pos);
+    const metadataSize = readVLQ(p, pos);
+    pos.i += metadataSize;
+
+    const actualSourceCrc = crc32(sourceBytes);
+    const sourceMatches = actualSourceCrc === expectedSourceCrc;
+
+    const target = new Uint8Array(targetSize);
+    let outOff = 0, srcRel = 0, tgtRel = 0;
+
+    while(pos.i < footerStart){
+      const data = readVLQ(p, pos);
+      const action = data & 3;
+      const length = (data >>> 2) + 1;
+      if(outOff + length > targetSize) throw new Error('This patch is malformed (writes past the expected output size).');
+
+      if(action === 0){ // SourceRead — same-position bytes copied straight from source
+        for(let n = 0; n < length; n++) target[outOff + n] = sourceBytes[outOff + n];
+        outOff += length;
+      }else if(action === 1){ // TargetRead — literal bytes embedded in the patch itself
+        if(pos.i + length > footerStart) throw new Error('This patch is malformed (ran out of data).');
+        for(let n = 0; n < length; n++) target[outOff + n] = p[pos.i + n];
+        pos.i += length;
+        outOff += length;
+      }else if(action === 2){ // SourceCopy — relocatable read from source
+        const rel = readVLQ(p, pos);
+        srcRel += (rel & 1) ? -(rel >>> 1) : (rel >>> 1);
+        if(srcRel < 0) throw new Error("This patch doesn't match your base ROM (source offset out of range).");
+        for(let n = 0; n < length; n++) target[outOff + n] = sourceBytes[srcRel + n];
+        outOff += length;
+        srcRel += length;
+      }else{ // TargetCopy — self-referential, used for RLE-style runs
+        const rel = readVLQ(p, pos);
+        tgtRel += (rel & 1) ? -(rel >>> 1) : (rel >>> 1);
+        if(tgtRel < 0) throw new Error('This patch is malformed (target offset out of range).');
+        for(let n = 0; n < length; n++) target[outOff + n] = target[tgtRel++];
+        outOff += length;
+      }
+    }
+
+    if(outOff !== targetSize) throw new Error("This patch didn't produce the expected output size.");
+
+    const actualTargetCrc = crc32(target);
+    return {
+      target, sourceMatches, actualSourceCrc, expectedSourceCrc,
+      targetMatches: actualTargetCrc === expectedTargetCrc, actualTargetCrc, expectedTargetCrc,
+    };
+  }
+
+  // IPS has no embedded checksums at all — there is nothing to verify a
+  // base ROM against before applying one, unlike BPS above.
+  function applyIps(patchBytes, sourceBytes){
+    const p = patchBytes;
+    if(p.length < 5 || String.fromCharCode(p[0], p[1], p[2], p[3], p[4]) !== 'PATCH'){
+      throw new Error('Not a valid IPS patch (missing "PATCH" header).');
+    }
+    let target = new Uint8Array(sourceBytes); // IPS only overwrites/extends a copy of the source
+    let i = 5;
+    while(i + 3 <= p.length){
+      const b0 = p[i], b1 = p[i+1], b2 = p[i+2];
+      if(b0 === 0x45 && b1 === 0x4F && b2 === 0x46){ i += 3; break; } // "EOF"
+      const offset = (b0 << 16) | (b1 << 8) | b2;
+      i += 3;
+      if(i + 2 > p.length) throw new Error('This patch is malformed (truncated record).');
+      const length = (p[i] << 8) | p[i+1];
+      i += 2;
+      let endOffset;
+      if(length === 0){ // RLE record
+        if(i + 3 > p.length) throw new Error('This patch is malformed (truncated RLE record).');
+        const rleLen = (p[i] << 8) | p[i+1];
+        const value = p[i+2];
+        i += 3;
+        endOffset = offset + rleLen;
+        if(endOffset > target.length){ const grown = new Uint8Array(endOffset); grown.set(target); target = grown; }
+        target.fill(value, offset, endOffset);
+      }else{
+        if(i + length > p.length) throw new Error('This patch is malformed (truncated data record).');
+        endOffset = offset + length;
+        if(endOffset > target.length){ const grown = new Uint8Array(endOffset); grown.set(target); target = grown; }
+        target.set(p.subarray(i, i + length), offset);
+        i += length;
+      }
+    }
+    if(i + 3 === p.length){ // optional trailing truncation length — rare, but part of the spec
+      const truncTo = (p[i] << 16) | (p[i+1] << 8) | p[i+2];
+      if(truncTo <= target.length) target = target.subarray(0, truncTo);
+    }
+    return { target };
+  }
+
+  // --- RAPatches repo search ---
+  // Community-maintained patch repository (github.com/Tsearo/RAPatches),
+  // linked from RetroAchievements' own Hash Labels documentation. There is
+  // no API that maps an RA game ID to "its" patches — patch↔game linking on
+  // RA happens by hand, in each game's forum topic and Linked Hashes page —
+  // so this can only do a best-effort filename search against the repo's
+  // file listing. Results are NOT an authoritative match; always cross-check
+  // manually before trusting one.
+  const RAPATCHES_OWNER = 'Tsearo';
+  const RAPATCHES_REPO = 'RAPatches';
+
+  async function getRAPatchesTree(){
+    const cacheKey = 'rapatches-tree-cache';
+    try{
+      const r = await window.storage.get(cacheKey, false);
+      if(r && r.value){
+        const cached = JSON.parse(r.value);
+        if(Date.now() - cached.ts < 24 * 60 * 60 * 1000) return cached;
+      }
+    }catch(e){ /* not cached yet */ }
+
+    const metaResp = await fetch(`https://api.github.com/repos/${RAPATCHES_OWNER}/${RAPATCHES_REPO}`);
+    if(!metaResp.ok) throw new Error(`Could not reach the RAPatches repo (${metaResp.status}).`);
+    const meta = await metaResp.json();
+    const branch = meta.default_branch || 'master';
+
+    const treeResp = await fetch(`https://api.github.com/repos/${RAPATCHES_OWNER}/${RAPATCHES_REPO}/git/trees/${branch}?recursive=1`);
+    if(!treeResp.ok) throw new Error(`Could not list RAPatches files (${treeResp.status}). GitHub's unauthenticated API is rate-limited — if this keeps happening, wait a while and try again.`);
+    const treeData = await treeResp.json();
+    const files = (treeData.tree || [])
+      .filter(e => e.type === 'blob' && /\.(bps|ips|xdelta)$/i.test(e.path))
+      .map(e => ({ path: e.path }));
+
+    const cached = { branch, files, ts: Date.now(), truncated: !!treeData.truncated };
+    try{ await window.storage.set(cacheKey, JSON.stringify(cached), false); }catch(e){ /* non-fatal */ }
+    return cached;
+  }
+
+  function normalizeForMatch(s){
+    return String(s || '').toLowerCase().replace(/\[.*?\]|\(.*?\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+
+  function searchRAPatches(files, title){
+    const titleWords = normalizeForMatch(title).split(' ').filter(w => w.length > 1);
+    if(!titleWords.length) return [];
+    const scored = files.map(f => {
+      const base = f.path.split('/').pop().replace(/\.(bps|ips|xdelta)$/i, '');
+      const norm = normalizeForMatch(base);
+      const hits = titleWords.filter(w => norm.includes(w)).length;
+      return { path: f.path, score: hits / titleWords.length };
+    }).filter(f => f.score >= 0.7);
+    scored.sort((a, b) => b.score - a.score || a.path.length - b.path.length);
+    return scored.slice(0, 15);
+  }
+
+  async function fetchRAPatchBytes(branch, path){
+    const url = `https://raw.githubusercontent.com/${RAPATCHES_OWNER}/${RAPATCHES_REPO}/${branch}/${path.split('/').map(encodeURIComponent).join('/')}`;
+    const resp = await fetch(url);
+    if(!resp.ok) throw new Error(`Could not download that patch (${resp.status}).`);
+    return new Uint8Array(await resp.arrayBuffer());
+  }
+
+  // Deliberately a denylist, not an allowlist: an unlisted disc/computer
+  // platform slipping through would wrongly show this button somewhere it
+  // doesn't belong, but that's a much smaller problem than an unlisted
+  // cartridge platform wrongly having the feature hidden from it entirely.
+  function isCartridgeConsole(consoleName){
+    const denylist = [
+      'playstation', 'ps2', 'psp', 'vita', 'saturn', 'dreamcast', 'sega cd', 'mega cd',
+      'pc-fx', '3do', 'neo geo cd', 'pc engine cd', 'turbografx-cd', 'turbografx cd',
+      'jaguar cd', 'cd-i', 'wii', 'gamecube', 'xbox', 'dos', 'windows', 'arcade',
+      'pc-8000', 'pc-9800', 'msx', 'apple ii', 'commodore', 'colecovision', 'amiga',
+    ];
+    const n = String(consoleName || '').toLowerCase();
+    return !denylist.some(d => n.includes(d));
+  }
+
+
+  function renderGuidePanelInner(gameId, title, guide){
+    const findUrl = `https://gamefaqs.gamespot.com/search?game=${encodeURIComponent(title)}`;
+    if(!guide){
+      return `
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <p style="font-size:12.3px;color:var(--muted);margin:0;line-height:1.55;">Import a guide you've downloaded (.txt, .html, or .pdf) from GameFAQs or anywhere else. It's saved on this device for offline reading, and your place is remembered.</p>
+          <a class="guide-btn guide-btn-outline" href="${findUrl}" target="_blank" rel="noopener">Find "${title}" on GameFAQs ↗</a>
+          <input type="file" id="guide-file-input" accept=".txt,.md,.html,.htm,.pdf" style="display:none;">
+          <button class="guide-btn guide-btn-primary" id="guide-import-btn">Import Guide File…</button>
+          <div id="guide-import-error"></div>
+        </div>
+      `;
+    }
+    return `
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <span style="font-size:12.3px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${guide.filename}</span>
+          <span style="font-size:10.8px;color:var(--muted);flex-shrink:0;letter-spacing:0.04em;">${guide.kind.toUpperCase()}</span>
+        </div>
+        <button class="guide-btn guide-btn-primary" id="guide-read-btn">Read Guide</button>
+        <div style="display:flex;gap:8px;">
+          <input type="file" id="guide-file-input" accept=".txt,.md,.html,.htm,.pdf" style="display:none;">
+          <button class="guide-btn guide-btn-ghost" id="guide-replace-btn">Replace…</button>
+          <button class="guide-btn guide-btn-danger" id="guide-remove-btn">Remove</button>
+        </div>
+        <div id="guide-import-error"></div>
+      </div>
+    `;
+  }
+
+  // Shared between the RA game modal and the manually-tracked (non-RA) game
+  // modal — guides aren't achievement data, so they make sense for any
+  // tracked game either way.
+  function setupGameGuideUI(gameId, title, card){
+    const guideBtn = card.querySelector('#modal-guide-btn');
+    const guideWrap = card.querySelector('#modal-guide-panel');
+    if(!guideBtn || !guideWrap) return;
+
+    let guide = null;
+    let guideLoaded = false;
+
+    function wireGuidePanelButtons(){
+      const fileInput = guideWrap.querySelector('#guide-file-input');
+      const importBtn = guideWrap.querySelector('#guide-import-btn');
+      const replaceBtn = guideWrap.querySelector('#guide-replace-btn');
+      const readBtn = guideWrap.querySelector('#guide-read-btn');
+      const removeBtn = guideWrap.querySelector('#guide-remove-btn');
+      const errorEl = guideWrap.querySelector('#guide-import-error');
+      const triggerBtn = importBtn || replaceBtn;
+
+      if(triggerBtn) triggerBtn.addEventListener('click', () => fileInput.click());
+      if(fileInput) fileInput.addEventListener('change', async () => {
+        const file = fileInput.files && fileInput.files[0];
+        if(!file) return;
+        if(errorEl) errorEl.innerHTML = '';
+        const prevLabel = triggerBtn.textContent;
+        triggerBtn.textContent = 'Importing…';
+        triggerBtn.disabled = true;
+        try{
+          guide = await importGuideFile(gameId, file);
+          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide);
+          wireGuidePanelButtons();
+        }catch(e){
+          triggerBtn.textContent = prevLabel;
+          triggerBtn.disabled = false;
+          if(errorEl) errorEl.innerHTML = `<p style="font-size:11.6px;color:var(--danger);margin:6px 0 0;">Could not import that file: ${e.message}</p>`;
+        }
+      });
+      if(readBtn) readBtn.addEventListener('click', () => openGuideReader(gameId, title, guide));
+      if(removeBtn) removeBtn.addEventListener('click', async () => {
+        await deleteGuide(gameId);
+        guide = null;
+        guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide);
+        wireGuidePanelButtons();
+      });
+    }
+
+    guideBtn.addEventListener('click', async () => {
+      const nowOpen = guideWrap.style.display === 'none';
+      guideWrap.style.display = nowOpen ? 'block' : 'none';
+      guideBtn.classList.toggle('open', nowOpen);
+      if(nowOpen && !guideLoaded){
+        guideLoaded = true;
+        guideWrap.innerHTML = '<div class="achievements-list-loading">Loading…</div>';
+        guide = await loadGuide(gameId);
+        if(card.dataset.gameId !== String(gameId)) return; // user moved on
+        guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide);
+        wireGuidePanelButtons();
+      }
+    });
+  }
+
+  let guideReaderScrollGameId = null; // which game's guide the reader is currently showing, for the debounced scroll-position save below
+  let guideReaderScrollTimer = null;
+
+  function setupGuideScrollTracking(body, gameId, guide){
+    body.onscroll = () => {
+      clearTimeout(guideReaderScrollTimer);
+      guideReaderScrollTimer = setTimeout(async () => {
+        if(guideReaderScrollGameId !== gameId) return; // reader moved on since this fired
+        const max = body.scrollHeight - body.clientHeight;
+        guide.scrollFrac = max > 0 ? body.scrollTop / max : 0;
+        await saveGuide(gameId, guide);
+      }, 600);
+    };
+  }
+
+  function openGuideReader(gameId, title, guide){
+    if(!guide) return;
+    const overlay = $('#guide-reader-overlay');
+    const body = $('#guide-reader-body');
+    $('#guide-reader-fn').textContent = guide.filename;
+    body.onscroll = null;
+    body.className = 'guide-reader-body';
+    guideReaderScrollGameId = gameId;
+
+    if(guide.kind === 'pdf'){
+      // Renders in the browser's own PDF viewer — position there isn't
+      // something this app can read or restore, unlike the text/html modes.
+      body.innerHTML = `<iframe src="${guide.content}" title="${guide.filename}"></iframe>`;
+    }else if(guide.kind === 'html'){
+      body.classList.add('html-guide');
+      body.innerHTML = guide.content;
+      setupGuideScrollTracking(body, gameId, guide);
+    }else{
+      const pre = document.createElement('pre');
+      pre.textContent = guide.content;
+      body.innerHTML = '';
+      body.appendChild(pre);
+      setupGuideScrollTracking(body, gameId, guide);
+    }
+
+    overlay.classList.add('open');
+    requestAnimationFrame(() => {
+      if(guide.scrollFrac && body.scrollHeight > body.clientHeight){
+        body.scrollTop = guide.scrollFrac * (body.scrollHeight - body.clientHeight);
+      }
+    });
+  }
+
+  function closeGuideReader(){
+    $('#guide-reader-overlay').classList.remove('open');
+    $('#guide-reader-body').innerHTML = '';
+    $('#guide-reader-body').onscroll = null;
+    guideReaderScrollGameId = null;
+  }
+  $('#guide-reader-close').addEventListener('click', closeGuideReader);
 
   let openAchievementsGameId = null; // gameId whose achievements panel is currently rendered in the modal, if any — lets the hardcore toggle refresh it in place without re-fetching
   let openBeatenAchievementsGameId = null; // same, for the Beaten Achievements panel
@@ -2004,6 +2527,9 @@
       <button class="btn-view-achievements" id="modal-view-beaten-ach-btn"><span class="arrow">▸</span> Beaten Achievements</button>
       <div class="achievements-list" id="modal-beaten-achievements" style="display:none;"></div>
 
+      <button class="btn-view-achievements" id="modal-guide-btn"><span class="arrow">▸</span> Game Guide</button>
+      <div class="guide-panel" id="modal-guide-panel" style="display:none;"></div>
+
       <div class="modal-links">
         <a href="${raUrl}" target="_blank" rel="noopener">RetroAchievements page ↗</a>
         <a href="${hltbUrl}" target="_blank" rel="noopener">Search HowLongToBeat ↗</a>
@@ -2013,6 +2539,7 @@
     `;
 
     attachRawgLookup(gameId, title, card);
+    setupGameGuideUI(gameId, title, card);
 
     const achBtn = card.querySelector('#modal-view-ach-btn');
     const achWrap = card.querySelector('#modal-achievements');
@@ -2067,6 +2594,7 @@
     $('#modal-backdrop').classList.remove('open');
     openAchievementsGameId = null;
     openBeatenAchievementsGameId = null;
+    closeGuideReader();
   }
 
   // --- Box art pinch-to-zoom viewer ---
@@ -2452,12 +2980,6 @@
     catch(e){ throw new Error('That file isn\'t valid JSON.'); }
     if(!payload || !Array.isArray(payload.entries)){
       throw new Error('This doesn\'t look like a Game Log Tracker backup file.');
-    }
-    const badIndex = payload.entries.findIndex(en =>
-      !en || typeof en !== 'object' || typeof en.key !== 'string' || !en.key || !('value' in en)
-    );
-    if(badIndex !== -1){
-      throw new Error(`Backup file is damaged (entry ${badIndex + 1} is missing its key or value). Nothing was imported.`);
     }
     await window.storage._putAllRaw(payload.entries);
   }
