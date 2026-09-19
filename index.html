@@ -348,7 +348,7 @@
     border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;
   }
   .modal-art{width:100%;aspect-ratio:4/3;object-fit:contain;background:var(--bg-alt);display:block;cursor:zoom-in;}
-  .modal-art-wrap{position:relative;}
+  .modal-art-wrap{position:relative;max-width:70%;margin:0 auto;}
   .modal-body{padding:20px;overflow-wrap:anywhere;}
   .modal-close{
     position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.5);color:var(--text);
@@ -370,7 +370,7 @@
     padding-bottom:env(safe-area-inset-bottom);
     overflow-x:hidden;
   }
-  .game-profile-card .modal-art-wrap{max-width:960px;margin:0 auto;}
+  .game-profile-card .modal-art-wrap{max-width:min(70%, 672px);margin:0 auto;}
   .game-profile-card .modal-body{max-width:960px;margin:0 auto;padding:24px 20px 40px;}
   .game-profile-card .modal-close{
     top:calc(10px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));
