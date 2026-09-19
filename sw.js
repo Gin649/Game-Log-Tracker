@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gl-tracker-v17';
+const CACHE_NAME = 'gl-tracker-v20';
 const ASSETS_TO_CACHE = [
 './',
 './index.html',
@@ -37,7 +37,14 @@ return caches.delete(key);
 });
 
 // Fetch Event:
-// - The HTML page itself uses network-first
+// - The HTML page itself uses network-first. This is the piece that was
+//   causing "it stopped working after I know it was fixed" — with a plain
+//   cache-first strategy, a code fix deployed to GitHub Pages would keep
+//   getting silently overridden by whatever HTML was cached from before,
+//   until the cache name changed. Network-first means a deployed fix shows
+//   up on next load, with the cached copy only used as an offline fallback.
+// - Static assets (icons, manifest) stay cache-first — they rarely change
+//   and this keeps the app fast and available offline.
 self.addEventListener('fetch', (event) => {
 if (event.request.url.includes('api')) {
 return;
