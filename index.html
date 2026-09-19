@@ -697,7 +697,7 @@
       <div class="field">
         <label>Export</label>
         <button class="btn-primary" id="data-export-btn" style="width:100%;">Download backup (.json)</button>
-        <div class="hint">Saves a file containing everything stored locally by this app.</div>
+        <div class="hint">Saves a file containing everything stored locally by this app. It includes your RetroAchievements API key in plain text, so keep it private and don't share it.</div>
       </div>
 
       <div class="field">
@@ -739,7 +739,10 @@
           }
         };
         req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+        req.onerror = () => {
+          idbOpenPromise = null; // let the next call retry instead of reusing this failure
+          reject(req.error);
+        };
       });
       return idbOpenPromise;
     }
@@ -764,6 +767,9 @@
           tx.objectStore(IDB_STORE).put({ key: nsKey(key, shared), value });
           tx.oncomplete = () => resolve({ key, value, shared: !!shared });
           tx.onerror = () => reject(tx.error);
+          // A quota error at commit time aborts the transaction WITHOUT firing
+          // onerror, so without this the promise would never settle.
+          tx.onabort = () => reject(tx.error || new Error('Storage write was aborted (storage may be full).'));
         });
       },
       delete: async (key, shared) => {
@@ -773,6 +779,7 @@
           tx.objectStore(IDB_STORE).delete(nsKey(key, shared));
           tx.oncomplete = () => resolve({ key, deleted: true, shared: !!shared });
           tx.onerror = () => reject(tx.error);
+          tx.onabort = () => reject(tx.error || new Error('Storage delete was aborted.'));
         });
       },
       list: async (prefix, shared) => {
@@ -803,9 +810,15 @@
         const db = await openIdb();
         return new Promise((resolve, reject) => {
           const tx = db.transaction(IDB_STORE, 'readwrite');
-          rawEntries.forEach(entry => tx.objectStore(IDB_STORE).put(entry));
           tx.oncomplete = () => resolve();
           tx.onerror = () => reject(tx.error);
+          tx.onabort = () => reject(tx.error || new Error('Import was aborted (storage may be full). Nothing was changed.'));
+          try{
+            rawEntries.forEach(entry => tx.objectStore(IDB_STORE).put(entry));
+          }catch(err){
+            try{ tx.abort(); }catch(_){}
+            reject(err);
+          }
         });
       },
     };
@@ -2439,6 +2452,12 @@
     catch(e){ throw new Error('That file isn\'t valid JSON.'); }
     if(!payload || !Array.isArray(payload.entries)){
       throw new Error('This doesn\'t look like a Game Log Tracker backup file.');
+    }
+    const badIndex = payload.entries.findIndex(en =>
+      !en || typeof en !== 'object' || typeof en.key !== 'string' || !en.key || !('value' in en)
+    );
+    if(badIndex !== -1){
+      throw new Error(`Backup file is damaged (entry ${badIndex + 1} is missing its key or value). Nothing was imported.`);
     }
     await window.storage._putAllRaw(payload.entries);
   }
