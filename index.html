@@ -2792,6 +2792,28 @@
   const GF_WORKER_URL = 'https://game-log-tracker.vercel.app'; // e.g. 'https://gamefaqs-proxy.<your-subdomain>.workers.dev' — leave blank to skip straight to the free fallbacks
   const GF_BASE = 'https://gamefaqs.gamespot.com';
 
+  // Some proxies (allorigins' default /get endpoint, some serverless
+  // functions written against a fetch-and-JSON.stringify pattern) wrap the
+  // target page as {"contents": "<html>..."} instead of sending it raw. Fed
+  // straight to DOMParser as HTML, that JSON blob parses as a document with
+  // no usable structure — no error thrown, just an empty result downstream,
+  // which is what shows up as a blank/black guide panel. This recognizes the
+  // common wrapper shapes and unwraps them; a genuinely raw HTML response
+  // (starting with "<") passes through untouched.
+  function unwrapProxyPayload(text){
+    const trimmed = String(text || '').trimStart();
+    if(trimmed[0] !== '{' && trimmed[0] !== '[') return text;
+    try{
+      const parsed = JSON.parse(trimmed);
+      if(typeof parsed === 'string') return parsed;
+      if(parsed && typeof parsed.contents === 'string') return parsed.contents; // allorigins /get shape
+      if(parsed && typeof parsed.body === 'string') return parsed.body;
+      if(parsed && typeof parsed.data === 'string') return parsed.data;
+      if(parsed && typeof parsed.html === 'string') return parsed.html;
+    }catch(e){ /* not actually JSON — treat as raw text below */ }
+    return text;
+  }
+
   async function gfProxyFetchText(url, timeoutMs){
     async function attempt(label, run){
       const controller = new AbortController();
@@ -2804,7 +2826,8 @@
         clearTimeout(timer);
       }
       if(!res.ok) throw new Error(`${label}: HTTP ${res.status}`);
-      const text = await res.text();
+      let text = await res.text();
+      text = unwrapProxyPayload(text);
       // A real page here — GameFAQs or a DuckDuckGo results page — comes
       // with several KB of shared site chrome (nav, footer, tracking tags)
       // even when the actual content is short. A proxy that's down, rate
