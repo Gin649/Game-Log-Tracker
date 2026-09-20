@@ -2257,14 +2257,14 @@
   }
 
   // --- RAPatches repo search ---
-  // Community-maintained patch repository (github.com/Tsearo/RAPatches),
+  // Official RetroAchievements patch repository (github.com/RetroAchievements/RAPatches),
   // linked from RetroAchievements' own Hash Labels documentation. There is
   // no API that maps an RA game ID to "its" patches — patch↔game linking on
   // RA happens by hand, in each game's forum topic and Linked Hashes page —
   // so this can only do a best-effort filename search against the repo's
   // file listing. Results are NOT an authoritative match; always cross-check
   // manually before trusting one.
-  const RAPATCHES_OWNER = 'Tsearo';
+  const RAPATCHES_OWNER = 'RetroAchievements';
   const RAPATCHES_REPO = 'RAPatches';
 
   async function getRAPatchesTree(){
