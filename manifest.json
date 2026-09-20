@@ -5,7 +5,7 @@
   "start_url": "/Game-Log-Tracker/",
   "scope": "/Game-Log-Tracker/",
   "display": "fullscreen",
-  "display_override": ["fullscreen", "standalone", "minimal-ui", "browser"],
+  "display_override": ["fullscreen", "standalone"],
   "orientation": "any",
   "background_color": "#15121f",
   "theme_color": "#15121f",
