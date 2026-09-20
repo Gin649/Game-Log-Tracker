@@ -1,71 +1,66 @@
-// api/proxy.js
-
-const ALLOWED_ORIGIN = 'https://gin649.github.io'; 
-const ALLOWED_HOST = 'gamefaqs.gamespot.com';
+// Vercel Serverless Function — reference implementation for a GameFAQs
+// proxy. Deploy at whatever path you're already pointing GF_WORKER_URL at
+// in index.html (e.g. api/proxy.js -> .../api/proxy, or api/index.js if
+// you want it at the bare domain root).
+//
+// This does a plain raw passthrough: fetch the target URL server-side (no
+// CORS restrictions apply server-to-server), then hand the response BODY
+// straight back with permissive CORS headers, unmodified. It deliberately
+// does NOT wrap the page in JSON (e.g. {"contents": "..."}) — the client
+// expects to receive the target page's raw HTML as the response body, and
+// treats a JSON-wrapped response as if it were malformed/empty content.
+// If your current deployment already works at its existing path but wraps
+// the response in JSON, the fix is just to change whatever it currently
+// does — res.json({...}) or similar — to res.send(text) as shown below;
+// the route/path itself doesn't need to move.
 
 export default async function handler(req, res) {
-  const origin = req.headers.origin || '';
-  
-  // Set up safe CORS headers
-  res.setHeader('Access-Control-Allow-Origin', origin === ALLOWED_ORIGIN ? ALLOWED_ORIGIN : 'null');
+  // Allow the browser to actually read this response cross-origin.
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Vary', 'Origin');
 
-  // Handle preflight requests
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    res.status(204).end();
+    return;
   }
 
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Only GET is supported' });
-  }
-
-  // Extract the target URL from the query string
   const target = req.query.url;
-  if (!target) {
-    return res.status(400).json({ error: 'Missing url parameter' });
+  if (!target || Array.isArray(target)) {
+    res.status(400).send('Missing "url" query parameter.');
+    return;
   }
 
-  let targetUrl;
+  // Basic allowlist so this can't be turned into an open proxy for
+  // arbitrary sites — only the hosts this app actually needs to reach.
+  let parsed;
   try {
-    targetUrl = new URL(target);
+    parsed = new URL(target);
   } catch (e) {
-    return res.status(400).json({ error: 'Invalid url parameter' });
+    res.status(400).send('Invalid "url" parameter.');
+    return;
   }
-
-  // Enforce isolation so it only scrapes GameFAQs
-  if (targetUrl.hostname !== ALLOWED_HOST) {
-    return res.status(403).json({ error: `This proxy only relays ${ALLOWED_HOST}` });
+  const allowedHosts = ['gamefaqs.gamespot.com', 'html.duckduckgo.com'];
+  if (!allowedHosts.includes(parsed.hostname)) {
+    res.status(403).send(`Host not allowed: ${parsed.hostname}`);
+    return;
   }
 
   try {
-    // Fetch GameFAQs using realistic browser footprints
-    const response = await fetch(targetUrl.toString(), {
-      method: 'GET',
+    const upstream = await fetch(parsed.toString(), {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cache-Control': 'max-age=0',
-        'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-        'Sec-Ch-Ua-Mobile': '?0',
-        'Sec-Ch-Ua-Platform': '"Windows"',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1'
+        // Some sites serve a stripped-down/anti-bot page to obvious
+        // script clients; a normal browser User-Agent avoids that.
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
       },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(9000), // stay under Vercel's own function timeout
     });
 
-    const contentType = response.headers.get('Content-Type') || 'text/html; charset=utf-8';
-    const body = await response.arrayBuffer();
-
-    res.setHeader('Content-Type', contentType);
-    return res.status(response.status).send(Buffer.from(body));
-
+    const text = await upstream.text();
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.status(upstream.status).send(text); // raw body, no JSON envelope
   } catch (e) {
-    return res.status(502).json({ error: `Could not reach ${ALLOWED_HOST}: ${e.message}` });
+    res.status(502).send(`Upstream fetch failed: ${e.message}`);
   }
 }
