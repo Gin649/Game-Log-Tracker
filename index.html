@@ -1400,231 +1400,6 @@
     return guide;
   }
 
-  // --- Fetch guides directly from GameFAQs, in-app (no external tab, no
-  // manual download+import step) ---
-  //
-  // GameFAQs doesn't send CORS headers, so a browser can't fetch it directly
-  // from our origin. We route through the same public CORS proxies already
-  // used for RetroAchievements/RAWG above (see raFetch), racing them and
-  // taking whichever answers first. These are third-party services outside
-  // our control — if every one of them is down or rate-limited, this whole
-  // feature degrades to "temporarily unavailable" and the manual import
-  // below still works as a fallback.
-  const GF_BASE = 'https://gamefaqs.gamespot.com';
-
-  async function gfProxyFetchText(url, timeoutMs){
-    async function attempt(label, run){
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs || 12000);
-      let res;
-      try{ res = await run(controller.signal); }
-      catch(networkErr){
-        throw new Error(`${label}: ${networkErr.name === 'AbortError' ? 'timed out' : 'blocked (' + networkErr.message + ')'}`);
-      }finally{
-        clearTimeout(timer);
-      }
-      if(!res.ok) throw new Error(`${label}: HTTP ${res.status}`);
-      const text = await res.text();
-      if(!text || text.length < 50) throw new Error(`${label}: empty response`);
-      return text;
-    }
-    function raceFirstSuccess(promises){
-      return new Promise((resolve, reject) => {
-        let remaining = promises.length;
-        const errors = [];
-        promises.forEach(p => {
-          p.then(resolve, (err) => {
-            errors.push(err && err.message ? err.message : String(err));
-            remaining--;
-            if(remaining === 0) reject(new Error(errors.join('; ')));
-          });
-        });
-      });
-    }
-    const attempts = [
-      attempt('allorigins', (signal) => fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url), { signal })),
-      attempt('codetabs',   (signal) => fetch('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url), { signal })),
-      attempt('corsproxy',  (signal) => fetch('https://corsproxy.io/?url=' + encodeURIComponent(url), { signal })),
-      attempt('thingproxy', (signal) => fetch('https://thingproxy.freeboard.io/fetch/' + url, { signal })),
-      attempt('corseu',     (signal) => fetch('https://cors.eu.org/' + url, { signal })),
-    ];
-    try{
-      return await raceFirstSuccess(attempts);
-    }catch(aggregateErr){
-      throw new Error('Could not reach GameFAQs through any available route — ' + aggregateErr.message);
-    }
-  }
-
-  function gfParseDoc(html){
-    return new DOMParser().parseFromString(html, 'text/html');
-  }
-
-  // Searches for games matching a title and returns [{ title, platform, path }].
-  //
-  // NOTE: this deliberately does NOT scrape GameFAQs' own /search?game=
-  // page. That page turns out to render its actual results client-side —
-  // fetched as plain HTML through a proxy (which can't run GameFAQs' JS),
-  // it always comes back as the empty search-box shell with a few
-  // placeholder "popular game" suggestions, no matter what you searched
-  // for. Real results, but the search itself never sees them.
-  // Instead we search DuckDuckGo's plain HTML results for
-  // "site:gamefaqs.gamespot.com <query>" — a normal server-rendered
-  // results page — and pull GameFAQs game-page links out of that. GameFAQs'
-  // own search is kept as a last-ditch fallback in case a future redesign
-  // changes this.
-  async function gfSearchGames(query){
-    function extractGameLinks(doc){
-      const seen = new Set();
-      const results = [];
-      doc.querySelectorAll('a[href]').forEach(a => {
-        let href = a.getAttribute('href') || '';
-        const uddg = href.match(/[?&]uddg=([^&]+)/); // DuckDuckGo wraps result links in a redirect
-        if(uddg) href = decodeURIComponent(uddg[1]);
-        const m = href.match(/gamefaqs\.gamespot\.com\/([a-z0-9_]+)\/(\d+)-([a-z0-9-]+)/i);
-        if(!m) return;
-        const path = `/${m[1]}/${m[2]}-${m[3]}`;
-        if(seen.has(path)) return;
-        seen.add(path);
-        let title = (a.textContent || '').trim()
-          .replace(/\s*[–—-]\s*(Guides? and )?FAQs?(,.*)?(\s*-\s*GameFAQs)?\s*$/i, '')
-          .replace(/\s*for\s+[A-Za-z0-9 /]+\s*-\s*GameFAQs\s*$/i, '')
-          .replace(/\s*-\s*GameFAQs.*$/i, '')
-          .trim();
-        if(!title || title.length < 2){
-          title = m[3].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        }
-        results.push({ title, platform: m[1].toUpperCase(), path });
-      });
-      return results;
-    }
-
-    try{
-      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent('site:gamefaqs.gamespot.com ' + query)}`;
-      const html = await gfProxyFetchText(ddgUrl);
-      const results = extractGameLinks(gfParseDoc(html));
-      if(results.length) return results.slice(0, 20);
-    }catch(e){ /* fall through to the direct-search fallback below */ }
-
-    // Fallback: try GameFAQs' own search page anyway — harmless if it comes
-    // back empty, and covers the chance it behaves differently than expected.
-    const url = `${GF_BASE}/search?game=${encodeURIComponent(query)}`;
-    const html = await gfProxyFetchText(url);
-    return extractGameLinks(gfParseDoc(html)).slice(0, 20);
-  }
-
-  // Lists guides/FAQs for a given game path, returning [{ title, path }].
-  async function gfListGuides(gamePath){
-    const url = `${GF_BASE}${gamePath}/faqs`;
-    const html = await gfProxyFetchText(url);
-    const doc = gfParseDoc(html);
-    const seen = new Set();
-    const results = [];
-    doc.querySelectorAll('a[href]').forEach(a => {
-      const href = a.getAttribute('href') || '';
-      const m = href.match(/^(\/[a-z0-9_]+\/\d+-[a-z0-9-]+\/faqs\/(\d+)[^"']*)$/i);
-      if(!m) return;
-      const title = a.textContent.trim();
-      if(!title || title.length < 2) return;
-      if(seen.has(m[2])) return;
-      seen.add(m[2]);
-      results.push({ title, path: m[1] });
-    });
-    return results.slice(0, 60);
-  }
-
-  // Pulls the readable body out of a GameFAQs FAQ page, independent of the
-  // site's exact class names (those change over time). Strategy: strip
-  // obvious chrome (script/style/nav/header/footer/ads), then prefer a <pre>
-  // block if one holds most of the text (classic plain-text FAQs), otherwise
-  // pick whichever remaining container has the most text relative to how
-  // link-heavy it is (real guide prose beats a sidebar full of nav links).
-  function gfExtractContent(doc, baseUrl){
-    doc.querySelectorAll('script,style,nav,header,footer,aside,iframe,noscript').forEach(el => el.remove());
-    doc.querySelectorAll('[class*="ad-" i],[class*="advert" i],[id*="ad-" i]').forEach(el => el.remove());
-
-    const pres = [...doc.querySelectorAll('pre')].sort((a,b) => b.textContent.length - a.textContent.length);
-    if(pres[0] && pres[0].textContent.trim().length > 400){
-      return { kind: 'text', content: pres[0].textContent };
-    }
-
-    const candidates = [...doc.querySelectorAll('div,article,section')];
-    let best = null, bestScore = 0;
-    candidates.forEach(el => {
-      const text = el.textContent || '';
-      const len = text.trim().length;
-      if(len < 500) return;
-      const linkChars = [...el.querySelectorAll('a')].reduce((n, a) => n + (a.textContent || '').length, 0);
-      const score = len - linkChars * 2 - el.querySelectorAll('div,section,article').length; // penalize link-heavy and deeply-nested containers
-      if(score > bestScore){ bestScore = score; best = el; }
-    });
-    if(!best) return null;
-
-    // Rewrite relative links/images to absolute so they still resolve once
-    // saved and rendered from our own origin.
-    best.querySelectorAll('[href],[src]').forEach(el => {
-      ['href','src'].forEach(attr => {
-        const v = el.getAttribute(attr);
-        if(!v) return;
-        try{ el.setAttribute(attr, new URL(v, baseUrl).href); }catch(e){ /* leave as-is */ }
-      });
-    });
-    return { kind: 'html', content: sanitizeGuideHtml(best.innerHTML) };
-  }
-
-  // Detects a GameFAQs page-selector and returns the total page count for a
-  // paginated HTML/text guide (1 if there's no pagination to find).
-  function gfDetectPageCount(doc){
-    let max = 1;
-    doc.querySelectorAll('a[href*="?page="], select option').forEach(el => {
-      const href = el.getAttribute ? (el.getAttribute('href') || el.getAttribute('value') || '') : '';
-      const m = href.match(/page=(\d+)/) || (el.value || '').match(/(\d+)/) || (el.textContent||'').match(/^\s*(\d+)\s*$/);
-      if(m){ const n = parseInt(m[1], 10); if(n > max && n < 200) max = n; }
-    });
-    return max;
-  }
-
-  // Fetches a full guide (all pages, concatenated) and saves it — the whole
-  // point being that this happens inside the PWA, on-device, with nothing
-  // for the person to download or import by hand.
-  async function gfFetchAndSaveGuide(gameId, guidePath, title, onProgress){
-    const firstUrl = `${GF_BASE}${guidePath}`;
-    const firstHtml = await gfProxyFetchText(firstUrl);
-    const firstDoc = gfParseDoc(firstHtml);
-    const pageCount = gfDetectPageCount(firstDoc);
-    const first = gfExtractContent(firstDoc, firstUrl);
-    if(!first) throw new Error("couldn't find guide text on that page — GameFAQs may have changed its layout");
-
-    if(first.kind === 'text'){
-      let full = first.content;
-      for(let p = 2; p <= pageCount; p++){
-        if(onProgress) onProgress(p, pageCount);
-        const pUrl = `${firstUrl}?page=${p}`;
-        try{
-          const html = await gfProxyFetchText(pUrl);
-          const extracted = gfExtractContent(gfParseDoc(html), pUrl);
-          if(extracted && extracted.kind === 'text') full += '\n\n' + extracted.content;
-        }catch(e){ break; } // partial guide beats none
-      }
-      const guide = { filename: `${title}.txt`, kind: 'text', content: full, scrollFrac: 0, savedAt: Date.now() };
-      await saveGuide(gameId, guide);
-      return guide;
-    }
-
-    let full = first.content;
-    for(let p = 2; p <= pageCount; p++){
-      if(onProgress) onProgress(p, pageCount);
-      const pUrl = `${firstUrl}?page=${p}`;
-      try{
-        const html = await gfProxyFetchText(pUrl);
-        const extracted = gfExtractContent(gfParseDoc(html), pUrl);
-        if(extracted && extracted.kind === 'html') full += '<hr>' + extracted.content;
-      }catch(e){ break; }
-    }
-    const guide = { filename: `${title}.html`, kind: 'html', content: full, scrollFrac: 0, savedAt: Date.now() };
-    await saveGuide(gameId, guide);
-    return guide;
-  }
-
   // --- Saved base ROMs (for the ROM patching feature below) ---
   // Stored as a raw { filename, bytes: Uint8Array } via structured clone —
   // deliberately NOT JSON-stringified like everything else here, since
@@ -2299,6 +2074,11 @@
       <button class="btn-view-achievements" id="modal-guide-btn"><span class="arrow">▸</span> Game Guide</button>
       <div class="guide-panel" id="modal-guide-panel" style="display:none;"></div>
 
+      ${isCartridgeConsole(local.ConsoleName) ? `
+      <button class="btn-view-achievements" id="modal-patch-btn"><span class="arrow">▸</span> ROM Patches</button>
+      <div class="guide-panel" id="modal-patch-panel" style="display:none;"></div>
+      ` : ''}
+
       <div class="modal-links">
         <a href="https://howlongtobeat.com/?q=${encodeURIComponent(local.Title)}" target="_blank" rel="noopener">Search HowLongToBeat ↗</a>
       </div>
@@ -2325,6 +2105,7 @@
 
     attachRawgLookup(gameId, local.Title, card);
     setupGameGuideUI(gameId, local.Title, card);
+    if(isCartridgeConsole(local.ConsoleName)) setupRomPatchUI(gameId, local.Title, card);
   }
 
   // --- ROM patch engine: CRC32 + BPS + IPS ---
@@ -2552,17 +2333,463 @@
     return !denylist.some(d => n.includes(d));
   }
 
+  // --- ROM patch panel ---
+  function setupRomPatchUI(gameId, title, card){
+    const patchBtn = card.querySelector('#modal-patch-btn');
+    const patchWrap = card.querySelector('#modal-patch-panel');
+    if(!patchBtn || !patchWrap) return;
+
+    let opened = false;
+    let branch = null;
+    let matches = null;
+    let selected = null; // { path, filename, bytes, kind }
+    let romBytes = null;
+    let romFilename = null;
+    let romFromStorage = false;
+
+    function renderIdle(){
+      patchWrap.innerHTML = `
+        <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">Search the community RAPatches repository for hacks, translations, and fixes for this game. This is a best-effort filename search, not an official link — always double-check a result before applying it.</p>
+        <button class="guide-btn guide-btn-primary" id="patch-search-btn">Search RAPatches</button>
+      `;
+      patchWrap.querySelector('#patch-search-btn').addEventListener('click', runSearch);
+    }
+
+    async function runSearch(){
+      patchWrap.innerHTML = '<div class="achievements-list-loading">Searching RAPatches…</div>';
+      try{
+        const tree = await getRAPatchesTree();
+        branch = tree.branch;
+        matches = searchRAPatches(tree.files, title);
+        renderResults();
+      }catch(e){
+        patchWrap.innerHTML = `<div class="achievements-list-loading">Could not search RAPatches: ${e.message}</div><button class="guide-btn guide-btn-ghost" id="patch-retry-btn" style="margin-top:8px;width:100%;">Try again</button>`;
+        patchWrap.querySelector('#patch-retry-btn').addEventListener('click', runSearch);
+      }
+    }
+
+    function renderResults(){
+      if(!matches || matches.length === 0){
+        patchWrap.innerHTML = `
+          <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">No filename matches found in the RAPatches repo for "${title}". That doesn't mean none exist — check the game's RetroAchievements forum topic and Linked Hashes section, or browse the repo yourself.</p>
+          <a class="guide-btn guide-btn-outline" href="https://github.com/${RAPATCHES_OWNER}/${RAPATCHES_REPO}" target="_blank" rel="noopener">Browse RAPatches on GitHub ↗</a>
+        `;
+        return;
+      }
+      patchWrap.innerHTML = `
+        <p style="font-size:11.3px;color:var(--muted);margin:0 0 6px;line-height:1.5;">Best-effort filename search — not an official link. Double-check before using.</p>
+        <div class="patch-result-list">
+          ${matches.map((m, idx) => {
+            const fn = m.path.split('/').pop();
+            const dir = m.path.slice(0, m.path.length - fn.length).replace(/\/$/, '') || '/';
+            return `
+              <div class="patch-result-row">
+                <div class="info"><div class="fn">${fn}</div><div class="pth">${dir}</div></div>
+                <button data-idx="${idx}">Use</button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+      patchWrap.querySelectorAll('.patch-result-row button').forEach(btn => {
+        btn.addEventListener('click', () => selectPatch(matches[Number(btn.dataset.idx)]));
+      });
+    }
+
+    async function selectPatch(match){
+      romBytes = null; romFilename = null; romFromStorage = false; selected = null;
+      patchWrap.innerHTML = '<div class="achievements-list-loading">Downloading patch…</div>';
+      try{
+        const bytes = await fetchRAPatchBytes(branch, match.path);
+        const kind = /\.bps$/i.test(match.path) ? 'bps' : (/\.ips$/i.test(match.path) ? 'ips' : 'xdelta');
+        selected = { path: match.path, filename: match.path.split('/').pop(), bytes, kind };
+        if(kind === 'xdelta'){
+          patchWrap.innerHTML = `
+            <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
+            <p style="font-size:12.3px;color:var(--muted);margin:10px 0 0;line-height:1.55;">This is an .xdelta patch, which isn't applied automatically here — only BPS and IPS are. You'll need a separate tool for this one.</p>
+          `;
+          patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
+          return;
+        }
+        const saved = await loadRom(gameId);
+        if(saved){ romBytes = saved.bytes; romFilename = saved.filename; romFromStorage = true; }
+        renderApplyPanel();
+      }catch(e){
+        patchWrap.innerHTML = `<div class="achievements-list-loading">Could not download that patch: ${e.message}</div><button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="margin-top:8px;width:100%;">‹ Back to results</button>`;
+        patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
+      }
+    }
+
+    function renderApplyPanel(){
+      patchWrap.innerHTML = `
+        <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
+        <div style="font-size:12.3px;color:var(--text);margin-top:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${selected.filename} <span style="color:var(--muted);font-size:10.8px;">(${selected.kind.toUpperCase()})</span></div>
+        <div id="patch-rom-area" style="margin-top:10px;display:flex;flex-direction:column;gap:10px;"></div>
+      `;
+      patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
+      renderRomArea();
+    }
+
+    function computeHashStatus(){
+      if(selected.kind !== 'bps'){
+        return { cls: 'unknown', text: 'IPS patches carry no built-in checksum, so there is no way to automatically verify this is the right base ROM. Double-check the version yourself before applying.' };
+      }
+      const footerStart = selected.bytes.length - 12;
+      const readU32LE = (off) => (selected.bytes[off] | (selected.bytes[off+1] << 8) | (selected.bytes[off+2] << 16) | (selected.bytes[off+3] << 24)) >>> 0;
+      const expected = readU32LE(footerStart);
+      const actual = crc32(romBytes);
+      if(actual === expected) return { cls: 'ok', text: `Base ROM checksum matches this patch (CRC32 ${crc32Hex(romBytes)}).` };
+      return { cls: 'mismatch', text: `Base ROM checksum does NOT match this patch — expected CRC32 ${expected.toString(16).padStart(8,'0')}, got ${crc32Hex(romBytes)}. This is very likely the wrong ROM version.` };
+    }
+
+    function renderRomArea(){
+      const area = patchWrap.querySelector('#patch-rom-area');
+      if(!area) return;
+      if(romBytes){
+        const status = computeHashStatus();
+        const applyClass = status.cls === 'mismatch' ? 'guide-btn guide-btn-danger' : 'guide-btn guide-btn-primary';
+        const applyLabel = status.cls === 'mismatch' ? 'Apply Anyway (not recommended)' : 'Apply Patch';
+        area.innerHTML = `
+          <div style="font-size:12.3px;color:var(--text);">Base ROM: <strong>${romFilename}</strong></div>
+          <div style="display:flex;gap:8px;">
+            <button class="guide-btn guide-btn-ghost" id="patch-rom-change-btn">Use a different file…</button>
+            ${romFromStorage ? '<button class="guide-btn guide-btn-danger" id="patch-rom-forget-btn">Forget saved ROM</button>' : ''}
+          </div>
+          <div class="hash-status ${status.cls}">${status.text}</div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text);">
+            <input type="checkbox" id="patch-remember-checkbox" style="width:15px;height:15px;flex-shrink:0;">
+            <span>Remember this ROM for future patches of this game</span>
+          </label>
+          <button class="${applyClass}" id="patch-apply-btn" style="width:100%;">${applyLabel}</button>
+          <div id="patch-apply-result"></div>
+        `;
+        area.querySelector('#patch-rom-change-btn').addEventListener('click', () => {
+          romBytes = null; romFilename = null; romFromStorage = false; renderRomArea();
+        });
+        const forgetBtn = area.querySelector('#patch-rom-forget-btn');
+        if(forgetBtn) forgetBtn.addEventListener('click', async () => {
+          await deleteRom(gameId);
+          romBytes = null; romFilename = null; romFromStorage = false;
+          renderRomArea();
+        });
+        area.querySelector('#patch-apply-btn').addEventListener('click', doApply);
+      }else{
+        area.innerHTML = `
+          <input type="file" id="patch-rom-input" style="display:none;">
+          <button class="guide-btn guide-btn-primary" id="patch-rom-pick-btn">Select Base ROM File…</button>
+        `;
+        const input = area.querySelector('#patch-rom-input');
+        area.querySelector('#patch-rom-pick-btn').addEventListener('click', () => input.click());
+        input.addEventListener('change', async () => {
+          const file = input.files && input.files[0];
+          if(!file) return;
+          romBytes = new Uint8Array(await file.arrayBuffer());
+          romFilename = file.name;
+          romFromStorage = false;
+          renderRomArea();
+        });
+      }
+    }
+
+    async function doApply(){
+      const applyBtn = patchWrap.querySelector('#patch-apply-btn');
+      const resultEl = patchWrap.querySelector('#patch-apply-result');
+      if(applyBtn){ applyBtn.disabled = true; applyBtn.textContent = 'Patching…'; }
+      try{
+        const result = selected.kind === 'bps' ? applyBps(selected.bytes, romBytes) : applyIps(selected.bytes, romBytes);
+        const target = result.target;
+        const outCrc = crc32Hex(target);
+        const blob = new Blob([target], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const romExtMatch = /\.[^./\\]+$/.exec(romFilename || '');
+        const romExt = romExtMatch ? romExtMatch[0] : '';
+        const outName = (selected.filename.replace(/\.(bps|ips)$/i, '') || 'patched-rom') + romExt;
+
+        const remember = patchWrap.querySelector('#patch-remember-checkbox');
+        if(remember && remember.checked){ await saveRom(gameId, romFilename, romBytes); }
+
+        if(resultEl){
+          resultEl.innerHTML = `
+            <div class="hash-status ok" style="margin-top:4px;">Patched successfully. Output CRC32: ${outCrc}. Compare this against the game's Linked Hashes on RetroAchievements to confirm it's the exact version expected before you load it.</div>
+            <a class="guide-btn guide-btn-primary" style="margin-top:8px;" href="${url}" download="${outName}">Download Patched ROM</a>
+          `;
+        }
+      }catch(e){
+        if(resultEl) resultEl.innerHTML = `<div class="hash-status mismatch" style="margin-top:4px;">Could not apply patch: ${e.message}</div>`;
+      }finally{
+        if(applyBtn){ applyBtn.disabled = false; applyBtn.textContent = 'Apply Patch'; }
+      }
+    }
+
+    patchBtn.addEventListener('click', () => {
+      const nowOpen = patchWrap.style.display === 'none';
+      patchWrap.style.display = nowOpen ? 'block' : 'none';
+      patchBtn.classList.toggle('open', nowOpen);
+      if(nowOpen && !opened){
+        opened = true;
+        renderIdle();
+      }
+    });
+  }
+
+  // --- Fetch guides directly from GameFAQs, in-app (no external tab, no
+  // manual download+import step) ---
+  //
+  // GameFAQs doesn't send CORS headers, so a browser can't fetch it directly
+  // from our origin. We route through the same public CORS proxies already
+  // used for RetroAchievements/RAWG above (see raFetch), racing them and
+  // taking whichever answers first. These are third-party services outside
+  // our control — if every one of them is down or rate-limited, this whole
+  // feature degrades to "temporarily unavailable" and the manual import
+  // below still works as a fallback.
+  const GF_BASE = 'https://gamefaqs.gamespot.com';
+
+  async function gfProxyFetchText(url, timeoutMs){
+    async function attempt(label, run){
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs || 12000);
+      let res;
+      try{ res = await run(controller.signal); }
+      catch(networkErr){
+        throw new Error(`${label}: ${networkErr.name === 'AbortError' ? 'timed out' : 'blocked (' + networkErr.message + ')'}`);
+      }finally{
+        clearTimeout(timer);
+      }
+      if(!res.ok) throw new Error(`${label}: HTTP ${res.status}`);
+      const text = await res.text();
+      if(!text || text.length < 50) throw new Error(`${label}: empty response`);
+      return text;
+    }
+    function raceFirstSuccess(promises){
+      return new Promise((resolve, reject) => {
+        let remaining = promises.length;
+        const errors = [];
+        promises.forEach(p => {
+          p.then(resolve, (err) => {
+            errors.push(err && err.message ? err.message : String(err));
+            remaining--;
+            if(remaining === 0) reject(new Error(errors.join('; ')));
+          });
+        });
+      });
+    }
+    const attempts = [
+      attempt('allorigins', (signal) => fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url), { signal })),
+      attempt('codetabs',   (signal) => fetch('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url), { signal })),
+      attempt('corsproxy',  (signal) => fetch('https://corsproxy.io/?url=' + encodeURIComponent(url), { signal })),
+      attempt('thingproxy', (signal) => fetch('https://thingproxy.freeboard.io/fetch/' + url, { signal })),
+      attempt('corseu',     (signal) => fetch('https://cors.eu.org/' + url, { signal })),
+    ];
+    try{
+      return await raceFirstSuccess(attempts);
+    }catch(aggregateErr){
+      throw new Error('Could not reach GameFAQs through any available route — ' + aggregateErr.message);
+    }
+  }
+
+  function gfParseDoc(html){
+    return new DOMParser().parseFromString(html, 'text/html');
+  }
+
+  // Turns a GameFAQs slug ("super-mario-world") into a readable title —
+  // used when we only have a URL and no page text to pull a title from.
+  function gfTitleFromSlug(slug){
+    return String(slug || '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // Pulls a game-root path (/platform/id-slug) out of anything that looks
+  // like a GameFAQs URL or path, stripping off any sub-page suffix
+  // (…/faqs, …/reviews, …/data, etc.).
+  function gfExtractGamePath(input){
+    const m = String(input).match(/gamefaqs\.gamespot\.com\/([a-z0-9_]+)\/(\d+)-([a-z0-9-]+)/i)
+           || String(input).match(/^\/?([a-z0-9_]+)\/(\d+)-([a-z0-9-]+)/i);
+    return m ? `/${m[1]}/${m[2]}-${m[3]}` : null;
+  }
+  // Pulls a specific guide path (/platform/id-slug/faqs/NNN) out of a URL,
+  // if the pasted link already points straight at one guide.
+  function gfExtractGuidePath(input){
+    const m = String(input).match(/gamefaqs\.gamespot\.com(\/[a-z0-9_]+\/\d+-[a-z0-9-]+\/faqs\/\d+)/i)
+           || String(input).match(/^(\/[a-z0-9_]+\/\d+-[a-z0-9-]+\/faqs\/\d+)/i);
+    return m ? m[1] : null;
+  }
+
+  // Searches for games matching a title and returns [{ title, platform, path }].
+  //
+  // NOTE: this deliberately does NOT scrape GameFAQs' own /search?game=
+  // page. That page turns out to render its actual results client-side —
+  // fetched as plain HTML through a proxy (which can't run GameFAQs' JS),
+  // it always comes back as the empty search-box shell with a few
+  // placeholder "popular game" suggestions, no matter what you searched
+  // for. Real results, but the search itself never sees them.
+  // Instead we search DuckDuckGo's plain HTML results for
+  // "site:gamefaqs.gamespot.com <query>" — a normal server-rendered
+  // results page — and pull GameFAQs game-page links out of that. GameFAQs'
+  // own search is kept as a last-ditch fallback in case a future redesign
+  // changes this.
+  async function gfSearchGames(query){
+    function extractGameLinks(doc){
+      const seen = new Set();
+      const results = [];
+      doc.querySelectorAll('a[href]').forEach(a => {
+        let href = a.getAttribute('href') || '';
+        const uddg = href.match(/[?&]uddg=([^&]+)/); // DuckDuckGo wraps result links in a redirect
+        if(uddg) href = decodeURIComponent(uddg[1]);
+        const m = href.match(/gamefaqs\.gamespot\.com\/([a-z0-9_]+)\/(\d+)-([a-z0-9-]+)/i);
+        if(!m) return;
+        const path = `/${m[1]}/${m[2]}-${m[3]}`;
+        if(seen.has(path)) return;
+        seen.add(path);
+        let title = (a.textContent || '').trim()
+          .replace(/\s*[–—-]\s*(Guides? and )?FAQs?(,.*)?(\s*-\s*GameFAQs)?\s*$/i, '')
+          .replace(/\s*for\s+[A-Za-z0-9 /]+\s*-\s*GameFAQs\s*$/i, '')
+          .replace(/\s*-\s*GameFAQs.*$/i, '')
+          .trim();
+        if(!title || title.length < 2){
+          title = m[3].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+        results.push({ title, platform: m[1].toUpperCase(), path });
+      });
+      return results;
+    }
+
+    try{
+      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent('site:gamefaqs.gamespot.com ' + query)}`;
+      const html = await gfProxyFetchText(ddgUrl);
+      const results = extractGameLinks(gfParseDoc(html));
+      if(results.length) return results.slice(0, 20);
+    }catch(e){ /* fall through to the direct-search fallback below */ }
+
+    // Fallback: try GameFAQs' own search page anyway — harmless if it comes
+    // back empty, and covers the chance it behaves differently than expected.
+    const url = `${GF_BASE}/search?game=${encodeURIComponent(query)}`;
+    const html = await gfProxyFetchText(url);
+    return extractGameLinks(gfParseDoc(html)).slice(0, 20);
+  }
+
+  // Lists guides/FAQs for a given game path, returning [{ title, path }].
+  async function gfListGuides(gamePath){
+    const url = `${GF_BASE}${gamePath}/faqs`;
+    const html = await gfProxyFetchText(url);
+    const doc = gfParseDoc(html);
+    const seen = new Set();
+    const results = [];
+    doc.querySelectorAll('a[href]').forEach(a => {
+      const href = a.getAttribute('href') || '';
+      const m = href.match(/^(\/[a-z0-9_]+\/\d+-[a-z0-9-]+\/faqs\/(\d+)[^"']*)$/i);
+      if(!m) return;
+      const title = a.textContent.trim();
+      if(!title || title.length < 2) return;
+      if(seen.has(m[2])) return;
+      seen.add(m[2]);
+      results.push({ title, path: m[1] });
+    });
+    return results.slice(0, 60);
+  }
+
+  // Pulls the readable body out of a GameFAQs FAQ page, independent of the
+  // site's exact class names (those change over time). Strategy: strip
+  // obvious chrome (script/style/nav/header/footer/ads), then prefer a <pre>
+  // block if one holds most of the text (classic plain-text FAQs), otherwise
+  // pick whichever remaining container has the most text relative to how
+  // link-heavy it is (real guide prose beats a sidebar full of nav links).
+  function gfExtractContent(doc, baseUrl){
+    doc.querySelectorAll('script,style,nav,header,footer,aside,iframe,noscript').forEach(el => el.remove());
+    doc.querySelectorAll('[class*="ad-" i],[class*="advert" i],[id*="ad-" i]').forEach(el => el.remove());
+
+    const pres = [...doc.querySelectorAll('pre')].sort((a,b) => b.textContent.length - a.textContent.length);
+    if(pres[0] && pres[0].textContent.trim().length > 400){
+      return { kind: 'text', content: pres[0].textContent };
+    }
+
+    const candidates = [...doc.querySelectorAll('div,article,section')];
+    let best = null, bestScore = 0;
+    candidates.forEach(el => {
+      const text = el.textContent || '';
+      const len = text.trim().length;
+      if(len < 500) return;
+      const linkChars = [...el.querySelectorAll('a')].reduce((n, a) => n + (a.textContent || '').length, 0);
+      const score = len - linkChars * 2 - el.querySelectorAll('div,section,article').length; // penalize link-heavy and deeply-nested containers
+      if(score > bestScore){ bestScore = score; best = el; }
+    });
+    if(!best) return null;
+
+    // Rewrite relative links/images to absolute so they still resolve once
+    // saved and rendered from our own origin.
+    best.querySelectorAll('[href],[src]').forEach(el => {
+      ['href','src'].forEach(attr => {
+        const v = el.getAttribute(attr);
+        if(!v) return;
+        try{ el.setAttribute(attr, new URL(v, baseUrl).href); }catch(e){ /* leave as-is */ }
+      });
+    });
+    return { kind: 'html', content: sanitizeGuideHtml(best.innerHTML) };
+  }
+
+  // Detects a GameFAQs page-selector and returns the total page count for a
+  // paginated HTML/text guide (1 if there's no pagination to find).
+  function gfDetectPageCount(doc){
+    let max = 1;
+    doc.querySelectorAll('a[href*="?page="], select option').forEach(el => {
+      const href = el.getAttribute ? (el.getAttribute('href') || el.getAttribute('value') || '') : '';
+      const m = href.match(/page=(\d+)/) || (el.value || '').match(/(\d+)/) || (el.textContent||'').match(/^\s*(\d+)\s*$/);
+      if(m){ const n = parseInt(m[1], 10); if(n > max && n < 200) max = n; }
+    });
+    return max;
+  }
+
+  // Fetches a full guide (all pages, concatenated) and saves it — the whole
+  // point being that this happens inside the PWA, on-device, with nothing
+  // for the person to download or import by hand.
+  async function gfFetchAndSaveGuide(gameId, guidePath, title, onProgress){
+    const firstUrl = `${GF_BASE}${guidePath}`;
+    const firstHtml = await gfProxyFetchText(firstUrl);
+    const firstDoc = gfParseDoc(firstHtml);
+    const pageCount = gfDetectPageCount(firstDoc);
+    const first = gfExtractContent(firstDoc, firstUrl);
+    if(!first) throw new Error("couldn't find guide text on that page — GameFAQs may have changed its layout");
+
+    if(first.kind === 'text'){
+      let full = first.content;
+      for(let p = 2; p <= pageCount; p++){
+        if(onProgress) onProgress(p, pageCount);
+        const pUrl = `${firstUrl}?page=${p}`;
+        try{
+          const html = await gfProxyFetchText(pUrl);
+          const extracted = gfExtractContent(gfParseDoc(html), pUrl);
+          if(extracted && extracted.kind === 'text') full += '\n\n' + extracted.content;
+        }catch(e){ break; } // partial guide beats none
+      }
+      const guide = { filename: `${title}.txt`, kind: 'text', content: full, scrollFrac: 0, savedAt: Date.now() };
+      await saveGuide(gameId, guide);
+      return guide;
+    }
+
+    let full = first.content;
+    for(let p = 2; p <= pageCount; p++){
+      if(onProgress) onProgress(p, pageCount);
+      const pUrl = `${firstUrl}?page=${p}`;
+      try{
+        const html = await gfProxyFetchText(pUrl);
+        const extracted = gfExtractContent(gfParseDoc(html), pUrl);
+        if(extracted && extracted.kind === 'html') full += '<hr>' + extracted.content;
+      }catch(e){ break; }
+    }
+    const guide = { filename: `${title}.html`, kind: 'html', content: full, scrollFrac: 0, savedAt: Date.now() };
+    await saveGuide(gameId, guide);
+    return guide;
+  }
 
   // The three sub-views of the "no guide saved yet" state: pick a game from
   // GameFAQs search results, then pick a guide from that game's FAQ list,
   // then (while gfFetchAndSaveGuide runs) a small in-progress readout.
   function renderGuideSearchStep(title, searchValue){
     return `
-      <p style="font-size:12.3px;color:var(--muted);margin:0;line-height:1.55;">Search GameFAQs and save a guide straight to this device — no external tab, no downloading a file yourself.</p>
+      <p style="font-size:12.3px;color:var(--muted);margin:0;line-height:1.55;"><strong style="color:var(--text);">Best way:</strong> open GameFAQs yourself, find the game, and paste its page link below — the app fetches and saves the guide here, so you never have to download anything by hand. Plain-title search below is a fallback and won't always find a match.</p>
       <div class="guide-search-row">
-        <input type="text" id="guide-search-input" value="${(searchValue !== undefined ? searchValue : title).replace(/"/g,'&quot;')}" placeholder="Game title…">
-        <button id="guide-search-btn">Search</button>
+        <input type="text" id="guide-search-input" value="${(searchValue !== undefined ? searchValue : title).replace(/"/g,'&quot;')}" placeholder="Paste a gamefaqs.gamespot.com link, or a game title…">
+        <button id="guide-search-btn">Go</button>
       </div>
+      <a href="https://gamefaqs.gamespot.com/search?game=${encodeURIComponent(title)}" target="_blank" rel="noopener" style="font-size:11.3px;color:var(--teal);text-decoration:none;align-self:flex-start;">Open GameFAQs' own search for "${title}" in a new tab ↗</a>
       <div id="guide-search-results"></div>
     `;
   }
@@ -2626,11 +2853,35 @@
         const q = searchInput.value.trim();
         if(!q) return;
         searchBtn.disabled = true;
-        setStatus('Searching GameFAQs…');
+
+        // A pasted GameFAQs link is resolved directly — no search step, no
+        // guessing, and it isn't subject to the proxy/anti-bot flakiness
+        // that plain title search can run into (see gfSearchGames).
+        if(/gamefaqs\.gamespot\.com/i.test(q)){
+          setStatus('Loading that page…');
+          try{
+            const directGuidePath = gfExtractGuidePath(q);
+            if(directGuidePath){
+              const slugTitle = gfTitleFromSlug((gfExtractGamePath(q) || '').split('-').slice(1).join('-')) || title;
+              await doSave({ title: slugTitle, path: directGuidePath }, null);
+              return;
+            }
+            const gamePath = gfExtractGamePath(q);
+            if(!gamePath){ setStatus("That doesn't look like a GameFAQs game or guide link — try pasting the page's full URL.", true); return; }
+            await showGuideListForPath(gamePath, gfTitleFromSlug(gamePath.split('-').slice(1).join('-')) || title);
+          }catch(e){
+            setStatus(`Couldn't load that page: ${e.message}`, true);
+          }finally{
+            searchBtn.disabled = false;
+          }
+          return;
+        }
+
+        setStatus('Searching…');
         try{
           const games = await gfSearchGames(q);
           if(guideWrap.querySelector('#guide-search-input') !== searchInput) return; // panel moved on
-          if(!games.length){ setStatus('No matches found on GameFAQs for that title.', true); return; }
+          if(!games.length){ setStatus('No matches found for that title. Pasting the exact GameFAQs page link (see above) is more reliable than this search.', true); return; }
           resultsEl.innerHTML = `
             <div class="guide-result-list">
               ${games.map((g,i) => `
@@ -2642,7 +2893,7 @@
             </div>
           `;
           resultsEl.querySelectorAll('.guide-pick-game-btn').forEach(btn => {
-            btn.addEventListener('click', () => showGuideList(games[Number(btn.dataset.i)]));
+            btn.addEventListener('click', () => showGuideListForPath(games[Number(btn.dataset.i)].path, games[Number(btn.dataset.i)].title));
           });
         }catch(e){
           setStatus(`Search failed: ${e.message}`, true);
@@ -2651,14 +2902,14 @@
         }
       }
 
-      async function showGuideList(game){
+      async function showGuideListForPath(gamePath, gameTitle){
         setStatus('Loading guide list…');
         try{
-          const guides = await gfListGuides(game.path);
+          const guides = await gfListGuides(gamePath);
           if(guideWrap.querySelector('#guide-search-input') !== searchInput) return;
-          if(!guides.length){ setStatus(`No FAQs/guides listed for ${game.title} on GameFAQs.`, true); return; }
+          if(!guides.length){ setStatus(`No FAQs/guides listed for ${gameTitle} on GameFAQs.`, true); return; }
           resultsEl.innerHTML = `
-            <button class="guide-back-link" id="guide-back-to-search">‹ Back to search</button>
+            <button class="guide-back-link" id="guide-back-to-search">‹ Back</button>
             <div class="guide-result-list">
               ${guides.map((g,i) => `
                 <div class="guide-result-row">
@@ -2670,14 +2921,18 @@
           `;
           resultsEl.querySelector('#guide-back-to-search').addEventListener('click', runSearch);
           resultsEl.querySelectorAll('.guide-save-btn').forEach(btn => {
-            btn.addEventListener('click', () => saveFromGameFaqs(guides[Number(btn.dataset.i)], btn));
+            btn.addEventListener('click', () => doSave(guides[Number(btn.dataset.i)], btn));
           });
         }catch(e){
           setStatus(`Couldn't load guides for that game: ${e.message}`, true);
         }
       }
 
-      async function saveFromGameFaqs(guideEntry, btn){
+      async function doSave(guideEntry, btn){
+        if(!btn){
+          resultsEl.innerHTML = `<p class="guide-status-text">Fetching…</p>`;
+          btn = resultsEl.querySelector('p');
+        }
         const allBtns = resultsEl.querySelectorAll('button');
         allBtns.forEach(b => b.disabled = true);
         btn.textContent = 'Fetching…';
@@ -2688,12 +2943,12 @@
           guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide);
           wireGuidePanelButtons();
         }catch(e){
-          allBtns.forEach(b => b.disabled = false);
-          btn.textContent = 'Save';
+          if(allBtns.length) allBtns.forEach(b => b.disabled = false);
           const errRow = document.createElement('p');
           errRow.className = 'guide-status-text err';
           errRow.textContent = `Could not save that guide: ${e.message}`;
-          resultsEl.appendChild(errRow);
+          if(btn.tagName === 'BUTTON'){ btn.textContent = 'Save'; resultsEl.appendChild(errRow); }
+          else { resultsEl.innerHTML = ''; resultsEl.appendChild(errRow); }
         }
       }
 
@@ -2893,6 +3148,11 @@
       <button class="btn-view-achievements" id="modal-guide-btn"><span class="arrow">▸</span> Game Guide</button>
       <div class="guide-panel" id="modal-guide-panel" style="display:none;"></div>
 
+      ${isCartridgeConsole(console_) ? `
+      <button class="btn-view-achievements" id="modal-patch-btn"><span class="arrow">▸</span> ROM Patches</button>
+      <div class="guide-panel" id="modal-patch-panel" style="display:none;"></div>
+      ` : ''}
+
       <div class="modal-links">
         <a href="${raUrl}" target="_blank" rel="noopener">RetroAchievements page ↗</a>
         <a href="${hltbUrl}" target="_blank" rel="noopener">Search HowLongToBeat ↗</a>
@@ -2903,6 +3163,7 @@
 
     attachRawgLookup(gameId, title, card);
     setupGameGuideUI(gameId, title, card);
+    if(isCartridgeConsole(console_)) setupRomPatchUI(gameId, title, card);
 
     const achBtn = card.querySelector('#modal-view-ach-btn');
     const achWrap = card.querySelector('#modal-achievements');
