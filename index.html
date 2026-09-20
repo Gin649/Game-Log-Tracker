@@ -2105,10 +2105,10 @@
 
     attachRawgLookup(gameId, local.Title, card);
     setupGameGuideUI(gameId, local.Title, card);
-    if(isCartridgeConsole(local.ConsoleName)) setupRomPatchUI(gameId, local.Title, card);
+    if(isCartridgeConsole(local.ConsoleName)) setupRomPatchUI(gameId, local.Title, card, local.ConsoleName);
   }
 
-  // --- ROM patch engine: CRC32 + BPS + IPS ---
+  // --- ROM patch engine: CRC32 + BPS + IPS + UPS ---
   // BPS format designed by byuu, released public domain
   // (https://byuu.org/, spec: https://www.romhacking.net/documents/746/).
   // IPS is the long-standing, unowned de facto standard for the format.
@@ -2256,15 +2256,66 @@
     return { target };
   }
 
+  // UPS carries embedded checksums like BPS does (source/target/patch CRC32
+  // in a 12-byte footer), but its body is a much simpler format: a stream of
+  // (gap, XOR-bytes-until-0x00) records applied on top of a copy of the
+  // source, rather than BPS's four-action instruction set.
+  function applyUps(patchBytes, sourceBytes){
+    const p = patchBytes;
+    if(p.length < 16 || p[0] !== 0x55 || p[1] !== 0x50 || p[2] !== 0x53 || p[3] !== 0x31){
+      throw new Error('Not a valid UPS patch (missing "UPS1" header).');
+    }
+    const footerStart = p.length - 12;
+    const readU32LE = (off) => (p[off] | (p[off+1] << 8) | (p[off+2] << 16) | (p[off+3] << 24)) >>> 0;
+    const expectedSourceCrc = readU32LE(footerStart);
+    const expectedTargetCrc = readU32LE(footerStart + 4);
+    const expectedPatchCrc = readU32LE(footerStart + 8);
+
+    if(crc32(p.subarray(0, footerStart + 8)) !== expectedPatchCrc){
+      throw new Error('This patch file looks corrupted (patch checksum mismatch) — try re-downloading it.');
+    }
+
+    const pos = { i: 4 };
+    readVLQ(p, pos); // source size — sourceBytes.length is used instead, same as BPS above
+    const targetSize = readVLQ(p, pos);
+
+    const actualSourceCrc = crc32(sourceBytes);
+    const sourceMatches = actualSourceCrc === expectedSourceCrc;
+
+    const target = new Uint8Array(targetSize);
+    target.set(sourceBytes.subarray(0, Math.min(sourceBytes.length, targetSize)));
+
+    let outOff = 0;
+    while(pos.i < footerStart){
+      outOff += readVLQ(p, pos);
+      while(pos.i < footerStart){
+        const b = p[pos.i++];
+        if(b === 0){ outOff++; break; }
+        if(outOff < target.length) target[outOff] ^= b;
+        outOff++;
+      }
+    }
+
+    const actualTargetCrc = crc32(target);
+    return {
+      target, sourceMatches, actualSourceCrc, expectedSourceCrc,
+      targetMatches: actualTargetCrc === expectedTargetCrc, actualTargetCrc, expectedTargetCrc,
+    };
+  }
+
   // --- RAPatches repo search ---
-  // Community-maintained patch repository (github.com/Tsearo/RAPatches),
-  // linked from RetroAchievements' own Hash Labels documentation. There is
-  // no API that maps an RA game ID to "its" patches — patch↔game linking on
-  // RA happens by hand, in each game's forum topic and Linked Hashes page —
-  // so this can only do a best-effort filename search against the repo's
-  // file listing. Results are NOT an authoritative match; always cross-check
-  // manually before trusting one.
-  const RAPATCHES_OWNER = 'Tsearo';
+  // Official RetroAchievements patch repository (github.com/RetroAchievements/RAPatches),
+  // linked from RetroAchievements' own Hash Labels documentation. There's no
+  // API that maps an RA game ID to "its" patches, and a hack with its own RA
+  // entry isn't required to name its patch file after the base game at all —
+  // so filename matching alone is unreliable in both directions (misses real
+  // matches, surfaces unrelated ones). Instead: RAPatches' own rules require
+  // patches to target the canonical No-Intro/Redump dump, and BPS/UPS files
+  // embed that dump's exact CRC32 in their footer. So the real match test is
+  // "does this candidate's embedded source checksum equal the checksum of
+  // the ROM the person actually has" — filename search is only used first,
+  // as a lightweight way to narrow which files are even worth checking.
+  const RAPATCHES_OWNER = 'RetroAchievements';
   const RAPATCHES_REPO = 'RAPatches';
 
   async function getRAPatchesTree(){
@@ -2286,7 +2337,7 @@
     if(!treeResp.ok) throw new Error(`Could not list RAPatches files (${treeResp.status}). GitHub's unauthenticated API is rate-limited — if this keeps happening, wait a while and try again.`);
     const treeData = await treeResp.json();
     const files = (treeData.tree || [])
-      .filter(e => e.type === 'blob' && /\.(bps|ips|xdelta)$/i.test(e.path))
+      .filter(e => e.type === 'blob' && /\.(bps|ips|ups|xdelta)$/i.test(e.path))
       .map(e => ({ path: e.path }));
 
     const cached = { branch, files, ts: Date.now(), truncated: !!treeData.truncated };
@@ -2298,17 +2349,104 @@
     return String(s || '').toLowerCase().replace(/\[.*?\]|\(.*?\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
   }
 
-  function searchRAPatches(files, title){
+  function searchRAPatches(files, title, cap){
     const titleWords = normalizeForMatch(title).split(' ').filter(w => w.length > 1);
     if(!titleWords.length) return [];
     const scored = files.map(f => {
-      const base = f.path.split('/').pop().replace(/\.(bps|ips|xdelta)$/i, '');
+      const base = f.path.split('/').pop().replace(/\.(bps|ips|ups|xdelta)$/i, '');
       const norm = normalizeForMatch(base);
       const hits = titleWords.filter(w => norm.includes(w)).length;
       return { path: f.path, score: hits / titleWords.length };
-    }).filter(f => f.score >= 0.7);
+    }).filter(f => f.score > 0);
     scored.sort((a, b) => b.score - a.score || a.path.length - b.path.length);
-    return scored.slice(0, 15);
+    return scored.slice(0, cap || 15);
+  }
+
+  // Non-exclusionary version of the above: scores every file by title-word
+  // overlap but keeps everything, even zero-overlap files. Used only to
+  // decide checking ORDER when a candidate pool is too big to fully scan —
+  // a hack that doesn't share any words with the base title still gets
+  // checked, it's just checked later.
+  function scoreForOrdering(files, title){
+    const titleWords = normalizeForMatch(title).split(' ').filter(w => w.length > 1);
+    return files.map(f => {
+      const base = f.path.split('/').pop().replace(/\.(bps|ips|ups|xdelta)$/i, '');
+      const norm = normalizeForMatch(base);
+      const hits = titleWords.length ? titleWords.filter(w => norm.includes(w)).length / titleWords.length : 0;
+      return { path: f.path, score: hits };
+    });
+  }
+
+  // RAPatches' own naming for a console's top-level folder doesn't always
+  // match RetroAchievements' console name (Genesis/Mega Drive -> "MD",
+  // PlayStation -> "PS1", Game Boy Advance -> "GBA", etc). This resolves it
+  // dynamically against the folders that actually exist in the fetched
+  // tree, rather than assuming a hardcoded layout, so it keeps working if
+  // the repo gets reorganized. Keys are checked longest-first so a more
+  // specific console name (e.g. "Game Boy Advance") isn't shadowed by a
+  // shorter one it happens to contain as a substring (e.g. "Game Boy").
+  const CONSOLE_FOLDER_ALIASES = {
+    'game boy advance': ['gba'],
+    'game boy color': ['gbc'],
+    'game boy': ['gb'],
+    'nintendo dsi': ['ndsi'],
+    'nintendo ds': ['nds'],
+    'nintendo 64': ['n64'],
+    'virtual boy': ['vb'],
+    'genesis mega drive': ['md', 'genesis', 'megadrive'],
+    'sega mega drive': ['md', 'genesis', 'megadrive'],
+    'playstation': ['ps1', 'psx'],
+    'playstation portable': ['psp'],
+    'pc engine turbografx 16': ['pce', 'tg16', 'turbografx16', 'turbografx'],
+    'sega cd': ['segacd', 'scd'],
+    'master system': ['sms', 'mastersystem'],
+    'game gear': ['gg', 'gamegear'],
+    'neo geo pocket': ['ngp', 'ngpc'],
+    'wonderswan': ['ws', 'wonderswan'],
+  };
+  const CONSOLE_FOLDER_ALIAS_KEYS = Object.keys(CONSOLE_FOLDER_ALIASES).sort((a, b) => b.length - a.length);
+
+  function containsWordSequence(haystackWords, needleWords){
+    if(needleWords.length === 0 || needleWords.length > haystackWords.length) return false;
+    outer: for(let i = 0; i <= haystackWords.length - needleWords.length; i++){
+      for(let j = 0; j < needleWords.length; j++){
+        if(haystackWords[i+j] !== needleWords[j]) continue outer;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function consoleFolderCandidates(files, consoleName){
+    const topDirs = new Map(); // spaced-normalized -> original
+    for(const f of files){
+      const idx = f.path.indexOf('/');
+      if(idx > 0){
+        const dir = f.path.slice(0, idx);
+        topDirs.set(normalizeForMatch(dir), dir);
+      }
+    }
+    const normConsole = normalizeForMatch(consoleName);
+    const consoleWords = normConsole.split(' ').filter(Boolean);
+
+    const aliasKey = CONSOLE_FOLDER_ALIAS_KEYS.find(k => normConsole.includes(k));
+    const aliasCandidates = aliasKey ? CONSOLE_FOLDER_ALIASES[aliasKey] : [];
+
+    const matchedDirs = [];
+    for(const [normDirSpaced, origDir] of topDirs){
+      if(!normDirSpaced) continue;
+      const normDirJoined = normDirSpaced.replace(/\s+/g, '');
+      const dirWords = normDirSpaced.split(' ').filter(Boolean);
+      // Word-level containment only (not raw substring) — "NES" must appear
+      // as its own word, not as a false-positive infix of "Genesis"/"SNES".
+      const isMatch = aliasCandidates.includes(normDirJoined)
+        || containsWordSequence(consoleWords, dirWords) || containsWordSequence(dirWords, consoleWords);
+      if(isMatch) matchedDirs.push(origDir);
+    }
+    if(matchedDirs.length === 0) return null; // couldn't confidently resolve the folder
+
+    const dirSet = new Set(matchedDirs);
+    return files.filter(f => dirSet.has(f.path.slice(0, f.path.indexOf('/'))));
   }
 
   async function fetchRAPatchBytes(branch, path){
@@ -2316,6 +2454,40 @@
     const resp = await fetch(url);
     if(!resp.ok) throw new Error(`Could not download that patch (${resp.status}).`);
     return new Uint8Array(await resp.arrayBuffer());
+  }
+
+  // Reads just the trailing 12-byte footer of a BPS/UPS file over HTTP Range,
+  // so checking whether a candidate patch matches this ROM doesn't require
+  // downloading the whole patch first. Falls back gracefully if the CDN
+  // doesn't honor the Range request and sends the full file instead.
+  async function fetchPatchSourceCrc32(branch, path){
+    const url = `https://raw.githubusercontent.com/${RAPATCHES_OWNER}/${RAPATCHES_REPO}/${branch}/${path.split('/').map(encodeURIComponent).join('/')}`;
+    const resp = await fetch(url, { headers: { Range: 'bytes=-12' } });
+    if(!resp.ok && resp.status !== 206) throw new Error(`(${resp.status})`);
+    const buf = new Uint8Array(await resp.arrayBuffer());
+    if(buf.length < 12) return null;
+    const footer = buf.subarray(buf.length - 12);
+    return (footer[0] | (footer[1] << 8) | (footer[2] << 16) | (footer[3] << 24)) >>> 0; // sourceCRC32
+  }
+
+  // Runs async fn() over items with at most `limit` in flight at once —
+  // keeps a checksum scan of dozens/hundreds of candidate files reasonably
+  // fast without firing them all at the CDN simultaneously. onProgress(done,
+  // total), if given, fires after each completed item.
+  async function mapWithConcurrency(items, limit, fn, onProgress){
+    const results = new Array(items.length);
+    let next = 0, done = 0;
+    async function worker(){
+      while(next < items.length){
+        const i = next++;
+        try{ results[i] = await fn(items[i], i); }
+        catch(e){ results[i] = undefined; }
+        done++;
+        if(onProgress) onProgress(done, items.length);
+      }
+    }
+    await Promise.all(new Array(Math.min(limit, items.length)).fill(0).map(worker));
+    return results;
   }
 
   // Deliberately a denylist, not an allowlist: an unlisted disc/computer
@@ -2334,190 +2506,265 @@
   }
 
   // --- ROM patch panel ---
-  function setupRomPatchUI(gameId, title, card){
+  function setupRomPatchUI(gameId, title, card, consoleName){
     const patchBtn = card.querySelector('#modal-patch-btn');
     const patchWrap = card.querySelector('#modal-patch-panel');
     if(!patchBtn || !patchWrap) return;
 
     let opened = false;
     let branch = null;
-    let matches = null;
-    let selected = null; // { path, filename, bytes, kind }
     let romBytes = null;
     let romFilename = null;
     let romFromStorage = false;
+    let rememberRom = false;
+    let results = null; // { official: [...], verified: [...], unverified: [...] }
 
-    function renderIdle(){
-      patchWrap.innerHTML = `
-        <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">Search the community RAPatches repository for hacks, translations, and fixes for this game. This is a best-effort filename search, not an official link — always double-check a result before applying it.</p>
-        <button class="guide-btn guide-btn-primary" id="patch-search-btn">Search RAPatches</button>
-      `;
-      patchWrap.querySelector('#patch-search-btn').addEventListener('click', runSearch);
+    async function init(){
+      const saved = await loadRom(gameId);
+      if(saved){ romBytes = saved.bytes; romFilename = saved.filename; romFromStorage = true; }
+      renderRomStage();
     }
 
-    async function runSearch(){
-      patchWrap.innerHTML = '<div class="achievements-list-loading">Searching RAPatches…</div>';
-      try{
-        const tree = await getRAPatchesTree();
-        branch = tree.branch;
-        matches = searchRAPatches(tree.files, title);
-        renderResults();
-      }catch(e){
-        patchWrap.innerHTML = `<div class="achievements-list-loading">Could not search RAPatches: ${e.message}</div><button class="guide-btn guide-btn-ghost" id="patch-retry-btn" style="margin-top:8px;width:100%;">Try again</button>`;
-        patchWrap.querySelector('#patch-retry-btn').addEventListener('click', runSearch);
-      }
-    }
-
-    function renderResults(){
-      if(!matches || matches.length === 0){
+    // --- Step 1: get the ROM whose hash we're matching against ---
+    function renderRomStage(){
+      if(!romBytes){
         patchWrap.innerHTML = `
-          <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">No filename matches found in the RAPatches repo for "${title}". That doesn't mean none exist — check the game's RetroAchievements forum topic and Linked Hashes section, or browse the repo yourself.</p>
-          <a class="guide-btn guide-btn-outline" href="https://github.com/${RAPATCHES_OWNER}/${RAPATCHES_REPO}" target="_blank" rel="noopener">Browse RAPatches on GitHub ↗</a>
-        `;
-        return;
-      }
-      patchWrap.innerHTML = `
-        <p style="font-size:11.3px;color:var(--muted);margin:0 0 6px;line-height:1.5;">Best-effort filename search — not an official link. Double-check before using.</p>
-        <div class="patch-result-list">
-          ${matches.map((m, idx) => {
-            const fn = m.path.split('/').pop();
-            const dir = m.path.slice(0, m.path.length - fn.length).replace(/\/$/, '') || '/';
-            return `
-              <div class="patch-result-row">
-                <div class="info"><div class="fn">${fn}</div><div class="pth">${dir}</div></div>
-                <button data-idx="${idx}">Use</button>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      `;
-      patchWrap.querySelectorAll('.patch-result-row button').forEach(btn => {
-        btn.addEventListener('click', () => selectPatch(matches[Number(btn.dataset.idx)]));
-      });
-    }
-
-    async function selectPatch(match){
-      romBytes = null; romFilename = null; romFromStorage = false; selected = null;
-      patchWrap.innerHTML = '<div class="achievements-list-loading">Downloading patch…</div>';
-      try{
-        const bytes = await fetchRAPatchBytes(branch, match.path);
-        const kind = /\.bps$/i.test(match.path) ? 'bps' : (/\.ips$/i.test(match.path) ? 'ips' : 'xdelta');
-        selected = { path: match.path, filename: match.path.split('/').pop(), bytes, kind };
-        if(kind === 'xdelta'){
-          patchWrap.innerHTML = `
-            <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
-            <p style="font-size:12.3px;color:var(--muted);margin:10px 0 0;line-height:1.55;">This is an .xdelta patch, which isn't applied automatically here — only BPS and IPS are. You'll need a separate tool for this one.</p>
-          `;
-          patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
-          return;
-        }
-        const saved = await loadRom(gameId);
-        if(saved){ romBytes = saved.bytes; romFilename = saved.filename; romFromStorage = true; }
-        renderApplyPanel();
-      }catch(e){
-        patchWrap.innerHTML = `<div class="achievements-list-loading">Could not download that patch: ${e.message}</div><button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="margin-top:8px;width:100%;">‹ Back to results</button>`;
-        patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
-      }
-    }
-
-    function renderApplyPanel(){
-      patchWrap.innerHTML = `
-        <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
-        <div style="font-size:12.3px;color:var(--text);margin-top:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${selected.filename} <span style="color:var(--muted);font-size:10.8px;">(${selected.kind.toUpperCase()})</span></div>
-        <div id="patch-rom-area" style="margin-top:10px;display:flex;flex-direction:column;gap:10px;"></div>
-      `;
-      patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
-      renderRomArea();
-    }
-
-    function computeHashStatus(){
-      if(selected.kind !== 'bps'){
-        return { cls: 'unknown', text: 'IPS patches carry no built-in checksum, so there is no way to automatically verify this is the right base ROM. Double-check the version yourself before applying.' };
-      }
-      const footerStart = selected.bytes.length - 12;
-      const readU32LE = (off) => (selected.bytes[off] | (selected.bytes[off+1] << 8) | (selected.bytes[off+2] << 16) | (selected.bytes[off+3] << 24)) >>> 0;
-      const expected = readU32LE(footerStart);
-      const actual = crc32(romBytes);
-      if(actual === expected) return { cls: 'ok', text: `Base ROM checksum matches this patch (CRC32 ${crc32Hex(romBytes)}).` };
-      return { cls: 'mismatch', text: `Base ROM checksum does NOT match this patch — expected CRC32 ${expected.toString(16).padStart(8,'0')}, got ${crc32Hex(romBytes)}. This is very likely the wrong ROM version.` };
-    }
-
-    function renderRomArea(){
-      const area = patchWrap.querySelector('#patch-rom-area');
-      if(!area) return;
-      if(romBytes){
-        const status = computeHashStatus();
-        const applyClass = status.cls === 'mismatch' ? 'guide-btn guide-btn-danger' : 'guide-btn guide-btn-primary';
-        const applyLabel = status.cls === 'mismatch' ? 'Apply Anyway (not recommended)' : 'Apply Patch';
-        area.innerHTML = `
-          <div style="font-size:12.3px;color:var(--text);">Base ROM: <strong>${romFilename}</strong></div>
-          <div style="display:flex;gap:8px;">
-            <button class="guide-btn guide-btn-ghost" id="patch-rom-change-btn">Use a different file…</button>
-            ${romFromStorage ? '<button class="guide-btn guide-btn-danger" id="patch-rom-forget-btn">Forget saved ROM</button>' : ''}
-          </div>
-          <div class="hash-status ${status.cls}">${status.text}</div>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text);">
-            <input type="checkbox" id="patch-remember-checkbox" style="width:15px;height:15px;flex-shrink:0;">
-            <span>Remember this ROM for future patches of this game</span>
-          </label>
-          <button class="${applyClass}" id="patch-apply-btn" style="width:100%;">${applyLabel}</button>
-          <div id="patch-apply-result"></div>
-        `;
-        area.querySelector('#patch-rom-change-btn').addEventListener('click', () => {
-          romBytes = null; romFilename = null; romFromStorage = false; renderRomArea();
-        });
-        const forgetBtn = area.querySelector('#patch-rom-forget-btn');
-        if(forgetBtn) forgetBtn.addEventListener('click', async () => {
-          await deleteRom(gameId);
-          romBytes = null; romFilename = null; romFromStorage = false;
-          renderRomArea();
-        });
-        area.querySelector('#patch-apply-btn').addEventListener('click', doApply);
-      }else{
-        area.innerHTML = `
+          <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">Select the ROM file for this game. Its checksum is what gets matched against the patch repo, so the results are patches actually compatible with your exact dump — not just anything with a similar name.</p>
           <input type="file" id="patch-rom-input" style="display:none;">
-          <button class="guide-btn guide-btn-primary" id="patch-rom-pick-btn">Select Base ROM File…</button>
+          <button class="guide-btn guide-btn-primary" id="patch-rom-pick-btn">Select ROM File…</button>
         `;
-        const input = area.querySelector('#patch-rom-input');
-        area.querySelector('#patch-rom-pick-btn').addEventListener('click', () => input.click());
+        const input = patchWrap.querySelector('#patch-rom-input');
+        patchWrap.querySelector('#patch-rom-pick-btn').addEventListener('click', () => input.click());
         input.addEventListener('change', async () => {
           const file = input.files && input.files[0];
           if(!file) return;
           romBytes = new Uint8Array(await file.arrayBuffer());
           romFilename = file.name;
           romFromStorage = false;
-          renderRomArea();
+          renderRomStage();
         });
+        return;
+      }
+      patchWrap.innerHTML = `
+        <div style="font-size:12.3px;color:var(--text);">Base ROM: <strong>${romFilename}</strong></div>
+        <div style="font-size:10.8px;color:var(--muted);margin-top:2px;">CRC32 ${crc32Hex(romBytes)}</div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="guide-btn guide-btn-ghost" id="patch-rom-change-btn">Use a different file…</button>
+          ${romFromStorage ? '<button class="guide-btn guide-btn-danger" id="patch-rom-forget-btn">Forget saved ROM</button>' : ''}
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text);margin-top:10px;">
+          <input type="checkbox" id="patch-remember-checkbox" style="width:15px;height:15px;flex-shrink:0;">
+          <span>Remember this ROM for future patches of this game</span>
+        </label>
+        <button class="guide-btn guide-btn-primary" id="patch-search-btn" style="width:100%;margin-top:12px;">Search RA Patches</button>
+      `;
+      patchWrap.querySelector('#patch-rom-change-btn').addEventListener('click', () => {
+        romBytes = null; romFilename = null; romFromStorage = false; renderRomStage();
+      });
+      const forgetBtn = patchWrap.querySelector('#patch-rom-forget-btn');
+      if(forgetBtn) forgetBtn.addEventListener('click', async () => {
+        await deleteRom(gameId);
+        romBytes = null; romFilename = null; romFromStorage = false;
+        renderRomStage();
+      });
+      patchWrap.querySelector('#patch-search-btn').addEventListener('click', () => {
+        const checkbox = patchWrap.querySelector('#patch-remember-checkbox');
+        rememberRom = !!(checkbox && checkbox.checked);
+        runSearch();
+      });
+    }
+
+    // --- Step 2: search RA Patches by matching checksums, not filenames ---
+    // 1) Ask RA directly for any patch it has officially linked to this exact
+    //    game entry (API_GetGameHashes' PatchUrl) — authoritative when present.
+    // 2) Separately, scan the RAPatches repo. Filename matching alone would
+    //    miss most hacks — a hack with its own RA entry doesn't have to be
+    //    named after the base game at all — so instead every BPS/UPS file
+    //    under this game's console folder is checked: its embedded source
+    //    CRC32 is read (via a cheap Range request for just its footer, no
+    //    full download) and compared against this ROM's own CRC32. Anything
+    //    that matches comes back "Verified", regardless of what it's named.
+    // IPS patches carry no embedded checksum, so they can't be verified this
+    // way; shown separately as unverified, ranked by filename relevance only.
+    const MAX_CHECKED = 500;
+    async function runSearch(){
+      patchWrap.innerHTML = '<div class="achievements-list-loading">Checking RetroAchievements…</div>';
+      try{
+        const romCrc = crc32(romBytes);
+        const official = await fetchOfficialPatches();
+
+        patchWrap.innerHTML = '<div class="achievements-list-loading">Reading the RAPatches file list…</div>';
+        const tree = await getRAPatchesTree();
+        branch = tree.branch;
+
+        let pool = consoleFolderCandidates(tree.files, consoleName);
+        let usedFallback = false;
+        if(!pool || pool.length === 0){
+          // Couldn't confidently resolve this console's folder — fall back
+          // to the old filename-only search rather than showing nothing.
+          pool = searchRAPatches(tree.files, title, 80).map(c => ({ path: c.path }));
+          usedFallback = true;
+        }
+
+        const ranked = scoreForOrdering(pool, title).sort((a, b) => b.score - a.score);
+        const bpsUpsAll = ranked.filter(c => /\.(bps|ups)$/i.test(c.path));
+        const ipsAll = ranked.filter(c => /\.ips$/i.test(c.path));
+        const bpsUpsCandidates = bpsUpsAll.slice(0, MAX_CHECKED);
+        const capped = bpsUpsAll.length > bpsUpsCandidates.length;
+
+        const checked = await mapWithConcurrency(bpsUpsCandidates, 14, async (c) => {
+          const srcCrc = await fetchPatchSourceCrc32(branch, c.path);
+          return { path: c.path, matches: srcCrc !== null && srcCrc === romCrc };
+        }, (done, total) => {
+          patchWrap.innerHTML = `<div class="achievements-list-loading">Checking patch checksums… (${done}/${total})</div>`;
+        });
+        const verified = checked.filter(c => c && c.matches).map(c => ({
+          label: c.path.split('/').pop(), path: c.path, url: fetchRAPatchUrl(branch, c.path),
+        }));
+
+        const officialPaths = new Set(official.map(o => o.url));
+        const verifiedDeduped = verified.filter(v => !officialPaths.has(v.url));
+
+        results = {
+          official,
+          verified: verifiedDeduped,
+          unverified: ipsAll.slice(0, 10).map(c => ({ label: c.path.split('/').pop(), path: c.path, url: fetchRAPatchUrl(branch, c.path) })),
+          usedFallback,
+          capped,
+        };
+        renderResults();
+      }catch(e){
+        patchWrap.innerHTML = `<div class="achievements-list-loading">Search failed: ${e.message}</div><button class="guide-btn guide-btn-ghost" id="patch-retry-btn" style="margin-top:8px;width:100%;">Try again</button>`;
+        patchWrap.querySelector('#patch-retry-btn').addEventListener('click', runSearch);
       }
     }
 
-    async function doApply(){
-      const applyBtn = patchWrap.querySelector('#patch-apply-btn');
-      const resultEl = patchWrap.querySelector('#patch-apply-result');
-      if(applyBtn){ applyBtn.disabled = true; applyBtn.textContent = 'Patching…'; }
+    async function fetchOfficialPatches(){
       try{
-        const result = selected.kind === 'bps' ? applyBps(selected.bytes, romBytes) : applyIps(selected.bytes, romBytes);
+        const data = await raFetch('API_GetGameHashes.php', { i: gameId });
+        const list = (data && (data.Results || data.results)) || [];
+        return list
+          .filter(r => (r.PatchUrl || r.patchUrl))
+          .map(r => ({ label: (r.PatchUrl || r.patchUrl).split('/').pop(), url: r.PatchUrl || r.patchUrl }));
+      }catch(e){
+        return []; // non-fatal — the repo scan below still runs
+      }
+    }
+
+    function fetchRAPatchUrl(branch_, path){
+      return `https://raw.githubusercontent.com/${RAPATCHES_OWNER}/${RAPATCHES_REPO}/${branch_}/${path.split('/').map(encodeURIComponent).join('/')}`;
+    }
+
+    function patchKindFromUrl(url){
+      const clean = (url || '').split('?')[0];
+      if(/\.bps$/i.test(clean)) return 'bps';
+      if(/\.ips$/i.test(clean)) return 'ips';
+      if(/\.ups$/i.test(clean)) return 'ups';
+      if(/\.xdelta$/i.test(clean)) return 'xdelta';
+      return 'archive'; // .zip, .7z, .rar, etc. — needs unpacking elsewhere first
+    }
+
+    function resultRow(entry, badge, idx, group){
+      return `
+        <div class="patch-result-row">
+          <div class="info"><div class="fn">${entry.label}</div><div class="pth">${badge}</div></div>
+          <button data-group="${group}" data-idx="${idx}">Use</button>
+        </div>
+      `;
+    }
+
+    function renderResults(){
+      const totalCount = results.official.length + results.verified.length + results.unverified.length;
+      const fallbackNote = results.usedFallback
+        ? `<p style="font-size:11px;color:var(--muted);margin:0 0 8px;line-height:1.5;">Couldn't confidently identify this console's folder in the repo, so this fell back to a filename-only search — hacks with unrelated names may be missing.</p>`
+        : '';
+      const cappedNote = results.capped
+        ? `<p style="font-size:11px;color:var(--muted);margin:0 0 8px;line-height:1.5;">This console has more patches than could be checked in one pass — the ${MAX_CHECKED} most relevant by filename were checked. Try the manual browse link below if you don't see the one you're after.</p>`
+        : '';
+      if(totalCount === 0){
+        patchWrap.innerHTML = `
+          ${fallbackNote}${cappedNote}
+          <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">No patch in the RAPatches repo matches this ROM's checksum, and RetroAchievements has nothing officially linked to this entry either. If you're after a specific hack, double check you're on that hack's own RetroAchievements game page rather than the base game's.</p>
+          <a class="guide-btn guide-btn-outline" href="https://github.com/${RAPATCHES_OWNER}/${RAPATCHES_REPO}" target="_blank" rel="noopener">Browse RAPatches on GitHub ↗</a>
+          <button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="width:100%;margin-top:8px;">‹ Back</button>
+        `;
+        patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderRomStage);
+        return;
+      }
+      patchWrap.innerHTML = `
+        <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back</button>
+        <div style="margin-top:10px;">${fallbackNote}${cappedNote}</div>
+        <div class="patch-result-list">
+          ${results.official.map((m, idx) => resultRow(m, 'Official — linked by RetroAchievements', idx, 'official')).join('')}
+          ${results.verified.map((m, idx) => resultRow(m, 'Verified — checksum matches this ROM', idx, 'verified')).join('')}
+          ${results.unverified.map((m, idx) => resultRow(m, 'Unverified — IPS has no checksum to check', idx, 'unverified')).join('')}
+        </div>
+      `;
+      patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderRomStage);
+      patchWrap.querySelectorAll('.patch-result-row button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const entry = results[btn.dataset.group][Number(btn.dataset.idx)];
+          selectAndApply(entry);
+        });
+      });
+    }
+
+    // --- Steps 4-6: pick a result, patch it, hand back the file ---
+    async function selectAndApply(entry){
+      patchWrap.innerHTML = '<div class="achievements-list-loading">Downloading patch…</div>';
+      try{
+        const kind = patchKindFromUrl(entry.url);
+        if(kind === 'xdelta' || kind === 'archive'){
+          const reason = kind === 'xdelta'
+            ? "This is an .xdelta patch, which isn't applied automatically here — xdelta tends to show up on larger disc-based dumps, which don't fit this app's scope well."
+            : 'This patch is packed in an archive (zip/7z/rar), which isn\'t unpacked automatically here.';
+          patchWrap.innerHTML = `
+            <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
+            <p style="font-size:12.3px;color:var(--muted);margin:10px 0 0;line-height:1.55;">${reason} Only BPS, IPS, and UPS files are applied automatically. You'll need a separate tool for this one.</p>
+            <a class="guide-btn guide-btn-primary" style="margin-top:10px;" href="${entry.url}" download="${entry.label}">Download patch file</a>
+          `;
+          patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
+          return;
+        }
+
+        const resp = await fetch(entry.url);
+        if(!resp.ok) throw new Error(`Could not download that patch (${resp.status}).`);
+        const patchBytes = new Uint8Array(await resp.arrayBuffer());
+
+        let mismatchWarning = '';
+        if(kind !== 'ips'){
+          const footerStart = patchBytes.length - 12;
+          const readU32LE = (off) => (patchBytes[off] | (patchBytes[off+1] << 8) | (patchBytes[off+2] << 16) | (patchBytes[off+3] << 24)) >>> 0;
+          const expected = readU32LE(footerStart);
+          if(crc32(romBytes) !== expected){
+            mismatchWarning = `<div class="hash-status mismatch" style="margin-top:8px;">Heads up: this patch's expected base-ROM checksum doesn't match your ROM (expected ${expected.toString(16).padStart(8,'0')}, got ${crc32Hex(romBytes)}). Applying anyway — check the output carefully.</div>`;
+          }
+        }
+
+        patchWrap.innerHTML = '<div class="achievements-list-loading">Applying patch…</div>';
+        const applyFn = kind === 'bps' ? applyBps : (kind === 'ups' ? applyUps : applyIps);
+        const result = applyFn(patchBytes, romBytes);
         const target = result.target;
-        const outCrc = crc32Hex(target);
         const blob = new Blob([target], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
         const romExtMatch = /\.[^./\\]+$/.exec(romFilename || '');
         const romExt = romExtMatch ? romExtMatch[0] : '';
-        const outName = (selected.filename.replace(/\.(bps|ips)$/i, '') || 'patched-rom') + romExt;
+        const outName = (entry.label.replace(/\.(bps|ips|ups)$/i, '') || 'patched-rom') + romExt;
 
-        const remember = patchWrap.querySelector('#patch-remember-checkbox');
-        if(remember && remember.checked){ await saveRom(gameId, romFilename, romBytes); }
-
-        if(resultEl){
-          resultEl.innerHTML = `
-            <div class="hash-status ok" style="margin-top:4px;">Patched successfully. Output CRC32: ${outCrc}. Compare this against the game's Linked Hashes on RetroAchievements to confirm it's the exact version expected before you load it.</div>
-            <a class="guide-btn guide-btn-primary" style="margin-top:8px;" href="${url}" download="${outName}">Download Patched ROM</a>
-          `;
+        if(rememberRom && !romFromStorage){
+          try{ await saveRom(gameId, romFilename, romBytes); romFromStorage = true; }catch(e){ /* non-fatal */ }
         }
+
+        patchWrap.innerHTML = `
+          ${mismatchWarning}
+          <div class="hash-status ok" style="margin-top:8px;">Your ROM has been patched and saved as <strong>${outName}</strong>. Open it in your emulator to add this game to your RetroAchievements library.</div>
+          <a class="guide-btn guide-btn-primary" style="margin-top:10px;width:100%;text-align:center;" href="${url}" download="${outName}">Download Patched ROM</a>
+          <button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="width:100%;margin-top:8px;">‹ Back to results</button>
+        `;
+        patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
       }catch(e){
-        if(resultEl) resultEl.innerHTML = `<div class="hash-status mismatch" style="margin-top:4px;">Could not apply patch: ${e.message}</div>`;
-      }finally{
-        if(applyBtn){ applyBtn.disabled = false; applyBtn.textContent = 'Apply Patch'; }
+        patchWrap.innerHTML = `<div class="achievements-list-loading">Could not apply that patch: ${e.message}</div><button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="margin-top:8px;width:100%;">‹ Back to results</button>`;
+        patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
       }
     }
 
@@ -2527,7 +2774,7 @@
       patchBtn.classList.toggle('open', nowOpen);
       if(nowOpen && !opened){
         opened = true;
-        renderIdle();
+        init();
       }
     });
   }
@@ -3058,7 +3305,7 @@
 
     attachRawgLookup(gameId, title, card);
     setupGameGuideUI(gameId, title, card);
-    if(isCartridgeConsole(console_)) setupRomPatchUI(gameId, title, card);
+    if(isCartridgeConsole(console_)) setupRomPatchUI(gameId, title, card, console_);
 
     const achBtn = card.querySelector('#modal-view-ach-btn');
     const achWrap = card.querySelector('#modal-achievements');
