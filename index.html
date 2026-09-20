@@ -1459,31 +1459,57 @@
     return new DOMParser().parseFromString(html, 'text/html');
   }
 
-  // Searches GameFAQs for games matching a title and returns
-  // [{ title, platform, path }], deduped, in page order.
+  // Searches for games matching a title and returns [{ title, platform, path }].
+  //
+  // NOTE: this deliberately does NOT scrape GameFAQs' own /search?game=
+  // page. That page turns out to render its actual results client-side —
+  // fetched as plain HTML through a proxy (which can't run GameFAQs' JS),
+  // it always comes back as the empty search-box shell with a few
+  // placeholder "popular game" suggestions, no matter what you searched
+  // for. Real results, but the search itself never sees them.
+  // Instead we search DuckDuckGo's plain HTML results for
+  // "site:gamefaqs.gamespot.com <query>" — a normal server-rendered
+  // results page — and pull GameFAQs game-page links out of that. GameFAQs'
+  // own search is kept as a last-ditch fallback in case a future redesign
+  // changes this.
   async function gfSearchGames(query){
+    function extractGameLinks(doc){
+      const seen = new Set();
+      const results = [];
+      doc.querySelectorAll('a[href]').forEach(a => {
+        let href = a.getAttribute('href') || '';
+        const uddg = href.match(/[?&]uddg=([^&]+)/); // DuckDuckGo wraps result links in a redirect
+        if(uddg) href = decodeURIComponent(uddg[1]);
+        const m = href.match(/gamefaqs\.gamespot\.com\/([a-z0-9_]+)\/(\d+)-([a-z0-9-]+)/i);
+        if(!m) return;
+        const path = `/${m[1]}/${m[2]}-${m[3]}`;
+        if(seen.has(path)) return;
+        seen.add(path);
+        let title = (a.textContent || '').trim()
+          .replace(/\s*[–—-]\s*(Guides? and )?FAQs?(,.*)?(\s*-\s*GameFAQs)?\s*$/i, '')
+          .replace(/\s*for\s+[A-Za-z0-9 /]+\s*-\s*GameFAQs\s*$/i, '')
+          .replace(/\s*-\s*GameFAQs.*$/i, '')
+          .trim();
+        if(!title || title.length < 2){
+          title = m[3].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+        results.push({ title, platform: m[1].toUpperCase(), path });
+      });
+      return results;
+    }
+
+    try{
+      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent('site:gamefaqs.gamespot.com ' + query)}`;
+      const html = await gfProxyFetchText(ddgUrl);
+      const results = extractGameLinks(gfParseDoc(html));
+      if(results.length) return results.slice(0, 20);
+    }catch(e){ /* fall through to the direct-search fallback below */ }
+
+    // Fallback: try GameFAQs' own search page anyway — harmless if it comes
+    // back empty, and covers the chance it behaves differently than expected.
     const url = `${GF_BASE}/search?game=${encodeURIComponent(query)}`;
     const html = await gfProxyFetchText(url);
-    const doc = gfParseDoc(html);
-    const seen = new Set();
-    const results = [];
-    doc.querySelectorAll('a[href]').forEach(a => {
-      const href = a.getAttribute('href') || '';
-      // Game pages look like /snes/588447-game-name — one path segment (the
-      // platform slug) then a numeric id and a name slug. Search-result and
-      // guide/faq links share this same shape elsewhere on the site, so we
-      // additionally require it not to contain a second-level path segment
-      // like /faqs/ or /reviews/ that would mark it as a sub-page instead.
-      const m = href.match(/^\/([a-z0-9_]+)\/(\d+)-([a-z0-9-]+)\/?$/i);
-      if(!m) return;
-      const title = a.textContent.trim();
-      if(!title || title.length < 2) return;
-      const path = `/${m[1]}/${m[2]}-${m[3]}`;
-      if(seen.has(path)) return;
-      seen.add(path);
-      results.push({ title, platform: m[1].toUpperCase(), path });
-    });
-    return results.slice(0, 25);
+    return extractGameLinks(gfParseDoc(html)).slice(0, 20);
   }
 
   // Lists guides/FAQs for a given game path, returning [{ title, path }].
