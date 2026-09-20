@@ -2536,12 +2536,13 @@
   // manual download+import step) ---
   //
   // GameFAQs doesn't send CORS headers, so a browser can't fetch it directly
-  // from our origin. We route through the same public CORS proxies already
-  // used for RetroAchievements/RAWG above (see raFetch), racing them and
-  // taking whichever answers first. These are third-party services outside
-  // our control — if every one of them is down or rate-limited, this whole
-  // feature degrades to "temporarily unavailable" and the manual import
-  // below still works as a fallback.
+  // from our origin. Preferred route: your own Cloudflare Worker (see
+  // cloudflare-worker.js in the repo) — set its URL below once deployed.
+  // Free public proxies remain as a fallback for whenever that's blank or
+  // down, but they're third-party services outside our control; if every
+  // one of them is also down or rate-limited, this feature degrades to
+  // "temporarily unavailable" and manual import still works regardless.
+  const GF_WORKER_URL = 'https://gamefaqs-proxy.gin649.workers.dev'; // e.g. 'https://gamefaqs-proxy.<your-subdomain>.workers.dev' — leave blank to skip straight to the free fallbacks
   const GF_BASE = 'https://gamefaqs.gamespot.com';
 
   async function gfProxyFetchText(url, timeoutMs){
@@ -2584,13 +2585,21 @@
         });
       });
     }
-    const attempts = [
+    // codetabs.com was removed here — its own repo now carries a
+    // "shut down June 30 2026" banner, so every attempt against it was a
+    // guaranteed wasted timeout. corsproxy.io was also removed — it now
+    // requires a paid API key and returns 401 on every unauthenticated
+    // request, confirmed against its current documented behavior.
+    const attempts = [];
+    if(GF_WORKER_URL){
+      attempts.push(attempt('your worker', (signal) => fetch(GF_WORKER_URL + '?url=' + encodeURIComponent(url), { signal })));
+    }
+    attempts.push(
       attempt('allorigins', (signal) => fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url), { signal })),
-      attempt('codetabs',   (signal) => fetch('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url), { signal })),
-      attempt('corsproxy',  (signal) => fetch('https://corsproxy.io/?url=' + encodeURIComponent(url), { signal })),
       attempt('thingproxy', (signal) => fetch('https://thingproxy.freeboard.io/fetch/' + url, { signal })),
       attempt('corseu',     (signal) => fetch('https://cors.eu.org/' + url, { signal })),
-    ];
+      attempt('corslol',    (signal) => fetch('https://api.cors.lol/url=' + encodeURIComponent(url), { signal })),
+    );
     try{
       return await raceFirstSuccess(attempts);
     }catch(aggregateErr){
