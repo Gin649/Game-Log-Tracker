@@ -2387,46 +2387,156 @@
     if(!patchBtn || !patchWrap) return;
 
     let opened = false;
-    let branch = null;
-    let matches = null;
-    let selected = null; // { path, filename, bytes, kind }
+    let branch = null;          // fuzzy fallback only: RAPatches' default branch
+    let hashResults = null;     // primary: official patches, from Linked Hashes' PatchUrl
+    let fuzzyMatches = null;    // fallback: best-effort filename search
+    let resultsMode = 'hash';   // which list the "back" button on the apply screen returns to
+    let selected = null;        // { filename, bytes, kind }
     let romBytes = null;
     let romFilename = null;
     let romFromStorage = false;
 
     function renderIdle(){
       patchWrap.innerHTML = `
-        <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">Search the community RAPatches repository for hacks, translations, and fixes for this game. This is a best-effort filename search, not an official link — always double-check a result before applying it.</p>
-        <button class="guide-btn guide-btn-primary" id="patch-search-btn">Search RAPatches</button>
+        <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">Checks RetroAchievements' own Linked Hashes for this exact game entry — the same official record the site itself uses, not a filename guess.</p>
+        <button class="guide-btn guide-btn-primary" id="patch-search-btn">Check for a patch</button>
       `;
-      patchWrap.querySelector('#patch-search-btn').addEventListener('click', runSearch);
+      patchWrap.querySelector('#patch-search-btn').addEventListener('click', checkHashPatches);
     }
 
-    async function runSearch(){
-      patchWrap.innerHTML = '<div class="achievements-list-loading">Searching RAPatches…</div>';
+    // --- Primary path: ask RetroAchievements directly ---
+    // API_GetGameHashes returns every known dump/hash for this game, and
+    // each one carries its own PatchUrl when RA has a patch linked to it —
+    // pointing straight at the exact RAPatches file, no filename matching
+    // involved. This is why it stays empty for most "vanilla" games (there's
+    // nothing to patch) but also why, unlike filename search, it's never a
+    // false negative: if this comes back empty, RA genuinely has no patch
+    // linked here. Fan-made hacks (randomizers, difficulty mods, etc.) are
+    // almost always their OWN separate RA game with their own achievement
+    // set — this same check works there too, just on that hack's own entry.
+    async function checkHashPatches(){
+      resultsMode = 'hash';
+      patchWrap.innerHTML = '<div class="achievements-list-loading">Checking RetroAchievements…</div>';
       try{
-        const tree = await getRAPatchesTree();
-        branch = tree.branch;
-        matches = searchRAPatches(tree.files, title);
-        renderResults();
+        const data = await raFetch('API_GetGameHashes.php', { i: gameId });
+        const results = (data && (data.Results || data.results)) || [];
+        hashResults = results
+          .filter(r => (r.PatchUrl || r.patchUrl))
+          .map(r => ({ name: r.Name || r.name, url: r.PatchUrl || r.patchUrl }));
+        renderHashResults();
       }catch(e){
-        patchWrap.innerHTML = `<div class="achievements-list-loading">Could not search RAPatches: ${e.message}</div><button class="guide-btn guide-btn-ghost" id="patch-retry-btn" style="margin-top:8px;width:100%;">Try again</button>`;
-        patchWrap.querySelector('#patch-retry-btn').addEventListener('click', runSearch);
+        patchWrap.innerHTML = `<div class="achievements-list-loading">Could not check RetroAchievements: ${e.message}</div><button class="guide-btn guide-btn-ghost" id="patch-retry-btn" style="margin-top:8px;width:100%;">Try again</button>`;
+        patchWrap.querySelector('#patch-retry-btn').addEventListener('click', checkHashPatches);
       }
     }
 
-    function renderResults(){
-      if(!matches || matches.length === 0){
+    function renderHashResults(){
+      resultsMode = 'hash';
+      if(!hashResults || hashResults.length === 0){
         patchWrap.innerHTML = `
-          <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">No filename matches found in the RAPatches repo for "${title}". That doesn't mean none exist — check the game's RetroAchievements forum topic and Linked Hashes section, or browse the repo yourself.</p>
+          <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">RetroAchievements doesn't have a patch linked to this exact game entry. If you're after a fan-made hack rather than a translation or fix, note those are almost always their own separate RetroAchievements game with their own achievement set — search for the hack itself with <strong>+ Add game</strong> and open its entry instead; this same check runs there too.</p>
+          <button class="guide-btn guide-btn-outline" id="patch-fuzzy-btn" style="width:100%;margin-bottom:8px;">Try a broader filename search instead</button>
           <a class="guide-btn guide-btn-outline" href="https://github.com/${RAPATCHES_OWNER}/${RAPATCHES_REPO}" target="_blank" rel="noopener">Browse RAPatches on GitHub ↗</a>
         `;
+        patchWrap.querySelector('#patch-fuzzy-btn').addEventListener('click', runFuzzySearch);
+        return;
+      }
+      patchWrap.innerHTML = `
+        <p style="font-size:11.3px;color:var(--muted);margin:0 0 6px;line-height:1.5;">From RetroAchievements' own Linked Hashes for this game — official, not a filename guess.</p>
+        <div class="patch-result-list">
+          ${hashResults.map((m, idx) => {
+            const fn = (m.url || '').split('/').pop() || m.name || 'patch';
+            return `
+              <div class="patch-result-row">
+                <div class="info"><div class="fn">${fn}</div><div class="pth">${m.name || ''}</div></div>
+                <button data-idx="${idx}">Use</button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <button class="guide-btn guide-btn-ghost" id="patch-fuzzy-btn" style="width:100%;margin-top:10px;">Also try a broader filename search</button>
+      `;
+      patchWrap.querySelectorAll('.patch-result-row button').forEach(btn => {
+        btn.addEventListener('click', () => selectHashPatch(hashResults[Number(btn.dataset.idx)]));
+      });
+      patchWrap.querySelector('#patch-fuzzy-btn').addEventListener('click', runFuzzySearch);
+    }
+
+    function patchKindFromUrl(url){
+      const clean = (url || '').split('?')[0];
+      if(/\.bps$/i.test(clean)) return 'bps';
+      if(/\.ips$/i.test(clean)) return 'ips';
+      if(/\.ups$/i.test(clean)) return 'ups';
+      if(/\.xdelta$/i.test(clean)) return 'xdelta';
+      return 'archive'; // .zip, .7z, .rar, etc. — needs unpacking elsewhere first
+    }
+
+    async function selectHashPatch(entry){
+      romBytes = null; romFilename = null; romFromStorage = false; selected = null;
+      patchWrap.innerHTML = '<div class="achievements-list-loading">Downloading patch…</div>';
+      try{
+        const kind = patchKindFromUrl(entry.url);
+        const filename = (entry.url || '').split('/').pop() || 'patch';
+        if(kind === 'xdelta' || kind === 'archive'){
+          const reason = kind === 'xdelta'
+            ? "This is an .xdelta patch, which isn't applied automatically here — xdelta tends to show up on larger disc-based dumps, which don't fit this app's scope well."
+            : 'This patch is packed in an archive (zip/7z/rar), which isn\'t unpacked automatically here.';
+          patchWrap.innerHTML = `
+            <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
+            <p style="font-size:12.3px;color:var(--muted);margin:10px 0 0;line-height:1.55;">${reason} Only BPS, IPS, and UPS files are applied automatically. You'll need a separate tool for this one.</p>
+            <a class="guide-btn guide-btn-primary" style="margin-top:10px;" href="${entry.url}" download="${filename}">Download patch file</a>
+          `;
+          patchWrap.querySelector('#patch-back-btn').addEventListener('click', () => renderHashResults());
+          return;
+        }
+        const resp = await fetch(entry.url);
+        if(!resp.ok) throw new Error(`Could not download that patch (${resp.status}).`);
+        const bytes = new Uint8Array(await resp.arrayBuffer());
+        selected = { filename, bytes, kind };
+        const saved = await loadRom(gameId);
+        if(saved){ romBytes = saved.bytes; romFilename = saved.filename; romFromStorage = true; }
+        renderApplyPanel();
+      }catch(e){
+        patchWrap.innerHTML = `<div class="achievements-list-loading">Could not download that patch: ${e.message}</div><button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="margin-top:8px;width:100%;">‹ Back to results</button>`;
+        patchWrap.querySelector('#patch-back-btn').addEventListener('click', () => renderHashResults());
+      }
+    }
+
+    // --- Fallback path: best-effort filename search of the RAPatches repo ---
+    // Only offered when RetroAchievements has no Linked Hash for this game.
+    // Much less reliable than the primary check above — a hack's patch file
+    // isn't required to be named after the base game at all, so this can
+    // both miss real matches and surface unrelated ones. Always double-check
+    // before applying anything found this way.
+    async function runFuzzySearch(){
+      resultsMode = 'fuzzy';
+      patchWrap.innerHTML = '<div class="achievements-list-loading">Searching RAPatches filenames…</div>';
+      try{
+        const tree = await getRAPatchesTree();
+        branch = tree.branch;
+        fuzzyMatches = searchRAPatches(tree.files, title);
+        renderFuzzyResults();
+      }catch(e){
+        patchWrap.innerHTML = `<div class="achievements-list-loading">Could not search RAPatches: ${e.message}</div><button class="guide-btn guide-btn-ghost" id="patch-retry-btn" style="margin-top:8px;width:100%;">Try again</button>`;
+        patchWrap.querySelector('#patch-retry-btn').addEventListener('click', runFuzzySearch);
+      }
+    }
+
+    function renderFuzzyResults(){
+      resultsMode = 'fuzzy';
+      if(!fuzzyMatches || fuzzyMatches.length === 0){
+        patchWrap.innerHTML = `
+          <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">No filename matches found in the RAPatches repo for "${title}" either. That doesn't mean none exist — browse the repo yourself, or check the game's RetroAchievements forum topic.</p>
+          <a class="guide-btn guide-btn-outline" href="https://github.com/${RAPATCHES_OWNER}/${RAPATCHES_REPO}" target="_blank" rel="noopener">Browse RAPatches on GitHub ↗</a>
+          <button class="guide-btn guide-btn-ghost" id="patch-back-hash-btn" style="width:100%;margin-top:8px;">‹ Back</button>
+        `;
+        patchWrap.querySelector('#patch-back-hash-btn').addEventListener('click', () => renderHashResults());
         return;
       }
       patchWrap.innerHTML = `
         <p style="font-size:11.3px;color:var(--muted);margin:0 0 6px;line-height:1.5;">Best-effort filename search — not an official link. Double-check before using.</p>
         <div class="patch-result-list">
-          ${matches.map((m, idx) => {
+          ${fuzzyMatches.map((m, idx) => {
             const fn = m.path.split('/').pop();
             const dir = m.path.slice(0, m.path.length - fn.length).replace(/\/$/, '') || '/';
             return `
@@ -2439,23 +2549,23 @@
         </div>
       `;
       patchWrap.querySelectorAll('.patch-result-row button').forEach(btn => {
-        btn.addEventListener('click', () => selectPatch(matches[Number(btn.dataset.idx)]));
+        btn.addEventListener('click', () => selectFuzzyPatch(fuzzyMatches[Number(btn.dataset.idx)]));
       });
     }
 
-    async function selectPatch(match){
+    async function selectFuzzyPatch(match){
       romBytes = null; romFilename = null; romFromStorage = false; selected = null;
       patchWrap.innerHTML = '<div class="achievements-list-loading">Downloading patch…</div>';
       try{
         const bytes = await fetchRAPatchBytes(branch, match.path);
         const kind = /\.bps$/i.test(match.path) ? 'bps' : (/\.ips$/i.test(match.path) ? 'ips' : (/\.ups$/i.test(match.path) ? 'ups' : 'xdelta'));
-        selected = { path: match.path, filename: match.path.split('/').pop(), bytes, kind };
+        selected = { filename: match.path.split('/').pop(), bytes, kind };
         if(kind === 'xdelta'){
           patchWrap.innerHTML = `
             <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
             <p style="font-size:12.3px;color:var(--muted);margin:10px 0 0;line-height:1.55;">This is an .xdelta patch, which isn't applied automatically here — xdelta tends to show up on larger disc-based dumps, which don't fit this app's scope well. Only BPS, IPS, and UPS are applied automatically. You'll need a separate tool for this one.</p>
           `;
-          patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
+          patchWrap.querySelector('#patch-back-btn').addEventListener('click', () => renderFuzzyResults());
           return;
         }
         const saved = await loadRom(gameId);
@@ -2463,7 +2573,7 @@
         renderApplyPanel();
       }catch(e){
         patchWrap.innerHTML = `<div class="achievements-list-loading">Could not download that patch: ${e.message}</div><button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="margin-top:8px;width:100%;">‹ Back to results</button>`;
-        patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
+        patchWrap.querySelector('#patch-back-btn').addEventListener('click', () => renderFuzzyResults());
       }
     }
 
@@ -2473,7 +2583,9 @@
         <div style="font-size:12.3px;color:var(--text);margin-top:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${selected.filename} <span style="color:var(--muted);font-size:10.8px;">(${selected.kind.toUpperCase()})</span></div>
         <div id="patch-rom-area" style="margin-top:10px;display:flex;flex-direction:column;gap:10px;"></div>
       `;
-      patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
+      patchWrap.querySelector('#patch-back-btn').addEventListener('click', () => {
+        if(resultsMode === 'fuzzy') renderFuzzyResults(); else renderHashResults();
+      });
       renderRomArea();
     }
 
