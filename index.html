@@ -1412,11 +1412,17 @@
   // below still works as a fallback.
   const GF_BASE = 'https://gamefaqs.gamespot.com';
 
-  async function gfProxyFetchText(url){
+  async function gfProxyFetchText(url, timeoutMs){
     async function attempt(label, run){
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs || 12000);
       let res;
-      try{ res = await run(); }
-      catch(networkErr){ throw new Error(`${label}: blocked (${networkErr.message})`); }
+      try{ res = await run(controller.signal); }
+      catch(networkErr){
+        throw new Error(`${label}: ${networkErr.name === 'AbortError' ? 'timed out' : 'blocked (' + networkErr.message + ')'}`);
+      }finally{
+        clearTimeout(timer);
+      }
       if(!res.ok) throw new Error(`${label}: HTTP ${res.status}`);
       const text = await res.text();
       if(!text || text.length < 50) throw new Error(`${label}: empty response`);
@@ -1436,11 +1442,11 @@
       });
     }
     const attempts = [
-      attempt('allorigins', () => fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url))),
-      attempt('codetabs',   () => fetch('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url))),
-      attempt('corsproxy',  () => fetch('https://corsproxy.io/?url=' + encodeURIComponent(url))),
-      attempt('thingproxy', () => fetch('https://thingproxy.freeboard.io/fetch/' + url)),
-      attempt('corseu',     () => fetch('https://cors.eu.org/' + url)),
+      attempt('allorigins', (signal) => fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url), { signal })),
+      attempt('codetabs',   (signal) => fetch('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url), { signal })),
+      attempt('corsproxy',  (signal) => fetch('https://corsproxy.io/?url=' + encodeURIComponent(url), { signal })),
+      attempt('thingproxy', (signal) => fetch('https://thingproxy.freeboard.io/fetch/' + url, { signal })),
+      attempt('corseu',     (signal) => fetch('https://cors.eu.org/' + url, { signal })),
     ];
     try{
       return await raceFirstSuccess(attempts);
@@ -1456,7 +1462,7 @@
   // Searches GameFAQs for games matching a title and returns
   // [{ title, platform, path }], deduped, in page order.
   async function gfSearchGames(query){
-    const url = `${GF_BASE}/search_advanced?game=${encodeURIComponent(query)}`;
+    const url = `${GF_BASE}/search?game=${encodeURIComponent(query)}`;
     const html = await gfProxyFetchText(url);
     const doc = gfParseDoc(html);
     const seen = new Set();
