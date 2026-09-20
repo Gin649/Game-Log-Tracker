@@ -2108,7 +2108,7 @@
     if(isCartridgeConsole(local.ConsoleName)) setupRomPatchUI(gameId, local.Title, card);
   }
 
-  // --- ROM patch engine: CRC32 + BPS + IPS ---
+  // --- ROM patch engine: CRC32 + BPS + IPS + UPS ---
   // BPS format designed by byuu, released public domain
   // (https://byuu.org/, spec: https://www.romhacking.net/documents/746/).
   // IPS is the long-standing, unowned de facto standard for the format.
@@ -2256,6 +2256,53 @@
     return { target };
   }
 
+  // UPS carries embedded checksums like BPS does (source/target/patch CRC32
+  // in a 12-byte footer), but its body is a much simpler format: a stream of
+  // (gap, XOR-bytes-until-0x00) records applied on top of a copy of the
+  // source, rather than BPS's four-action instruction set.
+  function applyUps(patchBytes, sourceBytes){
+    const p = patchBytes;
+    if(p.length < 16 || p[0] !== 0x55 || p[1] !== 0x50 || p[2] !== 0x53 || p[3] !== 0x31){
+      throw new Error('Not a valid UPS patch (missing "UPS1" header).');
+    }
+    const footerStart = p.length - 12;
+    const readU32LE = (off) => (p[off] | (p[off+1] << 8) | (p[off+2] << 16) | (p[off+3] << 24)) >>> 0;
+    const expectedSourceCrc = readU32LE(footerStart);
+    const expectedTargetCrc = readU32LE(footerStart + 4);
+    const expectedPatchCrc = readU32LE(footerStart + 8);
+
+    if(crc32(p.subarray(0, footerStart + 8)) !== expectedPatchCrc){
+      throw new Error('This patch file looks corrupted (patch checksum mismatch) — try re-downloading it.');
+    }
+
+    const pos = { i: 4 };
+    readVLQ(p, pos); // source size — sourceBytes.length is used instead, same as BPS above
+    const targetSize = readVLQ(p, pos);
+
+    const actualSourceCrc = crc32(sourceBytes);
+    const sourceMatches = actualSourceCrc === expectedSourceCrc;
+
+    const target = new Uint8Array(targetSize);
+    target.set(sourceBytes.subarray(0, Math.min(sourceBytes.length, targetSize)));
+
+    let outOff = 0;
+    while(pos.i < footerStart){
+      outOff += readVLQ(p, pos);
+      while(pos.i < footerStart){
+        const b = p[pos.i++];
+        if(b === 0){ outOff++; break; }
+        if(outOff < target.length) target[outOff] ^= b;
+        outOff++;
+      }
+    }
+
+    const actualTargetCrc = crc32(target);
+    return {
+      target, sourceMatches, actualSourceCrc, expectedSourceCrc,
+      targetMatches: actualTargetCrc === expectedTargetCrc, actualTargetCrc, expectedTargetCrc,
+    };
+  }
+
   // --- RAPatches repo search ---
   // Official RetroAchievements patch repository (github.com/RetroAchievements/RAPatches),
   // linked from RetroAchievements' own Hash Labels documentation. There is
@@ -2286,7 +2333,7 @@
     if(!treeResp.ok) throw new Error(`Could not list RAPatches files (${treeResp.status}). GitHub's unauthenticated API is rate-limited — if this keeps happening, wait a while and try again.`);
     const treeData = await treeResp.json();
     const files = (treeData.tree || [])
-      .filter(e => e.type === 'blob' && /\.(bps|ips|xdelta)$/i.test(e.path))
+      .filter(e => e.type === 'blob' && /\.(bps|ips|ups|xdelta)$/i.test(e.path))
       .map(e => ({ path: e.path }));
 
     const cached = { branch, files, ts: Date.now(), truncated: !!treeData.truncated };
@@ -2302,7 +2349,7 @@
     const titleWords = normalizeForMatch(title).split(' ').filter(w => w.length > 1);
     if(!titleWords.length) return [];
     const scored = files.map(f => {
-      const base = f.path.split('/').pop().replace(/\.(bps|ips|xdelta)$/i, '');
+      const base = f.path.split('/').pop().replace(/\.(bps|ips|ups|xdelta)$/i, '');
       const norm = normalizeForMatch(base);
       const hits = titleWords.filter(w => norm.includes(w)).length;
       return { path: f.path, score: hits / titleWords.length };
@@ -2401,12 +2448,12 @@
       patchWrap.innerHTML = '<div class="achievements-list-loading">Downloading patch…</div>';
       try{
         const bytes = await fetchRAPatchBytes(branch, match.path);
-        const kind = /\.bps$/i.test(match.path) ? 'bps' : (/\.ips$/i.test(match.path) ? 'ips' : 'xdelta');
+        const kind = /\.bps$/i.test(match.path) ? 'bps' : (/\.ips$/i.test(match.path) ? 'ips' : (/\.ups$/i.test(match.path) ? 'ups' : 'xdelta'));
         selected = { path: match.path, filename: match.path.split('/').pop(), bytes, kind };
         if(kind === 'xdelta'){
           patchWrap.innerHTML = `
             <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
-            <p style="font-size:12.3px;color:var(--muted);margin:10px 0 0;line-height:1.55;">This is an .xdelta patch, which isn't applied automatically here — only BPS and IPS are. You'll need a separate tool for this one.</p>
+            <p style="font-size:12.3px;color:var(--muted);margin:10px 0 0;line-height:1.55;">This is an .xdelta patch, which isn't applied automatically here — xdelta tends to show up on larger disc-based dumps, which don't fit this app's scope well. Only BPS, IPS, and UPS are applied automatically. You'll need a separate tool for this one.</p>
           `;
           patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
           return;
@@ -2431,9 +2478,11 @@
     }
 
     function computeHashStatus(){
-      if(selected.kind !== 'bps'){
+      if(selected.kind === 'ips'){
         return { cls: 'unknown', text: 'IPS patches carry no built-in checksum, so there is no way to automatically verify this is the right base ROM. Double-check the version yourself before applying.' };
       }
+      // BPS and UPS both embed the expected source CRC32 in the same
+      // place — the first 4 bytes of a trailing 12-byte footer.
       const footerStart = selected.bytes.length - 12;
       const readU32LE = (off) => (selected.bytes[off] | (selected.bytes[off+1] << 8) | (selected.bytes[off+2] << 16) | (selected.bytes[off+3] << 24)) >>> 0;
       const expected = readU32LE(footerStart);
@@ -2496,14 +2545,15 @@
       const resultEl = patchWrap.querySelector('#patch-apply-result');
       if(applyBtn){ applyBtn.disabled = true; applyBtn.textContent = 'Patching…'; }
       try{
-        const result = selected.kind === 'bps' ? applyBps(selected.bytes, romBytes) : applyIps(selected.bytes, romBytes);
+        const applyFn = selected.kind === 'bps' ? applyBps : (selected.kind === 'ups' ? applyUps : applyIps);
+        const result = applyFn(selected.bytes, romBytes);
         const target = result.target;
         const outCrc = crc32Hex(target);
         const blob = new Blob([target], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
         const romExtMatch = /\.[^./\\]+$/.exec(romFilename || '');
         const romExt = romExtMatch ? romExtMatch[0] : '';
-        const outName = (selected.filename.replace(/\.(bps|ips)$/i, '') || 'patched-rom') + romExt;
+        const outName = (selected.filename.replace(/\.(bps|ips|ups)$/i, '') || 'patched-rom') + romExt;
 
         const remember = patchWrap.querySelector('#patch-remember-checkbox');
         if(remember && remember.checked){ await saveRom(gameId, romFilename, romBytes); }
