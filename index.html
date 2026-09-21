@@ -2110,7 +2110,7 @@
     });
 
     attachRawgLookup(gameId, local.Title, card);
-    setupGameGuideUI(gameId, local.Title, card);
+    setupGameGuideUI(gameId, local.Title, card, local.ConsoleID);
     if(isCartridgeConsole(local.ConsoleName)) setupRomPatchUI(gameId, local.Title, card, local.ConsoleName);
   }
 
@@ -2795,7 +2795,7 @@
   // down, but they're third-party services outside our control; if every
   // one of them is also down or rate-limited, this feature degrades to
   // "temporarily unavailable" and manual import still works regardless.
-  const GF_WORKER_URL = 'https://game-log-tracker.vercel.app/api/proxy'; // e.g. 'https://gamefaqs-proxy.<your-subdomain>.workers.dev' — leave blank to skip straight to the free fallbacks
+  const GF_WORKER_URL = ''; // retired: GameFAQs' bot check blocks every proxy; guides now come from the archive (see downloadGuideFromArchive) // e.g. 'https://gamefaqs-proxy.<your-subdomain>.workers.dev' — leave blank to skip straight to the free fallbacks
   const GF_BASE = 'https://gamefaqs.gamespot.com';
 
   // Some proxies (allorigins' default /get endpoint, some serverless
@@ -3023,22 +3023,186 @@
   // The three sub-views of the "no guide saved yet" state: pick a game from
   // GameFAQs search results, then pick a guide from that game's FAQ list,
   // then (while gfFetchAndSaveGuide runs) a small in-progress readout.
-  function renderGuideSearchStep(title, searchValue){
+  // --- GameFAQs text-guide archive (archive.org) ---
+  // GameFAQs itself sits behind a bot check that blocks every proxy, so guides
+  // come from a public archive.org snapshot of GameFAQs' text guides instead
+  // ("Gamespot_Gamefaqs_TXTs"). A small per-console JSON index (hosted by the
+  // Guide Watch project at guides.retromodlab.com) maps a normalised game name
+  // to the file inside the archive; archive.org then extracts just that one
+  // file from its 7z on request. Only ever runs when the person taps the button.
+  const ARCHIVE_ITEM = 'Gamespot_Gamefaqs_TXTs';
+  const ARCHIVE_INDEX_SITE = 'https://guides.retromodlab.com/app/guides-index';
+  // RetroAchievements console id -> the index's platform names, best first.
+  const ARCHIVE_PLATFORMS = {
+    7:['nes'], 81:['famicomds','nes'], 3:['snes'], 2:['n64'], 4:['gameboy'], 6:['gbc','gameboy'],
+    5:['gba'], 18:['ds'], 28:['virtualboy'], 1:['genesis'], 9:['segacd'], 10:['sega32x'],
+    11:['sms'], 15:['gamegear','sms'], 39:['saturn'], 40:['dreamcast'], 33:['sg1000'], 12:['ps'],
+    21:['ps2'], 41:['psp'], 8:['tg16'], 76:['tg16'], 14:['ngp','ngpocket'], 13:['lynx'],
+    17:['jaguar'], 25:['atari2600'], 50:['atari5200'], 51:['atari7800'], 53:['wonderswan','wsc'],
+    29:['msx'], 30:['c64'], 35:['amiga'], 43:['3do'], 44:['colecovision'], 45:['intellivision'],
+    16:['gamecube'], 19:['wii']
+  };
+  const ARCHIVE_ROMAN = {};
+  ['i','ii','iii','iv','v','vi','vii','viii','ix','x','xi','xii','xiii','xiv','xv','xvi'].forEach((n, i) => { ARCHIVE_ROMAN[n] = String(i + 1); });
+  const archiveIndexMem = {};
+
+  // Must match the index's own rules exactly, or keys miss: lowercase, (tags) and
+  // [tags] dropped, apostrophes deleted, other punctuation spaced, leading
+  // articles/"and" dropped, roman numerals as figures.
+  function archiveKey(name){
+    let text = String(name || '').toLowerCase().replace(/~[^~]*~/g, ' ');
+    for(;;){
+      const next = text.replace(/\([^()]*\)/g, ' ').replace(/\[[^\[\]]*\]/g, ' ');
+      if(next === text) break;
+      text = next;
+    }
+    text = text.replace(/['’]/g, '');
+    return text.replace(/[^\p{L}\p{N}]/gu, ' ').split(' ')
+      .filter(w => w && !['the','a','an','and'].includes(w))
+      .map(w => ARCHIVE_ROMAN[w] || w).join(' ');
+  }
+
+  async function archiveFetch(url, timeoutMs){
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try{
+      const res = await fetch(url, { signal: controller.signal });
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      return res;
+    }catch(e){
+      if(e.name === 'AbortError') throw new Error('timed out');
+      throw e;
+    }finally{
+      clearTimeout(timer);
+    }
+  }
+
+  async function archiveIndex(platform){
+    if(archiveIndexMem[platform]) return archiveIndexMem[platform];
+    const cacheKey = 'guide-archive-index:' + platform;
+    try{
+      const r = await window.storage.get(cacheKey, false);
+      if(r && r.value){
+        const cached = JSON.parse(r.value);
+        if(cached && cached.data && Date.now() - cached.ts < 30 * 24 * 60 * 60 * 1000){
+          archiveIndexMem[platform] = cached.data;
+          return cached.data;
+        }
+      }
+    }catch(e){ /* not cached yet */ }
+    let data;
+    try{
+      const res = await archiveFetch(ARCHIVE_INDEX_SITE + '/' + platform + '.json', 30000);
+      data = await res.json();
+    }catch(e){
+      throw new Error('Could not load the guide index (' + e.message + ')');
+    }
+    archiveIndexMem[platform] = data;
+    try{ await window.storage.set(cacheKey, JSON.stringify({ data, ts: Date.now() }), false); }catch(e){}
+    return data;
+  }
+
+  // archive.org extracts one file from inside a 7z on request; an HTML answer is an error page.
+  async function archiveExtract(archive, inside){
+    const number = parseInt(String(archive).replace(/^gen/, '').replace(/\.7z$/, ''), 10);
+    if(!Number.isFinite(number)) return null;
+    const member = `gamefaqs.gamespot.com.txt.faqs.${number}.gen.7z`;
+    // Encoded like Java's URLEncoder (what the index was built against): also escape ! ' ( ) ~
+    const encInside = encodeURIComponent(inside).replace(/[!'()~]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+    const url = `https://archive.org/download/${ARCHIVE_ITEM}/${ARCHIVE_ITEM}%2F${member}/${encInside}`;
+    let buf;
+    try{
+      const res = await archiveFetch(url, 90000);
+      buf = await res.arrayBuffer();
+    }catch(e){
+      throw new Error('Could not download from archive.org (' + e.message + ')');
+    }
+    if(buf.byteLength < 200) return null;
+    let text;
+    try{ text = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+    catch(e){ text = new TextDecoder('windows-1252').decode(buf); } // older guides aren't UTF-8
+    if(text.trimStart().startsWith('<')) return null; // an error page, not a guide
+    return text;
+  }
+
+  async function downloadGuideFromArchive(gameId, title, consoleId, onStatus){
+    const platforms = ARCHIVE_PLATFORMS[consoleId];
+    if(!platforms) throw new Error("The archive doesn't cover this console.");
+
+    const names = [];
+    const add = n => { const k = archiveKey(n); if(k && !names.includes(k)) names.push(k); };
+    add(title);
+    [' - ', ': '].forEach(sep => {
+      const i = title.indexOf(sep);
+      if(i >= 0){ add(title.slice(i + sep.length)); add(title.slice(0, i)); }
+    });
+
+    let lastErr = null;
+    for(const platform of platforms){
+      if(onStatus) onStatus('Loading the ' + platform + ' guide index…');
+      let index;
+      try{ index = await archiveIndex(platform); }
+      catch(e){ lastErr = e; continue; }
+
+      // Exact keys first; then, for each name, the closest key containing all its words
+      // plus at most two more (RA says "Aladdin", the archive files "Disney's Aladdin").
+      const keys = Object.keys(index);
+      const tryKeys = [...names];
+      names.forEach(name => {
+        const words = new Set(name.split(' '));
+        let best = null;
+        keys.forEach(k => {
+          const kw = k.split(' ');
+          const extra = kw.length - words.size;
+          if(extra >= 1 && extra <= 2 && [...words].every(w => kw.includes(w)) && (!best || k.length < best.length)) best = k;
+        });
+        if(best) tryKeys.push(best);
+      });
+
+      for(const name of [...new Set(tryKeys)]){
+        const entries = index[name];
+        if(!entries) continue;
+        // An entry is [title, archive, path inside, size KB]; several are nested when a game has more.
+        const candidates = (Array.isArray(entries[0]) ? entries : [entries])
+          .filter(c => Array.isArray(c) && c[1] && c[2])
+          .sort((a, b) => (Number(b[3]) || 0) - (Number(a[3]) || 0)); // longest first: a walkthrough, not a cheat list
+        for(const c of candidates){
+          if(onStatus) onStatus('Downloading the guide…');
+          let text;
+          try{ text = await archiveExtract(c[1], c[2]); }
+          catch(e){ lastErr = e; continue; }
+          if(!text) continue;
+          const guide = { filename: `${title}.txt`, kind: 'text', content: text, scrollFrac: 0, savedAt: Date.now() };
+          await saveGuide(gameId, guide);
+          return guide;
+        }
+      }
+    }
+    if(lastErr) throw lastErr;
+    throw new Error(`No guide for “${title}” in the archive. Try “Paste Guide Text” instead.`);
+  }
+
+  function renderGuideSearchStep(title){
     return `
-      <p style="font-size:12.3px;color:var(--muted);margin:0;line-height:1.55;">Open GameFAQs, find the game, and click through to the specific guide you want — then paste that guide's page link below. The app fetches and saves it here, so you never have to download anything by hand.</p>
+      <p style="font-size:12.3px;color:var(--muted);margin:0;line-height:1.55;">Or find a guide on GameFAQs yourself: open it, select and copy its text, then use “Paste Guide Text” below.</p>
       <a href="https://gamefaqs.gamespot.com/search?game=${encodeURIComponent(title)}" target="_blank" rel="noopener" style="font-size:11.3px;color:var(--teal);text-decoration:none;align-self:flex-start;">Open GameFAQs' own search for "${title}" in a new tab ↗</a>
-      <div class="guide-search-row">
-        <input type="text" id="guide-search-input" value="${(searchValue !== undefined ? searchValue : '').replace(/"/g,'&quot;')}" placeholder="Paste the guide's page link…">
-        <button id="guide-search-btn">Go</button>
-      </div>
-      <div id="guide-search-results"></div>
     `;
   }
-  function renderGuideNoGuidePanel(gameId, title){
+  function renderGuideNoGuidePanel(gameId, title, consoleId){
+    const archiveSection = ARCHIVE_PLATFORMS[consoleId] ? `
+        <button class="guide-btn guide-btn-primary" id="guide-archive-btn">Download from GameFAQs Archive</button>
+        <p class="guide-status-text" id="guide-archive-status">Saved copies of GameFAQs text guides, kept for offline reading. Newer guides may be missing.</p>
+        <div class="guide-divider">or</div>` : '';
     return `
       <div style="display:flex;flex-direction:column;gap:10px;" id="guide-empty-wrap">
+        ${archiveSection}
         ${renderGuideSearchStep(title)}
-        <div class="guide-divider">or</div>
+        <button class="guide-btn guide-btn-outline" id="guide-paste-btn">Paste Guide Text…</button>
+        <div id="guide-paste-box" style="display:none;flex-direction:column;gap:8px;">
+          <textarea id="guide-paste-text" rows="8" placeholder="Paste the guide text here…" style="width:100%;box-sizing:border-box;background:var(--bg-alt);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:9px 10px;font-family:'Space Mono',monospace;font-size:12px;"></textarea>
+          <button class="guide-btn guide-btn-primary" id="guide-paste-save">Save Guide</button>
+          <p class="guide-status-text err" id="guide-paste-error" style="display:none;"></p>
+        </div>
         <input type="file" id="guide-file-input" accept=".txt,.md,.html,.htm,.pdf" style="display:none;">
         <button class="guide-btn guide-btn-outline" id="guide-import-btn">Import a Guide File You Already Have…</button>
         <div id="guide-import-error"></div>
@@ -3046,9 +3210,9 @@
     `;
   }
 
-  function renderGuidePanelInner(gameId, title, guide){
+  function renderGuidePanelInner(gameId, title, guide, consoleId){
     if(!guide){
-      return renderGuideNoGuidePanel(gameId, title);
+      return renderGuideNoGuidePanel(gameId, title, consoleId);
     }
     return `
       <div style="display:flex;flex-direction:column;gap:8px;">
@@ -3070,7 +3234,7 @@
   // Shared between the RA game modal and the manually-tracked (non-RA) game
   // modal — guides aren't achievement data, so they make sense for any
   // tracked game either way.
-  function setupGameGuideUI(gameId, title, card){
+  function setupGameGuideUI(gameId, title, card, consoleId){
     const guideBtn = card.querySelector('#modal-guide-btn');
     const guideWrap = card.querySelector('#modal-guide-panel');
     if(!guideBtn || !guideWrap) return;
@@ -3129,13 +3293,13 @@
           guide = await gfFetchAndSaveGuide(gameId, guideEntry.path, guideEntry.title || title, (p, total) => {
             btn.textContent = `Fetching ${p}/${total}…`;
           });
-          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide);
+          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
           wireGuidePanelButtons();
         }catch(e){
           if(allBtns.length) allBtns.forEach(b => b.disabled = false);
           const errRow = document.createElement('p');
           errRow.className = 'guide-status-text err';
-          errRow.textContent = `Could not save that guide: ${e.message}`;
+          errRow.textContent = `Could not save that guide: GameFAQs is blocking automatic downloads. Use “Paste Guide Text” below instead. (${e.message})`;
           if(btn.tagName === 'BUTTON'){ btn.textContent = 'Save'; resultsEl.appendChild(errRow); }
           else { resultsEl.innerHTML = ''; resultsEl.appendChild(errRow); }
         }
@@ -3156,6 +3320,52 @@
 
       wireGuideSearchUI();
 
+      const archiveBtn = guideWrap.querySelector('#guide-archive-btn');
+      const archiveStatus = guideWrap.querySelector('#guide-archive-status');
+      if(archiveBtn) archiveBtn.addEventListener('click', async () => {
+        archiveBtn.disabled = true;
+        archiveStatus.className = 'guide-status-text';
+        archiveStatus.textContent = 'Looking in the archive…';
+        try{
+          guide = await downloadGuideFromArchive(gameId, title, consoleId, msg => { archiveStatus.textContent = msg; });
+          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
+          wireGuidePanelButtons();
+        }catch(e){
+          archiveBtn.disabled = false;
+          archiveStatus.className = 'guide-status-text err';
+          archiveStatus.textContent = e.message;
+        }
+      });
+
+      const pasteBtn = guideWrap.querySelector('#guide-paste-btn');
+      const pasteBox = guideWrap.querySelector('#guide-paste-box');
+      const pasteText = guideWrap.querySelector('#guide-paste-text');
+      const pasteSave = guideWrap.querySelector('#guide-paste-save');
+      const pasteErr = guideWrap.querySelector('#guide-paste-error');
+      if(pasteBtn && pasteBox) pasteBtn.addEventListener('click', () => {
+        pasteBox.style.display = pasteBox.style.display === 'none' ? 'flex' : 'none';
+        if(pasteBox.style.display === 'flex' && pasteText) pasteText.focus();
+      });
+      if(pasteSave) pasteSave.addEventListener('click', async () => {
+        const text = (pasteText.value || '').trim();
+        if(text.length < 50){
+          pasteErr.textContent = 'Paste the guide text first.';
+          pasteErr.style.display = 'block';
+          return;
+        }
+        pasteSave.disabled = true;
+        try{
+          guide = { filename: `${title}.txt`, kind: 'text', content: text, scrollFrac: 0, savedAt: Date.now() };
+          await saveGuide(gameId, guide);
+          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
+          wireGuidePanelButtons();
+        }catch(e){
+          pasteSave.disabled = false;
+          pasteErr.textContent = 'Could not save: ' + e.message;
+          pasteErr.style.display = 'block';
+        }
+      });
+
       if(triggerBtn) triggerBtn.addEventListener('click', () => fileInput.click());
       if(fileInput) fileInput.addEventListener('change', async () => {
         const file = fileInput.files && fileInput.files[0];
@@ -3166,7 +3376,7 @@
         triggerBtn.disabled = true;
         try{
           guide = await importGuideFile(gameId, file);
-          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide);
+          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
           wireGuidePanelButtons();
         }catch(e){
           triggerBtn.textContent = prevLabel;
@@ -3178,7 +3388,7 @@
       if(removeBtn) removeBtn.addEventListener('click', async () => {
         await deleteGuide(gameId);
         guide = null;
-        guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide);
+        guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
         wireGuidePanelButtons();
       });
     }
@@ -3192,7 +3402,7 @@
         guideWrap.innerHTML = '<div class="achievements-list-loading">Loading…</div>';
         guide = await loadGuide(gameId);
         if(card.dataset.gameId !== String(gameId)) return; // user moved on
-        guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide);
+        guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
         wireGuidePanelButtons();
       }
     });
@@ -3365,7 +3575,7 @@
     `;
 
     attachRawgLookup(gameId, title, card);
-    setupGameGuideUI(gameId, title, card);
+    setupGameGuideUI(gameId, title, card, ext.ConsoleID || (local && local.ConsoleID));
     if(isCartridgeConsole(console_)) setupRomPatchUI(gameId, title, card, console_);
 
     const achBtn = card.querySelector('#modal-view-ach-btn');
