@@ -465,18 +465,24 @@
   }
   .guide-reader-header .guide-reader-fn{
     font-family:'Space Mono',monospace;font-size:12px;color:#9a9a9a;
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;
   }
+  .guide-reader-tools{display:flex;gap:6px;flex-shrink:0;}
+  .guide-reader-tools button{
+    background:transparent;border:1px solid #444;color:#fff;border-radius:4px;
+    min-width:38px;padding:6px 8px;font-family:'Space Mono',monospace;font-weight:700;font-size:12.5px;cursor:pointer;
+  }
+  .guide-reader-tools button:disabled{opacity:0.35;cursor:default;}
   .guide-reader-close{
     background:transparent;border:1px solid #444;color:#fff;border-radius:4px;flex-shrink:0;
     padding:6px 14px;font-family:'Space Mono',monospace;font-size:12.5px;cursor:pointer;
   }
   .guide-reader-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 16px;}
   .guide-reader-body pre{
-    font-family:'Space Mono',monospace;font-size:14px;line-height:1.65;color:#fff;
+    font-family:'Space Mono',monospace;font-size:var(--guide-font-size,14px);line-height:1.65;color:#fff;
     white-space:pre-wrap;word-break:break-word;margin:0;
   }
-  .guide-reader-body.html-guide{font-family:'Space Mono',monospace;font-size:14px;line-height:1.65;color:#fff;}
+  .guide-reader-body.html-guide{font-family:'Space Mono',monospace;font-size:var(--guide-font-size,14px);line-height:1.65;color:#fff;}
   .guide-reader-body.html-guide *{color:inherit !important;background:transparent !important;max-width:100%;box-sizing:border-box;}
   .guide-reader-body.html-guide a{color:var(--teal) !important;}
   .guide-reader-body.html-guide pre{white-space:pre-wrap;word-break:break-word;}
@@ -705,6 +711,10 @@
 <div id="guide-reader-overlay" class="guide-reader-overlay">
   <div class="guide-reader-header">
     <span class="guide-reader-fn" id="guide-reader-fn"></span>
+    <div class="guide-reader-tools" id="guide-reader-tools">
+      <button id="guide-font-dec" aria-label="Smaller text">A−</button>
+      <button id="guide-font-inc" aria-label="Larger text">A+</button>
+    </div>
     <button class="guide-reader-close" id="guide-reader-close">Close</button>
   </div>
   <div class="guide-reader-body" id="guide-reader-body"></div>
@@ -2937,15 +2947,18 @@
       <a href="https://gamefaqs.gamespot.com/search?game=${encodeURIComponent(title)}" target="_blank" rel="noopener" style="font-size:11.3px;color:var(--teal);text-decoration:none;align-self:flex-start;">Open GameFAQs' own search for "${title}" in a new tab ↗</a>
     `;
   }
-  function renderGuideNoGuidePanel(gameId, title, consoleId){
+  function renderGuideNoGuidePanel(gameId, title, consoleId, isReplacing){
     const archiveSection = ARCHIVE_PLATFORMS[consoleId] ? `
         <button class="guide-btn guide-btn-primary" id="guide-archive-btn">Download from GameFAQs Archive</button>
         <p class="guide-status-text" id="guide-archive-status">Saved copies of GameFAQs text guides, kept for offline reading. Newer guides may be missing.</p>
         <div class="guide-divider">or</div>` : '';
     return `
       <div style="display:flex;flex-direction:column;gap:10px;" id="guide-empty-wrap">
+        ${isReplacing ? '<button class="guide-btn guide-btn-ghost" id="guide-cancel-btn" style="flex:none;">‹ Keep current guide</button>' : ''}
         ${archiveSection}
         ${renderGuideSearchStep(title)}
+        <button class="guide-btn guide-btn-outline" id="guide-clip-btn">Paste from Clipboard</button>
+        <p class="guide-status-text err" id="guide-clip-status" style="display:none;"></p>
         <button class="guide-btn guide-btn-outline" id="guide-paste-btn">Paste Guide Text…</button>
         <div id="guide-paste-box" style="display:none;flex-direction:column;gap:8px;">
           <textarea id="guide-paste-text" rows="8" placeholder="Paste the guide text here…" style="width:100%;box-sizing:border-box;background:var(--bg-alt);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:9px 10px;font-family:'Space Mono',monospace;font-size:12px;"></textarea>
@@ -2971,7 +2984,6 @@
         </div>
         <button class="guide-btn guide-btn-primary" id="guide-read-btn">Read Guide</button>
         <div style="display:flex;gap:8px;">
-          <input type="file" id="guide-file-input" accept=".txt,.md,.html,.htm,.pdf" style="display:none;">
           <button class="guide-btn guide-btn-ghost" id="guide-replace-btn">Replace…</button>
           <button class="guide-btn guide-btn-danger" id="guide-remove-btn">Remove</button>
         </div>
@@ -2998,7 +3010,8 @@
       const readBtn = guideWrap.querySelector('#guide-read-btn');
       const removeBtn = guideWrap.querySelector('#guide-remove-btn');
       const errorEl = guideWrap.querySelector('#guide-import-error');
-      const triggerBtn = importBtn || replaceBtn;
+      const triggerBtn = importBtn;
+      const cancelBtn = guideWrap.querySelector('#guide-cancel-btn');
 
       const archiveBtn = guideWrap.querySelector('#guide-archive-btn');
       const archiveStatus = guideWrap.querySelector('#guide-archive-status');
@@ -3014,6 +3027,36 @@
           archiveBtn.disabled = false;
           archiveStatus.className = 'guide-status-text err';
           archiveStatus.textContent = e.message;
+        }
+      });
+
+      // One-tap version of paste: reads whatever was just copied (e.g. by the
+      // "Grab Guide" bookmarklet on a GameFAQs page) and saves it as the guide.
+      const clipBtn = guideWrap.querySelector('#guide-clip-btn');
+      const clipStatus = guideWrap.querySelector('#guide-clip-status');
+      if(clipBtn) clipBtn.addEventListener('click', async () => {
+        const fail = (msg) => { clipStatus.textContent = msg; clipStatus.style.display = 'block'; };
+        clipStatus.style.display = 'none';
+        let text = '';
+        try{
+          text = ((await navigator.clipboard.readText()) || '').trim();
+        }catch(e){
+          fail('Could not read the clipboard here. Use “Paste Guide Text…” and paste into the box instead.');
+          return;
+        }
+        if(text.length < 500){
+          fail(`The clipboard has only ${text.length} characters, which doesn't look like a guide. Copy the guide first, then try again.`);
+          return;
+        }
+        clipBtn.disabled = true;
+        try{
+          guide = { filename: `${title}.txt`, kind: 'text', content: text, scrollFrac: 0, savedAt: Date.now() };
+          await saveGuide(gameId, guide);
+          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
+          wireGuidePanelButtons();
+        }catch(e){
+          clipBtn.disabled = false;
+          fail('Could not save: ' + e.message);
         }
       });
 
@@ -3046,7 +3089,17 @@
         }
       });
 
-      if(triggerBtn) triggerBtn.addEventListener('click', () => fileInput.click());
+      if(triggerBtn && fileInput) triggerBtn.addEventListener('click', () => fileInput.click());
+      // Replace goes back to the find-a-guide view (archive download, paste, import)
+      // rather than straight to the file picker. The current guide stays until a new one is saved.
+      if(replaceBtn) replaceBtn.addEventListener('click', () => {
+        guideWrap.innerHTML = renderGuideNoGuidePanel(gameId, title, consoleId, true);
+        wireGuidePanelButtons();
+      });
+      if(cancelBtn) cancelBtn.addEventListener('click', () => {
+        guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
+        wireGuidePanelButtons();
+      });
       if(fileInput) fileInput.addEventListener('change', async () => {
         const file = fileInput.files && fileInput.files[0];
         if(!file) return;
@@ -3103,6 +3156,44 @@
     };
   }
 
+  // Reader text size — one setting for every guide, remembered between visits.
+  const GUIDE_FONT_MIN = 10, GUIDE_FONT_MAX = 32, GUIDE_FONT_DEFAULT = 14;
+  let guideFontSize = GUIDE_FONT_DEFAULT;
+  (async () => {
+    try{
+      const r = await window.storage.get('guide-font-size', false);
+      const n = r && r.value ? parseInt(r.value, 10) : NaN;
+      if(n >= GUIDE_FONT_MIN && n <= GUIDE_FONT_MAX) guideFontSize = n;
+    }catch(e){ /* nothing saved yet */ }
+  })();
+  function updateGuideFontButtons(){
+    $('#guide-font-dec').disabled = guideFontSize <= GUIDE_FONT_MIN;
+    $('#guide-font-inc').disabled = guideFontSize >= GUIDE_FONT_MAX;
+  }
+  function applyGuideFontSize(keepPlace){
+    const body = $('#guide-reader-body');
+    const max = body.scrollHeight - body.clientHeight;
+    const frac = max > 0 ? body.scrollTop / max : 0;
+    body.style.setProperty('--guide-font-size', guideFontSize + 'px');
+    updateGuideFontButtons();
+    if(keepPlace){
+      // Text reflows when the size changes, so restore the same relative spot.
+      requestAnimationFrame(() => {
+        const m = body.scrollHeight - body.clientHeight;
+        if(m > 0) body.scrollTop = frac * m;
+      });
+    }
+  }
+  async function changeGuideFontSize(delta){
+    const next = Math.min(GUIDE_FONT_MAX, Math.max(GUIDE_FONT_MIN, guideFontSize + delta));
+    if(next === guideFontSize) return;
+    guideFontSize = next;
+    applyGuideFontSize(true);
+    try{ await window.storage.set('guide-font-size', String(next), false); }catch(e){}
+  }
+  $('#guide-font-dec').addEventListener('click', () => changeGuideFontSize(-1));
+  $('#guide-font-inc').addEventListener('click', () => changeGuideFontSize(1));
+
   function openGuideReader(gameId, title, guide){
     if(!guide) return;
     const overlay = $('#guide-reader-overlay');
@@ -3111,6 +3202,8 @@
     body.onscroll = null;
     body.className = 'guide-reader-body';
     guideReaderScrollGameId = gameId;
+    $('#guide-reader-tools').style.display = guide.kind === 'pdf' ? 'none' : 'flex'; // a PDF has its own zoom
+    applyGuideFontSize(false);
 
     const showReaderMessage = (msg) => {
       body.innerHTML = '';
