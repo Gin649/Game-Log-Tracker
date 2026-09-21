@@ -2795,7 +2795,7 @@
   // down, but they're third-party services outside our control; if every
   // one of them is also down or rate-limited, this feature degrades to
   // "temporarily unavailable" and manual import still works regardless.
-  const GF_WORKER_URL = 'https://game-log-tracker.vercel.app'; // e.g. 'https://gamefaqs-proxy.<your-subdomain>.workers.dev' — leave blank to skip straight to the free fallbacks
+  const GF_WORKER_URL = 'https://game-log-tracker.vercel.app/api/proxy'; // e.g. 'https://gamefaqs-proxy.<your-subdomain>.workers.dev' — leave blank to skip straight to the free fallbacks
   const GF_BASE = 'https://gamefaqs.gamespot.com';
 
   // Some proxies (allorigins' default /get endpoint, some serverless
