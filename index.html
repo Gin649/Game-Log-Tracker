@@ -437,16 +437,6 @@
 
   .guide-divider{display:flex;align-items:center;gap:10px;margin:2px 0;color:var(--muted);font-size:10.6px;letter-spacing:0.06em;text-transform:uppercase;}
   .guide-divider::before,.guide-divider::after{content:'';flex:1;height:1px;background:var(--border);}
-  .guide-search-row{display:flex;gap:8px;}
-  .guide-search-row input{
-    flex:1;min-width:0;background:var(--bg-alt);border:1px solid var(--border);color:var(--text);
-    border-radius:6px;padding:9px 10px;font-family:'Space Mono',monospace;font-size:12.5px;box-sizing:border-box;
-  }
-  .guide-search-row button{
-    flex-shrink:0;background:var(--teal);border:none;color:#0f2a22;border-radius:6px;padding:0 14px;
-    font-family:'Space Mono',monospace;font-weight:700;font-size:12.5px;cursor:pointer;
-  }
-  .guide-search-row button:disabled{opacity:0.6;cursor:default;}
   .guide-status-text{font-size:11.6px;color:var(--muted);margin:0;line-height:1.5;}
   .guide-status-text.err{color:var(--danger);}
 
@@ -972,20 +962,6 @@
       setDismissed();
     });
   })();
-
-  // If the "paste a GameFAQs link" field is open and empty when the app
-  // regains focus (e.g. after switching away to copy a URL), refocus it —
-  // both iOS and Android show their own "Paste" suggestion the instant a
-  // text field is focused with something copyable on the clipboard, so this
-  // gets that prompt back in front of the person without reading the
-  // clipboard ourselves or asking for any permission.
-  document.addEventListener('visibilitychange', () => {
-    if(document.visibilityState !== 'visible') return;
-    setTimeout(() => {
-      const input = document.getElementById('guide-search-input');
-      if(input && !input.value && input.offsetParent !== null) input.focus();
-    }, 60); // a short delay avoids focus getting swallowed during the resume transition on some mobile browsers
-  });
 
   const MEDIA = 'https://media.retroachievements.org';
   let creds = null; // { username, apiKey }
@@ -2785,192 +2761,8 @@
     });
   }
 
-  // --- Fetch guides directly from GameFAQs, in-app (no external tab, no
-  // manual download+import step) ---
-  //
-  // GameFAQs doesn't send CORS headers, so a browser can't fetch it directly
-  // from our origin. Preferred route: your own Cloudflare Worker (see
-  // cloudflare-worker.js in the repo) — set its URL below once deployed.
-  // Free public proxies remain as a fallback for whenever that's blank or
-  // down, but they're third-party services outside our control; if every
-  // one of them is also down or rate-limited, this feature degrades to
-  // "temporarily unavailable" and manual import still works regardless.
-  const GF_WORKER_URL = ''; // retired: GameFAQs' bot check blocks every proxy; guides now come from the archive (see downloadGuideFromArchive) // e.g. 'https://gamefaqs-proxy.<your-subdomain>.workers.dev' — leave blank to skip straight to the free fallbacks
-  const GF_BASE = 'https://gamefaqs.gamespot.com';
-
-  // Some proxies (allorigins' default /get endpoint, some serverless
-  // functions written against a fetch-and-JSON.stringify pattern) wrap the
-  // target page as {"contents": "<html>..."} instead of sending it raw. Fed
-  // straight to DOMParser as HTML, that JSON blob parses as a document with
-  // no usable structure — no error thrown, just an empty result downstream,
-  // which is what shows up as a blank/black guide panel. This recognizes the
-  // common wrapper shapes and unwraps them; a genuinely raw HTML response
-  // (starting with "<") passes through untouched.
-  function unwrapProxyPayload(text){
-    const trimmed = String(text || '').trimStart();
-    if(trimmed[0] !== '{' && trimmed[0] !== '[') return text;
-    try{
-      const parsed = JSON.parse(trimmed);
-      if(typeof parsed === 'string') return parsed;
-      if(parsed && typeof parsed.contents === 'string') return parsed.contents; // allorigins /get shape
-      if(parsed && typeof parsed.body === 'string') return parsed.body;
-      if(parsed && typeof parsed.data === 'string') return parsed.data;
-      if(parsed && typeof parsed.html === 'string') return parsed.html;
-    }catch(e){ /* not actually JSON — treat as raw text below */ }
-    return text;
-  }
-
-  async function gfProxyFetchText(url, timeoutMs){
-    async function attempt(label, run){
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs || 12000);
-      let res;
-      try{ res = await run(controller.signal); }
-      catch(networkErr){
-        throw new Error(`${label}: ${networkErr.name === 'AbortError' ? 'timed out' : 'blocked (' + networkErr.message + ')'}`);
-      }finally{
-        clearTimeout(timer);
-      }
-      if(!res.ok) throw new Error(`${label}: HTTP ${res.status}`);
-      let text = await res.text();
-      text = unwrapProxyPayload(text);
-      // A real page here — GameFAQs or a DuckDuckGo results page — comes
-      // with several KB of shared site chrome (nav, footer, tracking tags)
-      // even when the actual content is short. A proxy that's down, rate
-      // limited, or itself getting blocked by the target site's anti-bot
-      // protection tends to hand back a short error stub or interstitial
-      // instead — technically a 200 OK, but not the page we asked for. The
-      // old 50-character floor let those through as if they'd succeeded,
-      // which is what was causing "couldn't find guide text on that page"
-      // even when a proxy request had technically gone through.
-      if(!text || text.length < 2000){
-        throw new Error(`${label}: response too short to be the real page (${text ? text.length : 0} chars) — likely a proxy error or anti-bot page`);
-      }
-      // A misconfigured proxy URL can answer 200 with a DIFFERENT page —
-      // e.g. this app's own index.html served from the same host. That is
-      // long enough to pass the size check, then gets saved as the "guide"
-      // (showing the install prompt / logo / slogan in the reader). Only
-      // accept a response that is actually a GameFAQs page.
-      if(/What will you beat today|<title>\s*Game Log/i.test(text) || !/gamefaqs/i.test(text)){
-        throw new Error(`${label}: returned something that isn't a GameFAQs page (check the proxy URL/path)`);
-      }
-      return text;
-    }
-    function raceFirstSuccess(promises){
-      return new Promise((resolve, reject) => {
-        let remaining = promises.length;
-        const errors = [];
-        promises.forEach(p => {
-          p.then(resolve, (err) => {
-            errors.push(err && err.message ? err.message : String(err));
-            remaining--;
-            if(remaining === 0) reject(new Error(errors.join('; ')));
-          });
-        });
-      });
-    }
-    // codetabs.com was removed here — its own repo now carries a
-    // "shut down June 30 2026" banner, so every attempt against it was a
-    // guaranteed wasted timeout. corsproxy.io was also removed — it now
-    // requires a paid API key and returns 401 on every unauthenticated
-    // request, confirmed against its current documented behavior.
-    const attempts = [];
-    if(GF_WORKER_URL){
-      attempts.push(attempt('your worker', (signal) => fetch(GF_WORKER_URL + '?url=' + encodeURIComponent(url), { signal })));
-    }
-    attempts.push(
-      attempt('allorigins', (signal) => fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url), { signal })),
-      attempt('thingproxy', (signal) => fetch('https://thingproxy.freeboard.io/fetch/' + url, { signal })),
-      attempt('corseu',     (signal) => fetch('https://cors.eu.org/' + url, { signal })),
-      attempt('corslol',    (signal) => fetch('https://api.cors.lol/url=' + encodeURIComponent(url), { signal })),
-    );
-    try{
-      return await raceFirstSuccess(attempts);
-    }catch(aggregateErr){
-      throw new Error('Could not reach GameFAQs through any available route — ' + aggregateErr.message);
-    }
-  }
-
-  function gfParseDoc(html){
-    return new DOMParser().parseFromString(html, 'text/html');
-  }
-
-  // Turns a GameFAQs slug ("super-mario-world") into a readable title —
-  // used when we only have a URL and no page text to pull a title from.
-  function gfTitleFromSlug(slug){
-    return String(slug || '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  }
-
-  // Pulls a game-root path (/platform/id-slug) out of anything that looks
-  // like a GameFAQs URL or path, stripping off any sub-page suffix
-  // (…/faqs, …/reviews, …/data, etc.).
-  function gfExtractGamePath(input){
-    const m = String(input).match(/gamefaqs\.gamespot\.com\/([a-z0-9_]+)\/(\d+)-([a-z0-9-]+)/i)
-           || String(input).match(/^\/?([a-z0-9_]+)\/(\d+)-([a-z0-9-]+)/i);
-    return m ? `/${m[1]}/${m[2]}-${m[3]}` : null;
-  }
-  // Pulls a specific guide path (/platform/id-slug/faqs/NNN) out of a URL,
-  // if the pasted link already points straight at one guide.
-  function gfExtractGuidePath(input){
-    const m = String(input).match(/gamefaqs\.gamespot\.com(\/[a-z0-9_]+\/\d+-[a-z0-9-]+\/faqs\/\d+)/i)
-           || String(input).match(/^(\/[a-z0-9_]+\/\d+-[a-z0-9-]+\/faqs\/\d+)/i);
-    return m ? m[1] : null;
-  }
-
-  // Pulls the readable body out of a GameFAQs FAQ page, independent of the
-  // site's exact class names (those change over time). Strategy: strip
-  // obvious chrome (script/style/nav/header/footer/ads), then prefer a <pre>
-  // block if one holds most of the text (classic plain-text FAQs), otherwise
-  // pick whichever remaining container has the most text relative to how
-  // link-heavy it is (real guide prose beats a sidebar full of nav links).
-  function gfExtractContent(doc, baseUrl){
-    doc.querySelectorAll('script,style,nav,header,footer,aside,iframe,noscript').forEach(el => el.remove());
-    doc.querySelectorAll('[class^="ad-" i],[class*=" ad-" i],[class*="advert" i],[id^="ad-" i],[id*="advert" i]').forEach(el => el.remove());
-
-    const pres = [...doc.querySelectorAll('pre')].sort((a,b) => b.textContent.length - a.textContent.length);
-    if(pres[0] && pres[0].textContent.trim().length > 400){
-      return { kind: 'text', content: pres[0].textContent };
-    }
-
-    const candidates = [...doc.querySelectorAll('div,article,section')];
-    let best = null, bestScore = 0;
-    candidates.forEach(el => {
-      const text = el.textContent || '';
-      const len = text.trim().length;
-      if(len < 500) return;
-      const linkChars = [...el.querySelectorAll('a')].reduce((n, a) => n + (a.textContent || '').length, 0);
-      const score = len - linkChars * 2 - el.querySelectorAll('div,section,article').length; // penalize link-heavy and deeply-nested containers
-      if(score > bestScore){ bestScore = score; best = el; }
-    });
-    if(!best) return null;
-
-    // Rewrite relative links/images to absolute so they still resolve once
-    // saved and rendered from our own origin.
-    best.querySelectorAll('[href],[src]').forEach(el => {
-      ['href','src'].forEach(attr => {
-        const v = el.getAttribute(attr);
-        if(!v) return;
-        try{ el.setAttribute(attr, new URL(v, baseUrl).href); }catch(e){ /* leave as-is */ }
-      });
-    });
-    return { kind: 'html', content: sanitizeGuideHtml(best.innerHTML) };
-  }
-
-  // Detects a GameFAQs page-selector and returns the total page count for a
-  // paginated HTML/text guide (1 if there's no pagination to find).
-  function gfDetectPageCount(doc){
-    let max = 1;
-    doc.querySelectorAll('a[href*="?page="], select option').forEach(el => {
-      const href = el.getAttribute ? (el.getAttribute('href') || el.getAttribute('value') || '') : '';
-      const m = href.match(/page=(\d+)/) || (el.value || '').match(/(\d+)/) || (el.textContent||'').match(/^\s*(\d+)\s*$/);
-      if(m){ const n = parseInt(m[1], 10); if(n > max && n < 200) max = n; }
-    });
-    return max;
-  }
-
-  // Fetches a full guide (all pages, concatenated) and saves it — the whole
-  // point being that this happens inside the PWA, on-device, with nothing
-  // for the person to download or import by hand.
+  // True length of the readable text in a saved guide (HTML guides are measured
+  // after tags are stripped). Used by the reader to catch an empty guide.
   function guideVisibleTextLength(guide){
     if(!guide || !guide.content) return 0;
     if(guide.kind === 'html'){
@@ -2979,50 +2771,7 @@
     }
     return String(guide.content).trim().length;
   }
-  async function gfFetchAndSaveGuide(gameId, guidePath, title, onProgress){
-    const firstUrl = `${GF_BASE}${guidePath}`;
-    const firstHtml = await gfProxyFetchText(firstUrl);
-    const firstDoc = gfParseDoc(firstHtml);
-    const pageCount = gfDetectPageCount(firstDoc);
-    const first = gfExtractContent(firstDoc, firstUrl);
-    if(!first) throw new Error("couldn't find guide text on that page — GameFAQs may have changed its layout");
 
-    if(first.kind === 'text'){
-      let full = first.content;
-      for(let p = 2; p <= pageCount; p++){
-        if(onProgress) onProgress(p, pageCount);
-        const pUrl = `${firstUrl}?page=${p}`;
-        try{
-          const html = await gfProxyFetchText(pUrl);
-          const extracted = gfExtractContent(gfParseDoc(html), pUrl);
-          if(extracted && extracted.kind === 'text') full += '\n\n' + extracted.content;
-        }catch(e){ break; } // partial guide beats none
-      }
-      const guide = { filename: `${title}.txt`, kind: 'text', content: full, scrollFrac: 0, savedAt: Date.now() };
-      if(guideVisibleTextLength(guide) < 200) throw new Error("the page came back with no readable guide text — try again or import the guide file instead");
-      await saveGuide(gameId, guide);
-      return guide;
-    }
-
-    let full = first.content;
-    for(let p = 2; p <= pageCount; p++){
-      if(onProgress) onProgress(p, pageCount);
-      const pUrl = `${firstUrl}?page=${p}`;
-      try{
-        const html = await gfProxyFetchText(pUrl);
-        const extracted = gfExtractContent(gfParseDoc(html), pUrl);
-        if(extracted && extracted.kind === 'html') full += '<hr>' + extracted.content;
-      }catch(e){ break; }
-    }
-    const guide = { filename: `${title}.html`, kind: 'html', content: full, scrollFrac: 0, savedAt: Date.now() };
-    if(guideVisibleTextLength(guide) < 200) throw new Error("the page came back with no readable guide text — try again or import the guide file instead");
-    await saveGuide(gameId, guide);
-    return guide;
-  }
-
-  // The three sub-views of the "no guide saved yet" state: pick a game from
-  // GameFAQs search results, then pick a guide from that game's FAQ list,
-  // then (while gfFetchAndSaveGuide runs) a small in-progress readout.
   // --- GameFAQs text-guide archive (archive.org) ---
   // GameFAQs itself sits behind a bot check that blocks every proxy, so guides
   // come from a public archive.org snapshot of GameFAQs' text guides instead
@@ -3242,73 +2991,6 @@
     let guide = null;
     let guideLoaded = false;
 
-    // Handles the "no guide yet" view: GameFAQs search box → game list →
-    // guide list → fetch-and-save-in-place, all inside the panel.
-    function wireGuideSearchUI(){
-      const searchInput = guideWrap.querySelector('#guide-search-input');
-      const searchBtn = guideWrap.querySelector('#guide-search-btn');
-      const resultsEl = guideWrap.querySelector('#guide-search-results');
-      if(!searchInput || !searchBtn || !resultsEl) return;
-
-      function setStatus(msg, isErr){
-        resultsEl.innerHTML = `<p class="guide-status-text${isErr ? ' err' : ''}">${msg}</p>`;
-      }
-
-      async function runSearch(){
-        const q = searchInput.value.trim();
-        if(!q) return;
-        searchBtn.disabled = true;
-
-        if(!/gamefaqs\.gamespot\.com/i.test(q)){
-          setStatus('Paste a GameFAQs guide page link — use the search link above to find it first.', true);
-          searchBtn.disabled = false;
-          return;
-        }
-
-        setStatus('Loading that guide…');
-        try{
-          const directGuidePath = gfExtractGuidePath(q);
-          if(!directGuidePath){
-            setStatus("That's a game's page, not a specific guide. Open it on GameFAQs, click the guide you want, then paste that page's link instead.", true);
-            return;
-          }
-          const slugTitle = gfTitleFromSlug((gfExtractGamePath(q) || '').split('-').slice(1).join('-')) || title;
-          await doSave({ title: slugTitle, path: directGuidePath }, null);
-        }catch(e){
-          setStatus(`Couldn't load that page: ${e.message}`, true);
-        }finally{
-          searchBtn.disabled = false;
-        }
-      }
-
-      async function doSave(guideEntry, btn){
-        if(!btn){
-          resultsEl.innerHTML = `<p class="guide-status-text">Fetching…</p>`;
-          btn = resultsEl.querySelector('p');
-        }
-        const allBtns = resultsEl.querySelectorAll('button');
-        allBtns.forEach(b => b.disabled = true);
-        btn.textContent = 'Fetching…';
-        try{
-          guide = await gfFetchAndSaveGuide(gameId, guideEntry.path, guideEntry.title || title, (p, total) => {
-            btn.textContent = `Fetching ${p}/${total}…`;
-          });
-          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
-          wireGuidePanelButtons();
-        }catch(e){
-          if(allBtns.length) allBtns.forEach(b => b.disabled = false);
-          const errRow = document.createElement('p');
-          errRow.className = 'guide-status-text err';
-          errRow.textContent = `Could not save that guide: GameFAQs is blocking automatic downloads. Use “Paste Guide Text” below instead. (${e.message})`;
-          if(btn.tagName === 'BUTTON'){ btn.textContent = 'Save'; resultsEl.appendChild(errRow); }
-          else { resultsEl.innerHTML = ''; resultsEl.appendChild(errRow); }
-        }
-      }
-
-      searchBtn.addEventListener('click', runSearch);
-      searchInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') runSearch(); });
-    }
-
     function wireGuidePanelButtons(){
       const fileInput = guideWrap.querySelector('#guide-file-input');
       const importBtn = guideWrap.querySelector('#guide-import-btn');
@@ -3317,8 +2999,6 @@
       const removeBtn = guideWrap.querySelector('#guide-remove-btn');
       const errorEl = guideWrap.querySelector('#guide-import-error');
       const triggerBtn = importBtn || replaceBtn;
-
-      wireGuideSearchUI();
 
       const archiveBtn = guideWrap.querySelector('#guide-archive-btn');
       const archiveStatus = guideWrap.querySelector('#guide-archive-status');
