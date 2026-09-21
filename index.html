@@ -2401,7 +2401,7 @@
   const RAPATCHES_REPO = 'RAPatches';
 
   async function getRAPatchesTree(){
-    const cacheKey = 'rapatches-tree-cache';
+    const cacheKey = 'rapatches-tree-cache-v2'; // v2: the file list now includes .zip/.7z (older caches only had bare patches)
     try{
       const r = await window.storage.get(cacheKey, false);
       if(r && r.value){
@@ -2419,7 +2419,7 @@
     if(!treeResp.ok) throw new Error(`Could not list RAPatches files (${treeResp.status}). GitHub's unauthenticated API is rate-limited — if this keeps happening, wait a while and try again.`);
     const treeData = await treeResp.json();
     const files = (treeData.tree || [])
-      .filter(e => e.type === 'blob' && /\.(bps|ips|ups|xdelta)$/i.test(e.path))
+      .filter(e => e.type === 'blob' && /\.(bps|ips|ups|xdelta|zip|7z)$/i.test(e.path))
       .map(e => ({ path: e.path }));
 
     const cached = { branch, files, ts: Date.now(), truncated: !!treeData.truncated };
@@ -2435,7 +2435,7 @@
     const titleWords = normalizeForMatch(title).split(' ').filter(w => w.length > 1);
     if(!titleWords.length) return [];
     const scored = files.map(f => {
-      const base = f.path.split('/').pop().replace(/\.(bps|ips|ups|xdelta)$/i, '');
+      const base = f.path.split('/').pop().replace(/\.(bps|ips|ups|xdelta|zip|7z)$/i, '');
       const norm = normalizeForMatch(base);
       const hits = titleWords.filter(w => norm.includes(w)).length;
       return { path: f.path, score: hits / titleWords.length };
@@ -2452,7 +2452,7 @@
   function scoreForOrdering(files, title){
     const titleWords = normalizeForMatch(title).split(' ').filter(w => w.length > 1);
     return files.map(f => {
-      const base = f.path.split('/').pop().replace(/\.(bps|ips|ups|xdelta)$/i, '');
+      const base = f.path.split('/').pop().replace(/\.(bps|ips|ups|xdelta|zip|7z)$/i, '');
       const norm = normalizeForMatch(base);
       const hits = titleWords.length ? titleWords.filter(w => norm.includes(w)).length / titleWords.length : 0;
       return { path: f.path, score: hits };
@@ -2485,6 +2485,9 @@
     'game gear': ['gg', 'gamegear'],
     'neo geo pocket': ['ngp', 'ngpc'],
     'wonderswan': ['ws', 'wonderswan'],
+    '32x': ['sega32x'],
+    'pc 8000': ['pc8801'],
+    'wasm 4': ['wasm4'],
   };
   const CONSOLE_FOLDER_ALIAS_KEYS = Object.keys(CONSOLE_FOLDER_ALIASES).sort((a, b) => b.length - a.length);
 
@@ -2515,16 +2518,21 @@
     const aliasCandidates = aliasKey ? CONSOLE_FOLDER_ALIASES[aliasKey] : [];
 
     const matchedDirs = [];
+    const aliasDirs = [];
     for(const [normDirSpaced, origDir] of topDirs){
       if(!normDirSpaced) continue;
       const normDirJoined = normDirSpaced.replace(/\s+/g, '');
       const dirWords = normDirSpaced.split(' ').filter(Boolean);
+      if(aliasCandidates.includes(normDirJoined)) aliasDirs.push(origDir);
       // Word-level containment only (not raw substring) — "NES" must appear
       // as its own word, not as a false-positive infix of "Genesis"/"SNES".
       const isMatch = aliasCandidates.includes(normDirJoined)
         || containsWordSequence(consoleWords, dirWords) || containsWordSequence(dirWords, consoleWords);
       if(isMatch) matchedDirs.push(origDir);
     }
+    // An exact alias hit is the precise answer ("Game Boy Advance" -> GBA); the loose
+    // word matching would otherwise also drag in the plain "Game Boy" folder.
+    if(aliasDirs.length) return files.filter(f => aliasDirs.includes(f.path.slice(0, f.path.indexOf('/'))));
     if(matchedDirs.length === 0) return null; // couldn't confidently resolve the folder
 
     const dirSet = new Set(matchedDirs);
@@ -2585,6 +2593,52 @@
     ];
     const n = String(consoleName || '').toLowerCase();
     return !denylist.some(d => n.includes(d));
+  }
+
+  // --- Minimal ZIP reader ---
+  // RAPatches stores almost every patch as a zip named "<RA game ID>-<Title>.zip",
+  // usually holding the patch plus a readme. Zip entries are either stored or
+  // deflated, and the browser can inflate deflate data itself, so no library is needed.
+  // (7z uses LZMA, which the browser can't do — those still fall back to a download link.)
+  function readZipEntries(bytes){
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let eocd = -1;
+    for(let i = bytes.length - 22; i >= Math.max(0, bytes.length - 22 - 65535); i--){
+      if(dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+    }
+    if(eocd < 0) throw new Error('not a zip file');
+    const count = dv.getUint16(eocd + 10, true);
+    let p = dv.getUint32(eocd + 16, true);
+    const entries = [];
+    for(let n = 0; n < count; n++){
+      if(p + 46 > bytes.length || dv.getUint32(p, true) !== 0x02014b50) break;
+      const flags = dv.getUint16(p + 8, true);
+      const method = dv.getUint16(p + 10, true);
+      const csize = dv.getUint32(p + 20, true);
+      const nameLen = dv.getUint16(p + 28, true);
+      const extraLen = dv.getUint16(p + 30, true);
+      const commentLen = dv.getUint16(p + 32, true);
+      const localOff = dv.getUint32(p + 42, true);
+      const name = new TextDecoder('utf-8').decode(bytes.subarray(p + 46, p + 46 + nameLen));
+      entries.push({ name, method, csize, localOff, encrypted: !!(flags & 1) });
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    return entries;
+  }
+  async function extractZipEntry(bytes, e){
+    if(e.encrypted) throw new Error('this zip is password-protected');
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const lp = e.localOff;
+    if(dv.getUint32(lp, true) !== 0x04034b50) throw new Error('zip entry is damaged');
+    const start = lp + 30 + dv.getUint16(lp + 26, true) + dv.getUint16(lp + 28, true);
+    const data = bytes.subarray(start, start + e.csize);
+    if(e.method === 0) return data.slice();
+    if(e.method === 8){
+      if(typeof DecompressionStream === 'undefined') throw new Error("this browser can't unpack zips");
+      const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      return new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+    throw new Error('unsupported zip compression');
   }
 
   // --- ROM patch panel ---
@@ -2731,18 +2785,31 @@
           label: c.path.split('/').pop(), path: c.path, url: fetchRAPatchUrl(branch, c.path),
         }));
 
+        // RAPatches names its files "<RA game ID>-<Title>" (e.g. 12736-SMWLearn2Kaizo.zip), so
+        // anything starting with this game's own ID is listed for exactly this game.
+        // No checksum scan or console-folder guess is needed for that.
+        const idPrefix = String(gameId) + '-';
+        const isOfficialDup = (path) => official.some(o => {
+          try{ return decodeURIComponent(o.url).endsWith(path); }catch(e){ return false; }
+        });
+        const byId = tree.files
+          .filter(f => f.path.split('/').pop().startsWith(idPrefix) && !isOfficialDup(f.path))
+          .map(f => ({ label: f.path.split('/').pop(), path: f.path, url: fetchRAPatchUrl(branch, f.path) }));
+        const idPaths = new Set(byId.map(b => b.path));
+
         const officialPaths = new Set(official.map(o => o.url));
-        const verifiedDeduped = verified.filter(v => !officialPaths.has(v.url));
+        const verifiedDeduped = verified.filter(v => !officialPaths.has(v.url) && !idPaths.has(v.path));
 
         // Same hacks-first priority for the unverified (IPS, unchecksummed)
         // list, so a relevant hack isn't pushed out of the top 10 by
         // unrelated filename noise either.
         const ipsHacks = ipsAll.filter(c => isHacksPath(c.path));
         const ipsOther = ipsAll.filter(c => !isHacksPath(c.path));
-        const unverifiedPicks = ipsHacks.slice(0, 6).concat(ipsOther.slice(0, 10 - Math.min(ipsHacks.length, 6)));
+        const unverifiedPicks = ipsHacks.slice(0, 6).concat(ipsOther.slice(0, 10 - Math.min(ipsHacks.length, 6))).filter(c => !idPaths.has(c.path));
 
         results = {
           official,
+          byId,
           verified: verifiedDeduped,
           unverified: unverifiedPicks.map(c => ({ label: c.path.split('/').pop(), path: c.path, url: fetchRAPatchUrl(branch, c.path) })),
           usedFallback,
@@ -2790,8 +2857,8 @@
     }
 
     function renderResults(){
-      const totalCount = results.official.length + results.verified.length + results.unverified.length;
-      const fallbackNote = results.usedFallback
+      const totalCount = results.official.length + results.byId.length + results.verified.length + results.unverified.length;
+      const fallbackNote = (results.usedFallback && !results.byId.length)
         ? `<p style="font-size:11px;color:var(--muted);margin:0 0 8px;line-height:1.5;">Couldn't confidently identify this console's folder in the repo, so this fell back to a filename-only search — hacks with unrelated names may be missing.</p>`
         : '';
       const cappedNote = results.capped
@@ -2800,7 +2867,7 @@
       if(totalCount === 0){
         patchWrap.innerHTML = `
           ${fallbackNote}${cappedNote}
-          <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">No patch in the RAPatches repo matches this ROM's checksum, and RetroAchievements has nothing officially linked to this entry either. If you're after a specific hack, double check you're on that hack's own RetroAchievements game page rather than the base game's.</p>
+          <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">Nothing in the RAPatches repo is filed under this game's RetroAchievements ID, no patch matches this ROM's checksum, and RetroAchievements has nothing officially linked to this entry either. If you're after a specific hack, double check you're on that hack's own RetroAchievements game page rather than the base game's.</p>
           <a class="guide-btn guide-btn-outline" href="https://github.com/${RAPATCHES_OWNER}/${RAPATCHES_REPO}" target="_blank" rel="noopener">Browse RAPatches on GitHub ↗</a>
           <button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="width:100%;margin-top:8px;">‹ Back</button>
         `;
@@ -2812,6 +2879,7 @@
         <div style="margin-top:10px;">${fallbackNote}${cappedNote}</div>
         <div class="patch-result-list">
           ${results.official.map((m, idx) => resultRow(m, 'Official — linked by RetroAchievements', idx, 'official')).join('')}
+          ${results.byId.map((m, idx) => resultRow(m, 'Listed for this exact game (RetroAchievements game ID)', idx, 'byId')).join('')}
           ${results.verified.map((m, idx) => resultRow(m, 'Verified — checksum matches this ROM', idx, 'verified')).join('')}
           ${results.unverified.map((m, idx) => resultRow(m, 'Unverified — IPS has no checksum to check', idx, 'unverified')).join('')}
         </div>
@@ -2826,27 +2894,94 @@
     }
 
     // --- Steps 4-6: pick a result, patch it, hand back the file ---
+    function showArchiveFallback(entry, reason){
+      patchWrap.innerHTML = `
+        <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
+        <p style="font-size:12.3px;color:var(--muted);margin:10px 0 0;line-height:1.55;">${reason} Only BPS, IPS, and UPS patches are applied automatically here. You'll need a separate tool for this one.</p>
+        <a class="guide-btn guide-btn-primary" style="margin-top:10px;" href="${entry.url}" download="${entry.label}">Download patch file</a>
+      `;
+      patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
+    }
+
     async function selectAndApply(entry){
       patchWrap.innerHTML = '<div class="achievements-list-loading">Downloading patch…</div>';
       try{
         const kind = patchKindFromUrl(entry.url);
-        if(kind === 'xdelta' || kind === 'archive'){
-          const reason = kind === 'xdelta'
+        const isZip = /\.zip$/i.test((entry.url || '').split('?')[0]);
+        if(kind === 'xdelta' || (kind === 'archive' && !isZip)){
+          showArchiveFallback(entry, kind === 'xdelta'
             ? "This is an .xdelta patch, which isn't applied automatically here — xdelta tends to show up on larger disc-based dumps, which don't fit this app's scope well."
-            : 'This patch is packed in an archive (zip/7z/rar), which isn\'t unpacked automatically here.';
-          patchWrap.innerHTML = `
-            <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
-            <p style="font-size:12.3px;color:var(--muted);margin:10px 0 0;line-height:1.55;">${reason} Only BPS, IPS, and UPS files are applied automatically. You'll need a separate tool for this one.</p>
-            <a class="guide-btn guide-btn-primary" style="margin-top:10px;" href="${entry.url}" download="${entry.label}">Download patch file</a>
-          `;
-          patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
+            : "This patch is packed in a 7z/rar archive, which isn't unpacked automatically here.");
           return;
         }
 
         const resp = await fetch(entry.url);
         if(!resp.ok) throw new Error(`Could not download that patch (${resp.status}).`);
-        const patchBytes = new Uint8Array(await resp.arrayBuffer());
+        const bytes = new Uint8Array(await resp.arrayBuffer());
 
+        if(isZip){ await applyFromZip(entry, bytes); return; }
+        await applyPatchBytes(entry.label, kind, bytes);
+      }catch(e){
+        patchWrap.innerHTML = `<div class="achievements-list-loading">Could not apply that patch: ${e.message}</div><button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="margin-top:8px;width:100%;">‹ Back to results</button>`;
+        patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
+      }
+    }
+
+    // Opens a downloaded zip, finds the BPS/IPS/UPS patch(es) inside, and applies the one
+    // that matches this ROM. If it can't tell (several patches, or IPS which has no
+    // checksum), it lets the person pick.
+    async function applyFromZip(entry, zipBytes){
+      let items = [];
+      try{
+        const entries = readZipEntries(zipBytes).filter(e =>
+          /\.(bps|ips|ups)$/i.test(e.name) && !/(^|\/)__MACOSX\//.test(e.name) && !e.name.endsWith('/'));
+        if(!entries.length){
+          showArchiveFallback(entry, "This zip doesn't contain a BPS, IPS or UPS patch that can be applied automatically.");
+          return;
+        }
+        const romCrc = crc32(romBytes);
+        for(const pe of entries){
+          const data = await extractZipEntry(zipBytes, pe);
+          const kind = /\.bps$/i.test(pe.name) ? 'bps' : (/\.ups$/i.test(pe.name) ? 'ups' : 'ips');
+          let matches = null; // IPS carries no checksum, so it can't be checked
+          if(kind !== 'ips' && data.length >= 12){
+            const f = data.length - 12;
+            const expected = (data[f] | (data[f+1] << 8) | (data[f+2] << 16) | (data[f+3] << 24)) >>> 0;
+            matches = expected === romCrc;
+          }
+          items.push({ label: pe.name.split('/').pop(), kind, data, matches });
+        }
+      }catch(e){
+        showArchiveFallback(entry, `Couldn't unpack this zip (${e.message}).`);
+        return;
+      }
+      const matched = items.filter(i => i.matches === true);
+      if(items.length === 1 || matched.length === 1){
+        const pick = items.length === 1 ? items[0] : matched[0];
+        await applyPatchBytes(pick.label, pick.kind, pick.data);
+        return;
+      }
+      items.sort((a, b) => (b.matches === true) - (a.matches === true));
+      patchWrap.innerHTML = `
+        <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
+        <p style="font-size:12.3px;color:var(--muted);margin:10px 0;line-height:1.55;">This zip has more than one patch. Pick the one to apply.</p>
+        <div class="patch-result-list">
+          ${items.map((m, idx) => resultRow(m,
+            m.matches === true ? 'Checksum matches this ROM' : (m.matches === false ? "Checksum doesn't match this ROM" : 'IPS — no checksum to check'),
+            idx, 'zip')).join('')}
+        </div>
+      `;
+      patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
+      patchWrap.querySelectorAll('.patch-result-row button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const it = items[Number(btn.dataset.idx)];
+          applyPatchBytes(it.label, it.kind, it.data);
+        });
+      });
+    }
+
+    async function applyPatchBytes(label, kind, patchBytes){
+      try{
         let mismatchWarning = '';
         if(kind !== 'ips'){
           const footerStart = patchBytes.length - 12;
@@ -2865,7 +3000,7 @@
         const url = URL.createObjectURL(blob);
         const romExtMatch = /\.[^./\\]+$/.exec(romFilename || '');
         const romExt = romExtMatch ? romExtMatch[0] : '';
-        const outName = (entry.label.replace(/\.(bps|ips|ups)$/i, '') || 'patched-rom') + romExt;
+        const outName = (label.replace(/\.(bps|ips|ups)$/i, '') || 'patched-rom') + romExt;
 
         if(rememberRom && !romFromStorage){
           try{ await saveRom(gameId, romFilename, romBytes); romFromStorage = true; }catch(e){ /* non-fatal */ }
