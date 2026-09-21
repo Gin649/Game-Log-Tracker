@@ -487,8 +487,11 @@
     white-space:pre-wrap;word-break:break-word;margin:0;
   }
   .guide-reader-body.html-guide{font-family:'Space Mono',monospace;font-size:14px;line-height:1.65;color:#fff;}
-  .guide-reader-body.html-guide a{color:var(--teal);}
-  .guide-reader-body.html-guide img{max-width:100%;}
+  .guide-reader-body.html-guide *{color:inherit !important;background:transparent !important;max-width:100%;box-sizing:border-box;}
+  .guide-reader-body.html-guide a{color:var(--teal) !important;}
+  .guide-reader-body.html-guide pre{white-space:pre-wrap;word-break:break-word;}
+  .guide-reader-body.html-guide img{max-width:100%;height:auto;}
+  .guide-reader-empty{padding:24px 8px;text-align:center;font-family:'Space Mono',monospace;font-size:13px;line-height:1.6;color:#c9c9c9;}
   .guide-reader-body iframe{width:100%;height:100%;border:0;display:block;}
 
 
@@ -1369,10 +1372,13 @@
   // just an arbitrary file the person picked off their device.
   function sanitizeGuideHtml(rawHtml){
     const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
-    doc.querySelectorAll('script').forEach(el => el.remove());
+    doc.querySelectorAll('script,style,link,meta').forEach(el => el.remove());
     doc.querySelectorAll('*').forEach(el => {
       [...el.attributes].forEach(attr => {
         const n = attr.name.toLowerCase();
+        // Author colours/backgrounds assume a white page; on the reader's
+        // black background they render text invisible.
+        if(n === 'style' || n === 'color' || n === 'bgcolor' || n === 'text' || n === 'background') el.removeAttribute(attr.name);
         if(n.startsWith('on')) el.removeAttribute(attr.name);
         if((n === 'href' || n === 'src') && /^\s*javascript:/i.test(attr.value)) el.removeAttribute(attr.name);
       });
@@ -2911,7 +2917,7 @@
   // link-heavy it is (real guide prose beats a sidebar full of nav links).
   function gfExtractContent(doc, baseUrl){
     doc.querySelectorAll('script,style,nav,header,footer,aside,iframe,noscript').forEach(el => el.remove());
-    doc.querySelectorAll('[class*="ad-" i],[class*="advert" i],[id*="ad-" i]').forEach(el => el.remove());
+    doc.querySelectorAll('[class^="ad-" i],[class*=" ad-" i],[class*="advert" i],[id^="ad-" i],[id*="advert" i]').forEach(el => el.remove());
 
     const pres = [...doc.querySelectorAll('pre')].sort((a,b) => b.textContent.length - a.textContent.length);
     if(pres[0] && pres[0].textContent.trim().length > 400){
@@ -2957,6 +2963,14 @@
   // Fetches a full guide (all pages, concatenated) and saves it — the whole
   // point being that this happens inside the PWA, on-device, with nothing
   // for the person to download or import by hand.
+  function guideVisibleTextLength(guide){
+    if(!guide || !guide.content) return 0;
+    if(guide.kind === 'html'){
+      const d = new DOMParser().parseFromString(guide.content, 'text/html');
+      return (d.body ? d.body.textContent : '').trim().length;
+    }
+    return String(guide.content).trim().length;
+  }
   async function gfFetchAndSaveGuide(gameId, guidePath, title, onProgress){
     const firstUrl = `${GF_BASE}${guidePath}`;
     const firstHtml = await gfProxyFetchText(firstUrl);
@@ -2977,6 +2991,7 @@
         }catch(e){ break; } // partial guide beats none
       }
       const guide = { filename: `${title}.txt`, kind: 'text', content: full, scrollFrac: 0, savedAt: Date.now() };
+      if(guideVisibleTextLength(guide) < 200) throw new Error("the page came back with no readable guide text — try again or import the guide file instead");
       await saveGuide(gameId, guide);
       return guide;
     }
@@ -2992,6 +3007,7 @@
       }catch(e){ break; }
     }
     const guide = { filename: `${title}.html`, kind: 'html', content: full, scrollFrac: 0, savedAt: Date.now() };
+    if(guideVisibleTextLength(guide) < 200) throw new Error("the page came back with no readable guide text — try again or import the guide file instead");
     await saveGuide(gameId, guide);
     return guide;
   }
@@ -3198,14 +3214,28 @@
     body.className = 'guide-reader-body';
     guideReaderScrollGameId = gameId;
 
-    if(guide.kind === 'pdf'){
+    const showReaderMessage = (msg) => {
+      body.innerHTML = '';
+      const d = document.createElement('div');
+      d.className = 'guide-reader-empty';
+      d.textContent = msg;
+      body.appendChild(d);
+    };
+
+    if(!guide.content || (guide.kind !== 'pdf' && guideVisibleTextLength(guide) === 0)){
+      showReaderMessage('This saved guide is empty. Tap Close, remove it, and download it again.');
+    }else if(guide.kind === 'pdf'){
       // Renders in the browser's own PDF viewer — position there isn't
       // something this app can read or restore, unlike the text/html modes.
       body.innerHTML = `<iframe src="${guide.content}" title="${guide.filename}"></iframe>`;
     }else if(guide.kind === 'html'){
       body.classList.add('html-guide');
-      body.innerHTML = guide.content;
-      setupGuideScrollTracking(body, gameId, guide);
+      try{
+        body.innerHTML = guide.content;
+        setupGuideScrollTracking(body, gameId, guide);
+      }catch(e){
+        showReaderMessage('Could not display this guide: ' + e.message);
+      }
     }else{
       const pre = document.createElement('pre');
       pre.textContent = guide.content;
