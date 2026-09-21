@@ -2941,32 +2941,53 @@
     throw new Error(`No guide for “${title}” in the archive. Try “Paste Guide Text” instead.`);
   }
 
+  // Opens a page in the phone's own browser instead of the installed app's in-app
+  // view (which is full screen and won't let you long-press to select all).
+  function openInExternalBrowser(url){
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    const ua = navigator.userAgent || '';
+    if(!standalone){ window.open(url, '_blank', 'noopener'); return; } // already in a normal browser tab
+    if(/Android/i.test(ua)){
+      // Android intent link: hands the address to the default browser app.
+      const u = new URL(url);
+      window.location.href = `intent://${u.host}${u.pathname}${u.search}#Intent;scheme=https;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+      return;
+    }
+    if(/iPhone|iPad|iPod/i.test(ua)){
+      // Asks iOS to open the address in Safari. If nothing happens (the page stays
+      // in front), fall back to the normal in-app view so the link never dead-ends.
+      window.location.href = url.replace(/^https:/, 'x-safari-https:');
+      setTimeout(() => { if(!document.hidden) window.open(url, '_blank', 'noopener'); }, 1500);
+      return;
+    }
+    window.open(url, '_blank', 'noopener');
+  }
+
   function renderGuideSearchStep(title){
     return `
-      <p style="font-size:12.3px;color:var(--muted);margin:0;line-height:1.55;">Or find a guide on GameFAQs yourself: open it, select and copy its text, then use “Paste Guide Text” below.</p>
-      <a href="https://gamefaqs.gamespot.com/search?game=${encodeURIComponent(title)}" target="_blank" rel="noopener" style="font-size:11.3px;color:var(--teal);text-decoration:none;align-self:flex-start;">Open GameFAQs' own search for "${title}" in a new tab ↗</a>
+      <p style="font-size:12.3px;color:var(--muted);margin:0;line-height:1.55;">Find your own guide on GameFAQs: click the link, choose your guide, hold to select all, copy the text, then use “Paste Guide Text” below.</p>
+      <a href="https://gamefaqs.gamespot.com/search?game=${encodeURIComponent(title)}" id="guide-gf-link" target="_blank" rel="noopener" style="font-size:11.3px;color:var(--teal);text-decoration:none;align-self:flex-start;">Search GameFAQs for "${title}" ↗</a>
     `;
   }
   function renderGuideNoGuidePanel(gameId, title, consoleId, isReplacing){
     const archiveSection = ARCHIVE_PLATFORMS[consoleId] ? `
         <button class="guide-btn guide-btn-primary" id="guide-archive-btn">Download from GameFAQs Archive</button>
-        <p class="guide-status-text" id="guide-archive-status">Saved copies of GameFAQs text guides, kept for offline reading. Newer guides may be missing.</p>
+        <p class="guide-status-text" id="guide-archive-status">Use the guide saved on the GameFAQs Archive. To use a different guide, use either option below.</p>
         <div class="guide-divider">or</div>` : '';
     return `
       <div style="display:flex;flex-direction:column;gap:10px;" id="guide-empty-wrap">
         ${isReplacing ? '<button class="guide-btn guide-btn-ghost" id="guide-cancel-btn" style="flex:none;">‹ Keep current guide</button>' : ''}
         ${archiveSection}
         ${renderGuideSearchStep(title)}
-        <button class="guide-btn guide-btn-outline" id="guide-clip-btn">Paste from Clipboard</button>
-        <p class="guide-status-text err" id="guide-clip-status" style="display:none;"></p>
-        <button class="guide-btn guide-btn-outline" id="guide-paste-btn">Paste Guide Text…</button>
+        <button class="guide-btn guide-btn-outline" id="guide-paste-btn">Paste Guide Text</button>
         <div id="guide-paste-box" style="display:none;flex-direction:column;gap:8px;">
           <textarea id="guide-paste-text" rows="8" placeholder="Paste the guide text here…" style="width:100%;box-sizing:border-box;background:var(--bg-alt);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:9px 10px;font-family:'Space Mono',monospace;font-size:12px;"></textarea>
           <button class="guide-btn guide-btn-primary" id="guide-paste-save">Save Guide</button>
           <p class="guide-status-text err" id="guide-paste-error" style="display:none;"></p>
         </div>
+        <div class="guide-divider">or</div>
         <input type="file" id="guide-file-input" accept=".txt,.md,.html,.htm,.pdf" style="display:none;">
-        <button class="guide-btn guide-btn-outline" id="guide-import-btn">Import a Guide File You Already Have…</button>
+        <button class="guide-btn guide-btn-outline" id="guide-import-btn">Import a Guide File You Already Have</button>
         <div id="guide-import-error"></div>
       </div>
     `;
@@ -2984,7 +3005,7 @@
         </div>
         <button class="guide-btn guide-btn-primary" id="guide-read-btn">Read Guide</button>
         <div style="display:flex;gap:8px;">
-          <button class="guide-btn guide-btn-ghost" id="guide-replace-btn">Replace…</button>
+          <button class="guide-btn guide-btn-ghost" id="guide-replace-btn">Replace</button>
           <button class="guide-btn guide-btn-danger" id="guide-remove-btn">Remove</button>
         </div>
         <div id="guide-import-error"></div>
@@ -3030,35 +3051,8 @@
         }
       });
 
-      // One-tap version of paste: reads whatever was just copied (e.g. by the
-      // "Grab Guide" bookmarklet on a GameFAQs page) and saves it as the guide.
-      const clipBtn = guideWrap.querySelector('#guide-clip-btn');
-      const clipStatus = guideWrap.querySelector('#guide-clip-status');
-      if(clipBtn) clipBtn.addEventListener('click', async () => {
-        const fail = (msg) => { clipStatus.textContent = msg; clipStatus.style.display = 'block'; };
-        clipStatus.style.display = 'none';
-        let text = '';
-        try{
-          text = ((await navigator.clipboard.readText()) || '').trim();
-        }catch(e){
-          fail('Could not read the clipboard here. Use “Paste Guide Text…” and paste into the box instead.');
-          return;
-        }
-        if(text.length < 500){
-          fail(`The clipboard has only ${text.length} characters, which doesn't look like a guide. Copy the guide first, then try again.`);
-          return;
-        }
-        clipBtn.disabled = true;
-        try{
-          guide = { filename: `${title}.txt`, kind: 'text', content: text, scrollFrac: 0, savedAt: Date.now() };
-          await saveGuide(gameId, guide);
-          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
-          wireGuidePanelButtons();
-        }catch(e){
-          clipBtn.disabled = false;
-          fail('Could not save: ' + e.message);
-        }
-      });
+      const gfLink = guideWrap.querySelector('#guide-gf-link');
+      if(gfLink) gfLink.addEventListener('click', (e) => { e.preventDefault(); openInExternalBrowser(gfLink.href); });
 
       const pasteBtn = guideWrap.querySelector('#guide-paste-btn');
       const pasteBox = guideWrap.querySelector('#guide-paste-box');
