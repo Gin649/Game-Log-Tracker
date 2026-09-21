@@ -2265,6 +2265,7 @@
       if(outOff + length > targetSize) throw new Error('This patch is malformed (writes past the expected output size).');
 
       if(action === 0){ // SourceRead — same-position bytes copied straight from source
+        if(outOff + length > sourceBytes.length) throw new Error("This patch doesn't match your base ROM (it reads past the end of it).");
         for(let n = 0; n < length; n++) target[outOff + n] = sourceBytes[outOff + n];
         outOff += length;
       }else if(action === 1){ // TargetRead — literal bytes embedded in the patch itself
@@ -2275,14 +2276,14 @@
       }else if(action === 2){ // SourceCopy — relocatable read from source
         const rel = readVLQ(p, pos);
         srcRel += (rel & 1) ? -(rel >>> 1) : (rel >>> 1);
-        if(srcRel < 0) throw new Error("This patch doesn't match your base ROM (source offset out of range).");
+        if(srcRel < 0 || srcRel + length > sourceBytes.length) throw new Error("This patch doesn't match your base ROM (source offset out of range).");
         for(let n = 0; n < length; n++) target[outOff + n] = sourceBytes[srcRel + n];
         outOff += length;
         srcRel += length;
       }else{ // TargetCopy — self-referential, used for RLE-style runs
         const rel = readVLQ(p, pos);
         tgtRel += (rel & 1) ? -(rel >>> 1) : (rel >>> 1);
-        if(tgtRel < 0) throw new Error('This patch is malformed (target offset out of range).');
+        if(tgtRel < 0 || tgtRel >= outOff) throw new Error('This patch is malformed (target offset out of range).');
         for(let n = 0; n < length; n++) target[outOff + n] = target[tgtRel++];
         outOff += length;
       }
@@ -2419,7 +2420,7 @@
     if(!treeResp.ok) throw new Error(`Could not list RAPatches files (${treeResp.status}). GitHub's unauthenticated API is rate-limited — if this keeps happening, wait a while and try again.`);
     const treeData = await treeResp.json();
     const files = (treeData.tree || [])
-      .filter(e => e.type === 'blob' && /\.(bps|ips|ups|xdelta|zip|7z)$/i.test(e.path))
+      .filter(e => e.type === 'blob' && /\.(bps|ips|ups|ppf|aps|xdelta3?|vcdiff|vcd|zip|7z)$/i.test(e.path))
       .map(e => ({ path: e.path }));
 
     const cached = { branch, files, ts: Date.now(), truncated: !!treeData.truncated };
@@ -2435,7 +2436,7 @@
     const titleWords = normalizeForMatch(title).split(' ').filter(w => w.length > 1);
     if(!titleWords.length) return [];
     const scored = files.map(f => {
-      const base = f.path.split('/').pop().replace(/\.(bps|ips|ups|xdelta|zip|7z)$/i, '');
+      const base = f.path.split('/').pop().replace(/\.(bps|ips|ups|ppf|aps|xdelta3?|vcdiff|vcd|zip|7z)$/i, '');
       const norm = normalizeForMatch(base);
       const hits = titleWords.filter(w => norm.includes(w)).length;
       return { path: f.path, score: hits / titleWords.length };
@@ -2452,7 +2453,7 @@
   function scoreForOrdering(files, title){
     const titleWords = normalizeForMatch(title).split(' ').filter(w => w.length > 1);
     return files.map(f => {
-      const base = f.path.split('/').pop().replace(/\.(bps|ips|ups|xdelta|zip|7z)$/i, '');
+      const base = f.path.split('/').pop().replace(/\.(bps|ips|ups|ppf|aps|xdelta3?|vcdiff|vcd|zip|7z)$/i, '');
       const norm = normalizeForMatch(base);
       const hits = titleWords.length ? titleWords.filter(w => norm.includes(w)).length / titleWords.length : 0;
       return { path: f.path, score: hits };
@@ -2593,6 +2594,274 @@
     ];
     const n = String(consoleName || '').toLowerCase();
     return !denylist.some(d => n.includes(d));
+  }
+
+  // --- More patch formats: PPF, APS (N64 and GBA), xdelta/VCDIFF ---
+  // Ported from the approach in JoeyOS's RomPatcher.kt (used with Joey's permission), with the
+  // formats' own public specs as the reference (RFC 3284 for VCDIFF). Every read is bounds-checked,
+  // because a typed array quietly returns 0 for an out-of-range read instead of failing.
+  function makeCursor(bytes, pos){
+    return {
+      bytes, pos,
+      u8(){ if(this.pos >= this.bytes.length) throw new Error('This patch is truncated.'); return this.bytes[this.pos++]; },
+      u32le(){ const a = this.u8(), b = this.u8(), c = this.u8(), d = this.u8(); return (a | (b << 8) | (c << 16) | (d << 24)) >>> 0; },
+      u32be(){ const a = this.u8(), b = this.u8(), c = this.u8(), d = this.u8(); return ((a << 24) | (b << 16) | (c << 8) | d) >>> 0; },
+      // VCDIFF's big-endian 7-bit continuation integer.
+      read7Bit(){ let num = 0; for(;;){ const bits = this.u8(); num = num * 128 + (bits & 0x7f); if(!(bits & 0x80)) break; } return num; },
+    };
+  }
+  const asciiAt = (b, i, str) => { for(let k = 0; k < str.length; k++) if(b[i + k] !== str.charCodeAt(k)) return false; return true; };
+
+  // PPF (v1-3): overwrites runs of bytes at absolute offsets. No source checksum, so a wrong base
+  // isn't caught. Undo data, if present, is skipped (this only ever patches forward).
+  function applyPpf(patch, rom){
+    if(patch.length < 58 || !asciiAt(patch, 0, 'PPF')) throw new Error('This is not a valid PPF patch.');
+    const version = Math.floor(parseInt(String.fromCharCode(patch[3], patch[4]), 10) / 10);
+    if(!version || version !== patch[5] + 1 || version > 3) throw new Error('This PPF version is not supported.');
+    const c = makeCursor(patch, 6);
+    c.pos += 50; // description
+    let undoData = false, blockCheck = false;
+    if(version === 3){ c.pos += 1; blockCheck = c.u8() !== 0; undoData = c.u8() !== 0; c.pos += 1; }
+    else if(version === 2){ blockCheck = true; c.pos += 4; }
+    if(blockCheck) c.pos += 1024;
+    const records = [];
+    let maxEnd = rom.length;
+    while(c.pos + (version === 3 ? 9 : 5) <= patch.length){
+      if(c.pos + 4 <= patch.length && asciiAt(patch, c.pos, '@BEG')) break; // FILE_ID.DIZ block ends the records
+      let offset;
+      if(version === 3){ const lo = c.u32le(), hi = c.u32le(); offset = lo + hi * 0x100000000; }
+      else offset = c.u32le();
+      const len = c.u8();
+      if(offset > 0x7fffffff) throw new Error('This PPF patch addresses past the supported size.');
+      if(c.pos + len > patch.length) throw new Error('This PPF patch is truncated.');
+      records.push({ offset, at: c.pos, len });
+      c.pos += len;
+      if(undoData) c.pos += len;
+      maxEnd = Math.max(maxEnd, offset + len);
+    }
+    const out = new Uint8Array(maxEnd);
+    out.set(rom);
+    for(const r of records) out.set(patch.subarray(r.at, r.at + r.len), r.offset);
+    return { target: out };
+  }
+
+  // APS has two unrelated formats sharing an extension, told apart by their first bytes.
+  function applyAps(patch, rom){
+    if(asciiAt(patch, 0, 'APS10')) return applyApsN64(patch, rom);
+    if(asciiAt(patch, 0, 'APS1')) return applyApsGba(patch, rom);
+    throw new Error('This is not a valid APS patch.');
+  }
+  function applyApsN64(patch, rom){
+    const c = makeCursor(patch, 5);
+    const headerType = c.u8();
+    c.pos += 1;  // encoding method
+    c.pos += 50; // description
+    if(headerType === 1) c.pos += 1 + 3 + 8 + 5; // N64 header: format, cartId, crc, pad
+    const outputSize = c.u32le();
+    if(outputSize > 0x7fffffff) throw new Error('This APS patch is not supported.');
+    const out = new Uint8Array(outputSize);
+    out.set(rom.subarray(0, Math.min(rom.length, outputSize)));
+    while(c.pos + 5 <= patch.length){
+      const offset = c.u32le();
+      const length = c.u8();
+      if(length === 0){
+        const value = c.u8(), runLength = c.u8();
+        for(let i = 0; i < runLength; i++) if(offset + i < out.length) out[offset + i] = value;
+      }else{
+        for(let i = 0; i < length; i++) if(c.pos + i < patch.length && offset + i < out.length) out[offset + i] = patch[c.pos + i];
+        c.pos += length;
+      }
+    }
+    return { target: out };
+  }
+  function applyApsGba(patch, rom){
+    const block = 0x10000, recordSize = 4 + 2 + 2 + block;
+    if(patch.length < 12 + recordSize || (patch.length - 12) % recordSize !== 0) throw new Error('This APS patch is truncated.');
+    const c = makeCursor(patch, 4);
+    const sourceSize = c.u32le(), targetSize = c.u32le();
+    if(rom.length !== sourceSize) throw new Error('This patch is for a different ROM than the one chosen.');
+    const out = new Uint8Array(targetSize);
+    out.set(rom.subarray(0, Math.min(rom.length, targetSize)));
+    while(c.pos < patch.length){
+      const offset = c.u32le();
+      c.pos += 4; // source and target CRC16, not verified
+      for(let j = 0; j < block; j++){
+        const base = offset + j < rom.length ? rom[offset + j] : 0;
+        if(offset + j < out.length) out[offset + j] = base ^ patch[c.pos + j];
+      }
+      c.pos += block;
+    }
+    return { target: out };
+  }
+
+  // xdelta / VCDIFF (RFC 3284): windows of ADD / RUN / COPY instructions from the default code
+  // table. No secondary compressor and no custom code table (what xdelta writes for ROM patches).
+  // A window's Adler-32, when present, is checked — that's what catches a wrong base ROM.
+  const VCD_NOOP = 0, VCD_ADD = 1, VCD_RUN = 2, VCD_COPY = 3;
+  const VCD_CODE_TABLE = (() => {
+    const empty = { type: VCD_NOOP, size: 0, mode: 0 };
+    const t = [];
+    t.push([{ type: VCD_RUN, size: 0, mode: 0 }, empty]);
+    for(let size = 0; size < 18; size++) t.push([{ type: VCD_ADD, size, mode: 0 }, empty]);
+    for(let mode = 0; mode < 9; mode++){
+      t.push([{ type: VCD_COPY, size: 0, mode }, empty]);
+      for(let size = 4; size < 19; size++) t.push([{ type: VCD_COPY, size, mode }, empty]);
+    }
+    for(let mode = 0; mode < 6; mode++) for(let add = 1; add < 5; add++) for(let copy = 4; copy < 7; copy++)
+      t.push([{ type: VCD_ADD, size: add, mode: 0 }, { type: VCD_COPY, size: copy, mode }]);
+    for(let mode = 6; mode < 9; mode++) for(let add = 1; add < 5; add++)
+      t.push([{ type: VCD_ADD, size: add, mode: 0 }, { type: VCD_COPY, size: 4, mode }]);
+    for(let mode = 0; mode < 9; mode++)
+      t.push([{ type: VCD_COPY, size: 4, mode }, { type: VCD_ADD, size: 1, mode: 0 }]);
+    return t;
+  })();
+  function makeVcdAddressCache(){
+    const nearSize = 4, sameSize = 3;
+    const near = new Array(nearSize).fill(0), same = new Array(sameSize * 256).fill(0);
+    let nextNear = 0, addr = null;
+    return {
+      reset(cursor){ nextNear = 0; near.fill(0); same.fill(0); addr = cursor; },
+      decode(here, mode){
+        let a;
+        if(mode === 0) a = addr.read7Bit();
+        else if(mode === 1) a = here - addr.read7Bit();
+        else if(mode - 2 < nearSize) a = near[mode - 2] + addr.read7Bit();
+        else a = same[(mode - (2 + nearSize)) * 256 + addr.u8()];
+        if(!(a >= 0)) throw new Error('This xdelta patch is damaged.');
+        near[nextNear] = a; nextNear = (nextNear + 1) % nearSize;
+        same[a % (sameSize * 256)] = a;
+        return a;
+      },
+    };
+  }
+  function adler32(data, offset, length){
+    let a = 1, b = 0, i = 0;
+    while(i < length){
+      const n = Math.min(5552, length - i);
+      for(let k = 0; k < n; k++){ a += data[offset + i + k]; b += a; }
+      a %= 65521; b %= 65521; i += n;
+    }
+    return ((b << 16) | a) >>> 0;
+  }
+  function decodeVcdWindow(c){
+    const indicator = c.u8();
+    let sourceLength = 0, sourcePosition = 0;
+    if(indicator & 0x03){ sourceLength = c.read7Bit(); sourcePosition = c.read7Bit(); }
+    c.read7Bit(); // delta length, not needed
+    const targetLength = c.read7Bit();
+    if(c.u8() !== 0) throw new Error('This xdelta patch uses window compression, which is not supported.');
+    const addRunDataLength = c.read7Bit(), instructionsLength = c.read7Bit(), addressesLength = c.read7Bit();
+    const adler = (indicator & 0x04) ? c.u32be() : -1;
+    return { indicator, sourceLength, sourcePosition, targetLength, addRunDataLength, instructionsLength, addressesLength, adler };
+  }
+  function applyVcdiff(patch, rom){
+    if(patch.length < 5 || patch[0] !== 0xD6 || patch[1] !== 0xC3 || patch[2] !== 0xC4) throw new Error('This is not a valid xdelta (VCDIFF) patch.');
+    const h = makeCursor(patch, 4);
+    const headerIndicator = h.u8();
+    if(headerIndicator & 0x01){ if(h.u8() !== 0) throw new Error('This xdelta patch uses a secondary compressor, which is not supported.'); }
+    if(headerIndicator & 0x02){ if(h.read7Bit() !== 0) throw new Error('This xdelta patch uses a custom code table, which is not supported.'); }
+    if(headerIndicator & 0x04) h.pos += h.read7Bit();
+    const headerEnd = h.pos;
+    const damaged = () => new Error('This patch is damaged, or is not made for this ROM.');
+
+    let targetSize = 0;
+    { const p = makeCursor(patch, headerEnd);
+      while(p.pos < patch.length){ const w = decodeVcdWindow(p); targetSize += w.targetLength; p.pos += w.addRunDataLength + w.instructionsLength + w.addressesLength; } }
+    if(targetSize > 0x7fffffff) throw damaged();
+
+    const out = new Uint8Array(targetSize);
+    const cache = makeVcdAddressCache();
+    let windowPos = 0;
+    const p = makeCursor(patch, headerEnd);
+    while(p.pos < patch.length){
+      const w = decodeVcdWindow(p);
+      const addRun = makeCursor(patch, p.pos);
+      const instr = makeCursor(patch, addRun.pos + w.addRunDataLength);
+      const addresses = makeCursor(patch, instr.pos + w.instructionsLength);
+      const addressesStart = addresses.pos;
+      cache.reset(addresses);
+      let targetOffset = 0;
+      while(instr.pos < addressesStart){
+        const idx = instr.u8();
+        for(let i = 0; i < 2; i++){
+          const inst = VCD_CODE_TABLE[idx][i];
+          let size = inst.size;
+          if(size === 0 && inst.type !== VCD_NOOP) size = instr.read7Bit();
+          const at = windowPos + targetOffset;
+          if(inst.type === VCD_NOOP) continue;
+          if(at + size > out.length) throw damaged();
+          if(inst.type === VCD_ADD){
+            if(addRun.pos + size > patch.length) throw damaged();
+            out.set(patch.subarray(addRun.pos, addRun.pos + size), at);
+            addRun.pos += size; targetOffset += size;
+          }else if(inst.type === VCD_RUN){
+            const runByte = addRun.u8();
+            out.fill(runByte, at, at + size);
+            targetOffset += size;
+          }else{ // COPY
+            const addr = cache.decode(targetOffset + w.sourceLength, inst.mode);
+            let abs, fromSource;
+            if(addr < w.sourceLength){ abs = w.sourcePosition + addr; fromSource = !!(w.indicator & 0x01); }
+            else{ abs = windowPos + (addr - w.sourceLength); fromSource = false; }
+            if(fromSource && abs + size > rom.length) throw new Error('This patch is for a different ROM than the one chosen.');
+            if(!fromSource && abs >= at) throw damaged();
+            for(let n = 0; n < size; n++) out[at + n] = fromSource ? rom[abs + n] : out[abs + n];
+            targetOffset += size;
+          }
+        }
+      }
+      if(w.adler !== -1 && adler32(out, windowPos, w.targetLength) !== w.adler) throw new Error('This patch is for a different ROM than the one chosen.');
+      p.pos += w.addRunDataLength + w.instructionsLength + w.addressesLength;
+      windowPos += w.targetLength;
+    }
+    return { target: out };
+  }
+
+  function patchKindFromName(name){
+    const clean = String(name || '').split('?')[0].toLowerCase();
+    if(/\.bps$/.test(clean)) return 'bps';
+    if(/\.ips$/.test(clean)) return 'ips';
+    if(/\.ups$/.test(clean)) return 'ups';
+    if(/\.ppf$/.test(clean)) return 'ppf';
+    if(/\.aps$/.test(clean)) return 'aps';
+    if(/\.(xdelta3?|vcdiff|vcd)$/.test(clean)) return 'vcdiff';
+    return null;
+  }
+  const PATCH_FILE_RE = /\.(bps|ips|ups|ppf|aps|xdelta3?|vcdiff|vcd)$/i;
+  const readU32LEAt = (b, off) => (b[off] | (b[off+1] << 8) | (b[off+2] << 16) | (b[off+3] << 24)) >>> 0;
+
+  // The one place a patch is applied. It refuses to produce a file when it can tell the ROM is the
+  // wrong one — BPS/UPS carry the source ROM's checksum, and VCDIFF/APS-GBA check it while patching
+  // — and when the result doesn't match the checksum the patch promises. A wrong ROM never
+  // silently turns into a broken game.
+  function applyPatchStrict(kind, patch, rom){
+    const notes = [];
+    let source = rom;
+    if(kind === 'bps' || kind === 'ups'){
+      if(patch.length < 16) throw new Error('This patch is truncated.');
+      if(crc32(patch.subarray(0, patch.length - 4)) !== readU32LEAt(patch, patch.length - 4))
+        throw new Error("This patch file is damaged: its download looks incomplete or corrupted. Download it again and retry.");
+      const expected = readU32LEAt(patch, patch.length - 12);
+      if(crc32(source) !== expected){
+        // Old SNES dumps often carry a 512-byte copier header the patch doesn't expect.
+        if(rom.length > 512 && crc32(rom.subarray(512)) === expected){
+          source = rom.subarray(512);
+          notes.push('This ROM had a 512-byte copier header, so it was removed before patching (the patch expects the headerless dump).');
+        }else{
+          throw new Error(`This patch is for a different version of this game than the ROM you chose. It needs a ROM with checksum ${expected.toString(16).padStart(8, '0')}, but yours is ${crc32Hex(rom)}. Nothing was patched.`);
+        }
+      }
+    }
+    const fn = { bps: applyBps, ups: applyUps, ips: applyIps, ppf: applyPpf, aps: applyAps, vcdiff: applyVcdiff }[kind];
+    if(!fn) throw new Error('Unsupported patch format.');
+    let result;
+    try{ result = fn(patch, source); }
+    catch(e){
+      if(e instanceof RangeError) throw new Error('This patch is damaged, or is not made for this ROM.');
+      throw e;
+    }
+    if(result.targetMatches === false) throw new Error("The patched ROM didn't match the checksum this patch promises, so it was discarded. The patch or the ROM is not what it should be.");
+    return { target: result.target, notes };
   }
 
   // --- Minimal ZIP reader ---
@@ -2763,7 +3032,7 @@
 
         const ranked = scoreForOrdering(pool, title).sort((a, b) => b.score - a.score);
         const bpsUpsAll = ranked.filter(c => /\.(bps|ups)$/i.test(c.path));
-        const ipsAll = ranked.filter(c => /\.ips$/i.test(c.path));
+        const ipsAll = ranked.filter(c => /\.(ips|ppf|aps|xdelta3?|vcdiff|vcd)$/i.test(c.path)); // formats with no checksum to pre-check
 
         // Split into Hacks vs everything else *before* capping, so each
         // category draws from its own budget instead of competing for one
@@ -2839,12 +3108,7 @@
     }
 
     function patchKindFromUrl(url){
-      const clean = (url || '').split('?')[0];
-      if(/\.bps$/i.test(clean)) return 'bps';
-      if(/\.ips$/i.test(clean)) return 'ips';
-      if(/\.ups$/i.test(clean)) return 'ups';
-      if(/\.xdelta$/i.test(clean)) return 'xdelta';
-      return 'archive'; // .zip, .7z, .rar, etc. — needs unpacking elsewhere first
+      return patchKindFromName(url) || 'archive'; // .zip, .7z, .rar, etc. — needs unpacking first
     }
 
     function resultRow(entry, badge, idx, group){
@@ -2881,7 +3145,7 @@
           ${results.official.map((m, idx) => resultRow(m, 'Official — linked by RetroAchievements', idx, 'official')).join('')}
           ${results.byId.map((m, idx) => resultRow(m, 'Listed for this exact game (RetroAchievements game ID)', idx, 'byId')).join('')}
           ${results.verified.map((m, idx) => resultRow(m, 'Verified — checksum matches this ROM', idx, 'verified')).join('')}
-          ${results.unverified.map((m, idx) => resultRow(m, 'Unverified — IPS has no checksum to check', idx, 'unverified')).join('')}
+          ${results.unverified.map((m, idx) => resultRow(m, 'Unverified — this format has no checksum to check up front', idx, 'unverified')).join('')}
         </div>
       `;
       patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderRomStage);
@@ -2897,7 +3161,7 @@
     function showArchiveFallback(entry, reason){
       patchWrap.innerHTML = `
         <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
-        <p style="font-size:12.3px;color:var(--muted);margin:10px 0 0;line-height:1.55;">${reason} Only BPS, IPS, and UPS patches are applied automatically here. You'll need a separate tool for this one.</p>
+        <p style="font-size:12.3px;color:var(--muted);margin:10px 0 0;line-height:1.55;">${reason} Only BPS, IPS, UPS, PPF, APS and xdelta patches are applied automatically here. You'll need a separate tool for this one.</p>
         <a class="guide-btn guide-btn-primary" style="margin-top:10px;" href="${entry.url}" download="${entry.label}">Download patch file</a>
       `;
       patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
@@ -2908,10 +3172,8 @@
       try{
         const kind = patchKindFromUrl(entry.url);
         const isZip = /\.zip$/i.test((entry.url || '').split('?')[0]);
-        if(kind === 'xdelta' || (kind === 'archive' && !isZip)){
-          showArchiveFallback(entry, kind === 'xdelta'
-            ? "This is an .xdelta patch, which isn't applied automatically here — xdelta tends to show up on larger disc-based dumps, which don't fit this app's scope well."
-            : "This patch is packed in a 7z/rar archive, which isn't unpacked automatically here.");
+        if(kind === 'archive' && !isZip){
+          showArchiveFallback(entry, "This patch is packed in a 7z/rar archive, which isn't unpacked automatically here.");
           return;
         }
 
@@ -2934,20 +3196,19 @@
       let items = [];
       try{
         const entries = readZipEntries(zipBytes).filter(e =>
-          /\.(bps|ips|ups)$/i.test(e.name) && !/(^|\/)__MACOSX\//.test(e.name) && !e.name.endsWith('/'));
+          PATCH_FILE_RE.test(e.name) && !/(^|\/)__MACOSX\//.test(e.name) && !e.name.endsWith('/'));
         if(!entries.length){
           showArchiveFallback(entry, "This zip doesn't contain a BPS, IPS or UPS patch that can be applied automatically.");
           return;
         }
-        const romCrc = crc32(romBytes);
+        const romCrcs = [crc32(romBytes)];
+        if(romBytes.length > 512) romCrcs.push(crc32(romBytes.subarray(512))); // headerless version of the same dump
         for(const pe of entries){
           const data = await extractZipEntry(zipBytes, pe);
-          const kind = /\.bps$/i.test(pe.name) ? 'bps' : (/\.ups$/i.test(pe.name) ? 'ups' : 'ips');
-          let matches = null; // IPS carries no checksum, so it can't be checked
-          if(kind !== 'ips' && data.length >= 12){
-            const f = data.length - 12;
-            const expected = (data[f] | (data[f+1] << 8) | (data[f+2] << 16) | (data[f+3] << 24)) >>> 0;
-            matches = expected === romCrc;
+          const kind = patchKindFromName(pe.name);
+          let matches = null; // only BPS/UPS carry a checksum that can be compared up front
+          if((kind === 'bps' || kind === 'ups') && data.length >= 12){
+            matches = romCrcs.includes(readU32LEAt(data, data.length - 12));
           }
           items.push({ label: pe.name.split('/').pop(), kind, data, matches });
         }
@@ -2967,7 +3228,7 @@
         <p style="font-size:12.3px;color:var(--muted);margin:10px 0;line-height:1.55;">This zip has more than one patch. Pick the one to apply.</p>
         <div class="patch-result-list">
           ${items.map((m, idx) => resultRow(m,
-            m.matches === true ? 'Checksum matches this ROM' : (m.matches === false ? "Checksum doesn't match this ROM" : 'IPS — no checksum to check'),
+            m.matches === true ? 'Checksum matches this ROM' : (m.matches === false ? "Checksum doesn't match this ROM" : 'No checksum to check up front'),
             idx, 'zip')).join('')}
         </div>
       `;
@@ -2982,32 +3243,21 @@
 
     async function applyPatchBytes(label, kind, patchBytes){
       try{
-        let mismatchWarning = '';
-        if(kind !== 'ips'){
-          const footerStart = patchBytes.length - 12;
-          const readU32LE = (off) => (patchBytes[off] | (patchBytes[off+1] << 8) | (patchBytes[off+2] << 16) | (patchBytes[off+3] << 24)) >>> 0;
-          const expected = readU32LE(footerStart);
-          if(crc32(romBytes) !== expected){
-            mismatchWarning = `<div class="hash-status mismatch" style="margin-top:8px;">Heads up: this patch's expected base-ROM checksum doesn't match your ROM (expected ${expected.toString(16).padStart(8,'0')}, got ${crc32Hex(romBytes)}). Applying anyway — check the output carefully.</div>`;
-          }
-        }
-
         patchWrap.innerHTML = '<div class="achievements-list-loading">Applying patch…</div>';
-        const applyFn = kind === 'bps' ? applyBps : (kind === 'ups' ? applyUps : applyIps);
-        const result = applyFn(patchBytes, romBytes);
-        const target = result.target;
+        await new Promise(r => setTimeout(r, 30)); // let the message paint before the heavy work
+        const { target, notes } = applyPatchStrict(kind, patchBytes, romBytes);
         const blob = new Blob([target], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
         const romExtMatch = /\.[^./\\]+$/.exec(romFilename || '');
         const romExt = romExtMatch ? romExtMatch[0] : '';
-        const outName = (label.replace(/\.(bps|ips|ups)$/i, '') || 'patched-rom') + romExt;
+        const outName = (label.replace(PATCH_FILE_RE, '') || 'patched-rom') + romExt;
 
         if(rememberRom && !romFromStorage){
           try{ await saveRom(gameId, romFilename, romBytes); romFromStorage = true; }catch(e){ /* non-fatal */ }
         }
 
         patchWrap.innerHTML = `
-          ${mismatchWarning}
+          ${notes.map(n => `<div class="hash-status ok" style="margin-top:8px;">${n}</div>`).join('')}
           <div class="hash-status ok" style="margin-top:8px;">Your ROM has been patched and saved as <strong>${outName}</strong>. Open it in your emulator to add this game to your RetroAchievements library.</div>
           <a class="guide-btn guide-btn-primary" style="margin-top:10px;width:100%;text-align:center;" href="${url}" download="${outName}">Download Patched ROM</a>
           <button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="width:100%;margin-top:8px;">‹ Back to results</button>
