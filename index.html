@@ -2795,7 +2795,7 @@
   // down, but they're third-party services outside our control; if every
   // one of them is also down or rate-limited, this feature degrades to
   // "temporarily unavailable" and manual import still works regardless.
-  const GF_WORKER_URL = 'https://game-log-tracker.vercel.app'; // e.g. 'https://gamefaqs-proxy.<your-subdomain>.workers.dev' — leave blank to skip straight to the free fallbacks
+  const GF_WORKER_URL = 'https://game-log-tracker.vercel.app/api/proxy'; // e.g. 'https://gamefaqs-proxy.<your-subdomain>.workers.dev' — leave blank to skip straight to the free fallbacks
   const GF_BASE = 'https://gamefaqs.gamespot.com';
 
   // Some proxies (allorigins' default /get endpoint, some serverless
@@ -2845,6 +2845,14 @@
       // even when a proxy request had technically gone through.
       if(!text || text.length < 2000){
         throw new Error(`${label}: response too short to be the real page (${text ? text.length : 0} chars) — likely a proxy error or anti-bot page`);
+      }
+      // A misconfigured proxy URL can answer 200 with a DIFFERENT page —
+      // e.g. this app's own index.html served from the same host. That is
+      // long enough to pass the size check, then gets saved as the "guide"
+      // (showing the install prompt / logo / slogan in the reader). Only
+      // accept a response that is actually a GameFAQs page.
+      if(/What will you beat today|<title>\s*Game Log/i.test(text) || !/gamefaqs/i.test(text)){
+        throw new Error(`${label}: returned something that isn't a GameFAQs page (check the proxy URL/path)`);
       }
       return text;
     }
