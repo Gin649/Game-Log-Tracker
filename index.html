@@ -2965,14 +2965,14 @@
 
   function renderGuideSearchStep(title){
     return `
-      <p style="font-size:12.3px;color:var(--muted);margin:0;line-height:1.55;">Find your own guide on GameFAQs: click the link, choose your guide, hold to select all, copy the text, then use “Paste Guide Text” below.</p>
+      <p style="font-size:12.3px;color:var(--muted);margin:0;line-height:1.55;">Find your own guide on GameFAQs: click the link, choose your guide, select and copy all text, hit that Paste Guide Text button, then Paste and Save.</p>
       <a href="https://gamefaqs.gamespot.com/search?game=${encodeURIComponent(title)}" id="guide-gf-link" target="_blank" rel="noopener" style="font-size:11.3px;color:var(--teal);text-decoration:none;align-self:flex-start;">Search GameFAQs for "${title}" ↗</a>
     `;
   }
   function renderGuideNoGuidePanel(gameId, title, consoleId, isReplacing){
     const archiveSection = ARCHIVE_PLATFORMS[consoleId] ? `
         <button class="guide-btn guide-btn-primary" id="guide-archive-btn">Download from GameFAQs Archive</button>
-        <p class="guide-status-text" id="guide-archive-status">Use the guide saved on the GameFAQs Archive. To use a different guide, use either option below.</p>
+        <p class="guide-status-text" id="guide-archive-status">Use the guide saved on the GameFAQs Archive. To use a different guide, see below.</p>
         <div class="guide-divider">or</div>` : '';
     return `
       <div style="display:flex;flex-direction:column;gap:10px;" id="guide-empty-wrap">
@@ -2987,7 +2987,7 @@
         </div>
         <div class="guide-divider">or</div>
         <input type="file" id="guide-file-input" accept=".txt,.md,.html,.htm,.pdf" style="display:none;">
-        <button class="guide-btn guide-btn-outline" id="guide-import-btn">Import a Guide File You Already Have</button>
+        <button class="guide-btn guide-btn-outline" id="guide-import-btn">Import your own saved Guide File (pdf, text, html)</button>
         <div id="guide-import-error"></div>
       </div>
     `;
