@@ -2477,7 +2477,17 @@
       const base = f.path.split('/').pop().replace(/\.(bps|ips|ups|ppf|aps|xdelta3?|vcdiff|vcd|zip|7z)$/i, '');
       const norm = normalizeForMatch(base);
       const hits = titleWords.length ? titleWords.filter(w => norm.includes(w)).length / titleWords.length : 0;
-      return { path: f.path, score: hits };
+      // RAPatches nests most patches under console/Category/<Game Title>/file — but the
+      // file itself is usually named "<RA ID>-AbbreviatedName.ext" (e.g. "98765-SMWLearn2Kaizo.zip"),
+      // which shares no words with the game's real title, so filename scoring alone finds
+      // nothing for it. The enclosing folder name usually is the real title, so check that
+      // too: any directory between the console folder and the file, matched the same
+      // word-containment way the console folder itself is matched.
+      const segs = f.path.split('/').slice(1, -1);
+      const segWords = normalizeForMatch(segs.join(' ')).split(' ').filter(Boolean);
+      const inFolder = titleWords.length > 0 && segWords.length > 0
+        && (containsWordSequence(segWords, titleWords) || containsWordSequence(titleWords, segWords));
+      return { path: f.path, score: hits, inFolder };
     });
   }
 
@@ -3051,9 +3061,14 @@
           usedFallback = true;
         }
 
-        const ranked = scoreForOrdering(pool, title).sort((a, b) => b.score - a.score);
+        // Files whose enclosing folder matches the game's title come first — that's the
+        // strongest signal on a console with many unrelated games' patches — then by
+        // filename word overlap, then shortest path as a final tiebreak.
+        const ranked = scoreForOrdering(pool, title)
+          .sort((a, b) => (b.inFolder - a.inFolder) || b.score - a.score || a.path.length - b.path.length);
         const bpsUpsAll = ranked.filter(c => /\.(bps|ups)$/i.test(c.path));
         const ipsAll = ranked.filter(c => /\.(ips|ppf|aps|xdelta3?|vcdiff|vcd)$/i.test(c.path)); // formats with no checksum to pre-check
+        const zipAll = ranked.filter(c => /\.(zip|7z)$/i.test(c.path)); // most RAPatches files are zips; checked after download, not up front
 
         // Split into Hacks vs everything else *before* capping, so each
         // category draws from its own budget instead of competing for one
@@ -3093,9 +3108,10 @@
         // Same hacks-first priority for the unverified (IPS, unchecksummed)
         // list, so a relevant hack isn't pushed out of the top 10 by
         // unrelated filename noise either.
-        const ipsHacks = ipsAll.filter(c => isHacksPath(c.path));
-        const ipsOther = ipsAll.filter(c => !isHacksPath(c.path));
-        const unverifiedPicks = ipsHacks.slice(0, 6).concat(ipsOther.slice(0, 10 - Math.min(ipsHacks.length, 6))).filter(c => !idPaths.has(c.path));
+        const noPreCheck = ipsAll.concat(zipAll);
+        const noPreCheckHacks = noPreCheck.filter(c => isHacksPath(c.path));
+        const noPreCheckOther = noPreCheck.filter(c => !isHacksPath(c.path));
+        const unverifiedPicks = noPreCheckHacks.slice(0, 10).concat(noPreCheckOther.slice(0, 16 - Math.min(noPreCheckHacks.length, 10))).filter(c => !idPaths.has(c.path));
 
         results = {
           official,
@@ -3118,7 +3134,11 @@
         const list = (data && (data.Results || data.results)) || [];
         return list
           .filter(r => (r.PatchUrl || r.patchUrl))
-          .map(r => ({ label: (r.PatchUrl || r.patchUrl).split('/').pop(), url: r.PatchUrl || r.patchUrl }));
+          .map(r => {
+            let url = r.PatchUrl || r.patchUrl;
+            if(url.startsWith('http://')) url = 'https://' + url.slice(7); // avoid a silent https-page-fetching-http block
+            return { label: url.split('/').pop(), url };
+          });
       }catch(e){
         return []; // non-fatal — the repo scan below still runs
       }
@@ -3152,7 +3172,7 @@
       if(totalCount === 0){
         patchWrap.innerHTML = `
           ${fallbackNote}${cappedNote}
-          <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">Nothing in the RAPatches repo is filed under this game's RetroAchievements ID, no patch matches this ROM's checksum, and RetroAchievements has nothing officially linked to this entry either. If you're after a specific hack, double check you're on that hack's own RetroAchievements game page rather than the base game's.</p>
+          <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">Nothing in the RAPatches repo is filed under this game's RetroAchievements ID, no loose patch matches this ROM's checksum, no zip for this game/console was found either, and RetroAchievements has nothing officially linked to this entry either. If you're after a specific hack, double check you're on that hack's own RetroAchievements game page rather than the base game's.</p>
           <a class="guide-btn guide-btn-outline" href="https://github.com/${RAPATCHES_OWNER}/${RAPATCHES_REPO}" target="_blank" rel="noopener">Browse RAPatches on GitHub ↗</a>
           <button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="width:100%;margin-top:8px;">‹ Back</button>
         `;
@@ -3166,7 +3186,7 @@
           ${results.official.map((m, idx) => resultRow(m, 'Official — linked by RetroAchievements', idx, 'official')).join('')}
           ${results.byId.map((m, idx) => resultRow(m, 'Listed for this exact game (RetroAchievements game ID)', idx, 'byId')).join('')}
           ${results.verified.map((m, idx) => resultRow(m, 'Verified — checksum matches this ROM', idx, 'verified')).join('')}
-          ${results.unverified.map((m, idx) => resultRow(m, 'Unverified — this format has no checksum to check up front', idx, 'unverified')).join('')}
+          ${results.unverified.map((m, idx) => resultRow(m, /\.(zip|7z)$/i.test(m.path) ? 'Not checked yet — matched by name; downloading it checks the patch(es) inside' : 'Unverified — this format has no checksum to check up front', idx, 'unverified')).join('')}
         </div>
       `;
       patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderRomStage);
