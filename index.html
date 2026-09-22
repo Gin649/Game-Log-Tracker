@@ -3128,11 +3128,13 @@
         const officialPaths = new Set(official.map(o => o.url));
         const verifiedDeduped = verified.filter(v => !officialPaths.has(v.url) && !idPaths.has(v.path));
 
-        // Every IPS/zip candidate is shown now (not just a top-10-hacks-plus-
-        // a-few-others slice) — the result list scrolls, and everything is
-        // sorted alphabetically below, so there's no need to pre-trim this
-        // for display purposes.
-        const noPreCheck = ipsAll.concat(zipAll);
+        // IPS/zip patches carry no checksum, so filename/folder relevance is the only
+        // thing keeping totally unrelated games' hacks (e.g. Metroid patches while
+        // searching for Mario) out of this list. Require the file to either share a
+        // title word (score > 0) or sit in a folder named after this game (inFolder) —
+        // both signal "clearly about this game" the way a bare console-folder scan
+        // (which just means "some file for this console") doesn't.
+        const noPreCheck = ipsAll.concat(zipAll).filter(c => c.inFolder || c.score > 0);
         const unverifiedPicks = noPreCheck.filter(c => !idPaths.has(c.path));
 
         const byLabel = (a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true });
@@ -3204,22 +3206,63 @@
         return;
       }
       patchWrap.innerHTML = `
-        <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back</button>
-        <div style="margin-top:10px;">${fallbackNote}${cappedNote}</div>
-        <div class="patch-result-list">
-          ${results.official.map((m, idx) => resultRow(m, 'Official — linked by RetroAchievements', idx, 'official')).join('')}
-          ${results.byId.map((m, idx) => resultRow(m, 'Listed for this exact game (RetroAchievements game ID)', idx, 'byId')).join('')}
-          ${results.verified.map((m, idx) => resultRow(m, 'Verified — checksum matches this ROM', idx, 'verified')).join('')}
-          ${results.unverified.map((m, idx) => resultRow(m, /\.(zip|7z)$/i.test(m.path) ? 'Not checked yet — matched by name; downloading it checks the patch(es) inside' : 'Unverified — this format has no checksum to check up front', idx, 'unverified')).join('')}
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="flex-shrink:0;">‹ Back</button>
+          <input type="text" id="patch-filter-input" placeholder="Search hack name…" style="flex:1;min-width:0;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:12.5px;">
         </div>
+        <div style="margin-top:10px;">${fallbackNote}${cappedNote}</div>
+        <div id="patch-result-list-wrap"></div>
       `;
       patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderRomStage);
-      patchWrap.querySelectorAll('.patch-result-row button').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const entry = results[btn.dataset.group][Number(btn.dataset.idx)];
-          selectAndApply(entry);
+
+      const listWrap = patchWrap.querySelector('#patch-result-list-wrap');
+      const filterInput = patchWrap.querySelector('#patch-filter-input');
+
+      function renderList(){
+        const q = filterInput.value.trim().toLowerCase();
+        const matches = (m) => !q || m.label.toLowerCase().includes(q);
+        const officialRows = results.official.filter(matches);
+        const byIdRows = results.byId.filter(matches);
+        const verifiedRows = results.verified.filter(matches);
+        const unverifiedRows = results.unverified.filter(matches);
+
+        if(officialRows.length + byIdRows.length + verifiedRows.length + unverifiedRows.length === 0){
+          listWrap.innerHTML = `<p style="font-size:12.3px;color:var(--muted);margin:8px 0 0;">No hacks match “${filterInput.value.trim()}”.</p>`;
+          return;
+        }
+
+        listWrap.innerHTML = `
+          <div class="patch-result-list">
+            ${officialRows.map(m => resultRowByUrl(m, 'Official — linked by RetroAchievements', 'official')).join('')}
+            ${byIdRows.map(m => resultRowByUrl(m, 'Listed for this exact game (RetroAchievements game ID)', 'byId')).join('')}
+            ${verifiedRows.map(m => resultRowByUrl(m, 'Verified — checksum matches this ROM', 'verified')).join('')}
+            ${unverifiedRows.map(m => resultRowByUrl(m, /\.(zip|7z)$/i.test(m.path) ? 'Not checked yet — matched by name; downloading it checks the patch(es) inside' : 'Unverified — this format has no checksum to check up front', 'unverified')).join('')}
+          </div>
+        `;
+        listWrap.querySelectorAll('.patch-result-row button').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const url = decodeURIComponent(btn.dataset.url);
+            const entry = results[btn.dataset.group].find(e => e.url === url);
+            if(entry) selectAndApply(entry);
+          });
         });
-      });
+      }
+
+      filterInput.addEventListener('input', renderList);
+      renderList();
+    }
+
+    // Same row markup as resultRow above, but keyed by URL instead of array
+    // index — needed here because the visible rows are a filtered (searched)
+    // subset of results[group], so their positions no longer match that
+    // array's real indices.
+    function resultRowByUrl(entry, badge, group){
+      return `
+        <div class="patch-result-row">
+          <div class="info"><div class="fn">${entry.label}</div><div class="pth">${badge}</div></div>
+          <button data-group="${group}" data-url="${encodeURIComponent(entry.url)}">Use</button>
+        </div>
+      `;
     }
 
     // --- Steps 4-6: pick a result, patch it, hand back the file ---
