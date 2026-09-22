@@ -1,7 +1,12 @@
-const CACHE_NAME = 'gl-tracker-v52';
+const CACHE_NAME = 'gl-tracker-v53';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
+  './style.css',
+  './bootstrap.js',
+  './app.js',
+  './rom-patcher.js',
+  './guides.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
