@@ -851,9 +851,12 @@
         romBytes = null; romFilename = null; romFromStorage = false; romFileHandle = null;
         renderRomStage();
       });
-      patchWrap.querySelector('#patch-search-btn').addEventListener('click', () => {
+      patchWrap.querySelector('#patch-search-btn').addEventListener('click', async () => {
         const checkbox = patchWrap.querySelector('#patch-remember-checkbox');
         rememberRom = !!(checkbox && checkbox.checked);
+        if(rememberRom && !romFromStorage){
+          try{ await saveRom(gameId, romFilename, romBytes); romFromStorage = true; }catch(e){ /* non-fatal */ }
+        }
         runSearch();
       });
     }
