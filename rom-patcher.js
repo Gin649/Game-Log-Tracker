@@ -840,6 +840,7 @@
           <input type="checkbox" id="patch-remember-checkbox" style="width:15px;height:15px;flex-shrink:0;">
           <span>Remember this ROM for future patches of this game</span>
         </label>
+        <div id="patch-remember-status" style="font-size:0.675rem;margin-top:4px;min-height:1em;"></div>
         <button class="guide-btn guide-btn-primary" id="patch-search-btn" style="width:100%;margin-top:12px;">Search RA Patches</button>
       `;
       patchWrap.querySelector('#patch-rom-change-btn').addEventListener('click', () => {
@@ -851,9 +852,27 @@
         romBytes = null; romFilename = null; romFromStorage = false; romFileHandle = null;
         renderRomStage();
       });
+      const rememberCheckbox = patchWrap.querySelector('#patch-remember-checkbox');
+      const rememberStatus = patchWrap.querySelector('#patch-remember-status');
+      rememberCheckbox.addEventListener('change', async () => {
+        rememberRom = rememberCheckbox.checked;
+        if(rememberRom && !romFromStorage){
+          rememberStatus.textContent = 'Saving…';
+          try{
+            await saveRom(gameId, romFilename, romBytes);
+            romFromStorage = true;
+            rememberStatus.textContent = 'Saved on this device.';
+          }catch(e){
+            rememberStatus.textContent = "Couldn't save — this ROM may be too large for storage.";
+            rememberCheckbox.checked = false;
+            rememberRom = false;
+          }
+        }else if(!rememberRom){
+          rememberStatus.textContent = '';
+        }
+      });
       patchWrap.querySelector('#patch-search-btn').addEventListener('click', async () => {
-        const checkbox = patchWrap.querySelector('#patch-remember-checkbox');
-        rememberRom = !!(checkbox && checkbox.checked);
+        rememberRom = !!(rememberCheckbox && rememberCheckbox.checked);
         if(rememberRom && !romFromStorage){
           try{ await saveRom(gameId, romFilename, romBytes); romFromStorage = true; }catch(e){ /* non-fatal */ }
         }
