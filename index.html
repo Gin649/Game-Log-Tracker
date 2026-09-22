@@ -66,6 +66,7 @@
   }
 
   *{box-sizing:border-box;}
+  html{font-size:16px;} /* base for all the rem font sizes below — changed at runtime to scale app-wide text size */
   html,body{margin:0;padding:0;background:var(--bg);overscroll-behavior-y:contain;height:100%;}
   body{
     font-family:'Inter',sans-serif;
@@ -88,10 +89,10 @@
     background:var(--panel);border:1px solid var(--gold-dim);border-radius:6px;
     padding:12px 14px;margin-bottom:18px;
   }
-  .install-banner span{font-size:13px;color:var(--text);line-height:1.4;}
+  .install-banner span{font-size:0.8125rem;color:var(--text);line-height:1.4;}
   .install-banner-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;}
   .install-banner-close{
-    background:transparent;border:none;color:var(--muted);font-size:15px;
+    background:transparent;border:none;color:var(--muted);font-size:0.9375rem;
     cursor:pointer;padding:4px;line-height:1;
   }
   .install-banner-close:hover{color:var(--text);}
@@ -105,28 +106,28 @@
   }
   .brand .menu-wrap{margin-left:auto;}
   .brand .mark{
-    width:72px;height:72px;border-radius:8px;flex-shrink:0;display:block;
+    width:90px;height:90px;border-radius:8px;flex-shrink:0;display:block;
   }
-  .brand .name{font-family:'Space Mono',monospace;font-size:17px;color:var(--muted);}
+  .brand .name{font-family:'Space Mono',monospace;font-size:1.0625rem;color:var(--muted);}
 
   .field{margin-bottom:16px;}
   .field label{
-    display:block;font-size:12px;color:var(--muted);
+    display:block;font-size:0.75rem;color:var(--muted);
     margin-bottom:6px;font-family:'Space Mono',monospace;
   }
   .field input{
     width:100%;padding:10px 12px;background:var(--bg-alt);
     border:1px solid var(--border);border-radius:var(--radius);
-    color:var(--text);font-size:14px;font-family:'Inter',sans-serif;
+    color:var(--text);font-size:0.875rem;font-family:'Inter',sans-serif;
   }
   .field input:focus{outline:none;border-color:var(--gold);}
-  .field .hint{font-size:12px;color:var(--muted);margin-top:6px;}
+  .field .hint{font-size:0.75rem;color:var(--muted);margin-top:6px;}
   .field .hint a{color:var(--teal);}
 
   button{
     font-family:'Space Mono',monospace;
     cursor:pointer;border:none;border-radius:var(--radius);
-    font-size:13px;font-weight:700;letter-spacing:0.3px;
+    font-size:0.8125rem;font-weight:700;letter-spacing:0.3px;
   }
   .btn-primary{
     background:var(--gold);color:#1a1424;padding:11px 20px;width:100%;
@@ -157,7 +158,7 @@
   .dropdown-menu.open{display:block;}
   .dropdown-item{
     display:block;width:100%;text-align:left;background:transparent;border:none;
-    color:var(--text);padding:11px 14px;font-family:'Space Mono',monospace;font-size:12.5px;
+    color:var(--text);padding:11px 14px;font-family:'Space Mono',monospace;font-size:0.7812rem;
     cursor:pointer;
   }
   .dropdown-item:hover{background:var(--bg-alt);}
@@ -166,24 +167,44 @@
     display:flex;justify-content:space-between;align-items:center;
     color:var(--gold);font-weight:700;
   }
-  .dropdown-heading #ra-heading-arrow{font-size:10px;color:var(--muted);}
+  .dropdown-heading #ra-heading-arrow,.dropdown-heading #textsize-heading-arrow{font-size:0.625rem;color:var(--muted);}
   .dropdown-subitem{
-    padding-left:26px;font-size:11.5px;color:var(--muted);background:var(--bg-alt);
+    padding-left:26px;font-size:0.7188rem;color:var(--muted);background:var(--bg-alt);
   }
   .dropdown-subitem:hover{color:var(--text);}
   #ra-submenu .dropdown-subitem + .dropdown-subitem{border-top:1px solid var(--border);}
 
+  .textsize-row{
+    display:flex;align-items:center;gap:8px;padding:9px 14px 9px 26px;
+    background:var(--bg-alt);border-top:1px solid var(--border);
+  }
+  .textsize-btn{
+    width:26px;height:24px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+    background:var(--panel);border:1px solid var(--border);border-radius:4px;color:var(--text);
+    font-family:'Space Mono',monospace;font-size:0.6875rem;font-weight:700;cursor:pointer;padding:0;
+  }
+  .textsize-btn:hover{border-color:var(--muted);}
+  .textsize-btn:disabled{opacity:0.4;cursor:default;}
+  .textsize-row .size-label{
+    font-family:'Space Mono',monospace;font-size:0.7188rem;color:var(--text);min-width:34px;text-align:center;
+  }
+  .textsize-reset{
+    margin-left:auto;background:transparent;border:none;color:var(--muted);
+    font-family:'Space Mono',monospace;font-size:0.65rem;text-decoration:underline;cursor:pointer;padding:0;flex-shrink:0;
+  }
+  .textsize-reset:hover{color:var(--text);}
+
   .pull-refresh-indicator{
     position:fixed;top:0;left:0;right:0;height:0;overflow:hidden;
     display:flex;justify-content:center;align-items:center;
-    color:var(--gold);font-family:'Space Mono',monospace;font-size:11.5px;
+    color:var(--gold);font-family:'Space Mono',monospace;font-size:0.7188rem;
     background:var(--bg);z-index:60;transition:height 0.15s ease-out;
   }
 
   .error-box{
     background:rgba(226,104,92,0.1);border:1px solid var(--danger);
     color:#f3aca4;padding:12px 14px;border-radius:var(--radius);
-    font-size:13px;margin-top:16px;line-height:1.5;
+    font-size:0.8125rem;margin-top:16px;line-height:1.5;
   }
 
   /* ---- Dashboard ---- */
@@ -208,19 +229,19 @@
   }
   .profile-hero .who{flex:1;min-width:160px;}
   .profile-hero .who h2{
-    font-family:'Space Mono',monospace;margin:0 0 4px;font-size:20px;
+    font-family:'Space Mono',monospace;margin:0 0 4px;font-size:1.25rem;
   }
-  .profile-hero .who .motto{color:var(--muted);font-size:13px;margin:0;}
+  .profile-hero .who .motto{color:var(--muted);font-size:0.8125rem;margin:0;}
   .stat-row{display:flex;gap:22px;flex-wrap:wrap;}
   .stat{text-align:right;}
   .stat .num{
-    font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--gold);
+    font-family:'Space Mono',monospace;font-size:1.375rem;font-weight:700;color:var(--gold);
     line-height:1;
   }
-  .stat .lbl{font-size:11px;color:var(--muted);margin-top:4px;}
+  .stat .lbl{font-size:0.6875rem;color:var(--muted);margin-top:4px;}
 
   .section-title{
-    font-family:'Space Mono',monospace;font-size:14px;color:var(--muted);
+    font-family:'Space Mono',monospace;font-size:0.875rem;color:var(--muted);
     letter-spacing:0.5px;margin:32px 0 12px;
     display:flex;justify-content:space-between;align-items:center;
   }
@@ -242,10 +263,10 @@
   }
   .cart .body{padding:8px;}
   .cart .title{
-    font-size:11.5px;font-weight:600;margin:0 0 2px;line-height:1.3;
+    font-size:0.7188rem;font-weight:600;margin:0 0 2px;line-height:1.3;
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
   }
-  .cart .console{font-size:9.5px;color:var(--muted);margin:0 0 6px;}
+  .cart .console{font-size:0.5938rem;color:var(--muted);margin:0 0 6px;}
   .progress-track{
     background:var(--bg-alt);border-radius:20px;height:5px;overflow:hidden;margin-bottom:4px;
   }
@@ -253,11 +274,11 @@
   .progress-fill.complete{background:var(--gold);}
   .progress-fill.hardcore{background:var(--gold);}
   .cart .prog-lbl{
-    display:flex;justify-content:space-between;font-size:9.5px;color:var(--muted);
+    display:flex;justify-content:space-between;font-size:0.5938rem;color:var(--muted);
     font-family:'Space Mono',monospace;
   }
   .cart .hours{
-    font-size:9.5px;color:var(--muted);font-family:'Space Mono',monospace;margin-top:3px;
+    font-size:0.5938rem;color:var(--muted);font-family:'Space Mono',monospace;margin-top:3px;
   }
   .cart .hours .val{color:var(--gold);}
 
@@ -268,29 +289,29 @@
   .unlock-row{display:flex;align-items:center;gap:12px;}
   .unlock img{width:40px;height:40px;border-radius:var(--radius);flex-shrink:0;image-rendering:pixelated;}
   .unlock .info{flex:1;min-width:0;}
-  .unlock .info .t{font-size:13.5px;font-weight:600;margin:0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .unlock .info .g{font-size:11.5px;color:var(--muted);margin:0;}
+  .unlock .info .t{font-size:0.8438rem;font-weight:600;margin:0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .unlock .info .g{font-size:0.7188rem;color:var(--muted);margin:0;}
   .unlock .pts{
-    font-family:'Space Mono',monospace;color:var(--gold);font-size:13px;font-weight:700;
+    font-family:'Space Mono',monospace;color:var(--gold);font-size:0.8125rem;font-weight:700;
     flex-shrink:0;
   }
-  .unlock .when{font-size:11px;color:var(--muted);flex-shrink:0;width:70px;text-align:right;}
+  .unlock .when{font-size:0.6875rem;color:var(--muted);flex-shrink:0;width:70px;text-align:right;}
   .unlock-desc{
     display:none;margin:8px 0 0;padding-left:52px;
-    font-size:12.5px;color:var(--muted);line-height:1.5;
+    font-size:0.7812rem;color:var(--muted);line-height:1.5;
   }
   .unlock.expanded .unlock-desc{display:block;}
 
   .lib-search{
     width:100%;padding:9px 12px;background:var(--bg-alt);border:1px solid var(--border);
-    border-radius:var(--radius);color:var(--text);font-size:13px;margin-bottom:12px;font-family:'Inter',sans-serif;
+    border-radius:var(--radius);color:var(--text);font-size:0.8125rem;margin-bottom:12px;font-family:'Inter',sans-serif;
   }
   .lib-search:focus{outline:none;border-color:var(--gold);}
 
-  .lib-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .lib-table{width:100%;border-collapse:collapse;font-size:0.8125rem;}
   .lib-table th{
     text-align:left;font-family:'Space Mono',monospace;font-weight:400;
-    color:var(--muted);font-size:11px;padding:6px 10px;border-bottom:1px solid var(--border);
+    color:var(--muted);font-size:0.6875rem;padding:6px 10px;border-bottom:1px solid var(--border);
     cursor:pointer;user-select:none;
   }
   .lib-table th:hover{color:var(--text);}
@@ -303,7 +324,7 @@
   .lib-table .bar{width:90px;}
 
   .pill{
-    display:inline-block;font-family:'Space Mono',monospace;font-size:9.5px;
+    display:inline-block;font-family:'Space Mono',monospace;font-size:0.5938rem;
     padding:2px 7px;border-radius:10px;white-space:nowrap;
   }
   .pill-teal{background:rgba(89,201,165,0.15);color:var(--teal);}
@@ -314,7 +335,7 @@
   .tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px;}
   .tab-btn{
     background:transparent;border:none;color:var(--muted);
-    padding:10px 16px 10px 0;margin-right:20px;font-size:13px;
+    padding:10px 16px 10px 0;margin-right:20px;font-size:0.8125rem;
     border-bottom:2px solid transparent;
   }
   .tab-btn.active{color:var(--text);border-bottom-color:var(--gold);}
@@ -331,7 +352,7 @@
   .chip-row::-webkit-scrollbar{height:4px;}
   .chip{
     flex-shrink:0;background:var(--panel);border:1px solid var(--border);color:var(--muted);
-    font-family:'Space Mono',monospace;font-size:11.5px;padding:6px 12px;border-radius:20px;
+    font-family:'Space Mono',monospace;font-size:0.7188rem;padding:6px 12px;border-radius:20px;
     white-space:nowrap;cursor:pointer;
   }
   .chip:hover{color:var(--text);border-color:var(--muted);}
@@ -352,7 +373,7 @@
   .modal-body{padding:20px;overflow-wrap:anywhere;}
   .modal-close{
     position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.5);color:var(--text);
-    width:30px;height:30px;border-radius:50%;font-size:16px;line-height:1;z-index:2;
+    width:30px;height:30px;border-radius:50%;font-size:1rem;line-height:1;z-index:2;
   }
 
   /* ---- Game profile: its own full-screen view, not a popup over the
@@ -378,31 +399,31 @@
   /* Game profile text runs 10% larger than the shared modal baseline used by
      the settings dialogs (Connect RA, Add game, RAWG, Data) — scoped so it
      doesn't affect those. */
-  .game-profile-card .modal-body h2{font-size:21px;}
-  .game-profile-card .modal-body .sub{font-size:14.3px;}
-  .game-profile-card .modal-links a{font-size:12.7px;}
-  .game-profile-card .modal-note{font-size:12.1px;}
-  .game-profile-card .rawg-setup-note{font-size:12.1px;}
-  .modal-body h2{font-family:'Space Mono',monospace;font-size:19px;margin:0 0 4px;overflow-wrap:anywhere;}
-  .modal-body .sub{color:var(--muted);font-size:13px;margin:0 0 16px;}
+  .game-profile-card .modal-body h2{font-size:1.3125rem;}
+  .game-profile-card .modal-body .sub{font-size:0.8938rem;}
+  .game-profile-card .modal-links a{font-size:0.7937rem;}
+  .game-profile-card .modal-note{font-size:0.7562rem;}
+  .game-profile-card .rawg-setup-note{font-size:0.7562rem;}
+  .modal-body h2{font-family:'Space Mono',monospace;font-size:1.1875rem;margin:0 0 4px;overflow-wrap:anywhere;}
+  .modal-body .sub{color:var(--muted);font-size:0.8125rem;margin:0 0 16px;}
   .modal-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-bottom:18px;}
-  .modal-meta .mi .k{font-size:11.6px;color:var(--muted);font-family:'Space Mono',monospace;margin-bottom:2px;}
-  .modal-meta .mi .v{font-size:14.3px;}
+  .modal-meta .mi .k{font-size:0.725rem;color:var(--muted);font-family:'Space Mono',monospace;margin-bottom:2px;}
+  .modal-meta .mi .v{font-size:0.8938rem;}
   .modal-progress{background:var(--bg-alt);border-radius:6px;padding:14px;margin-bottom:16px;}
-  .modal-progress .row{display:flex;justify-content:space-between;font-size:14.3px;margin-bottom:8px;}
+  .modal-progress .row{display:flex;justify-content:space-between;font-size:0.8938rem;margin-bottom:8px;}
   .modal-progress .row:last-child{margin-bottom:0;}
   .modal-links{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
   .modal-links a{
-    font-family:'Space Mono',monospace;font-size:11.5px;color:var(--teal);
+    font-family:'Space Mono',monospace;font-size:0.7188rem;color:var(--teal);
     border:1px solid var(--border);padding:6px 12px;border-radius:20px;text-decoration:none;
   }
   .modal-links a:hover{border-color:var(--teal);}
-  .modal-note{font-size:11px;color:var(--muted);margin-top:14px;line-height:1.5;}
+  .modal-note{font-size:0.6875rem;color:var(--muted);margin-top:14px;line-height:1.5;}
 
   .btn-view-achievements{
     width:100%;margin-top:14px;background:var(--bg-alt);border:1px solid var(--border);
     color:var(--text);border-radius:6px;padding:10px;font-family:'Space Mono',monospace;
-    font-size:13.8px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;
+    font-size:0.8625rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;
   }
   .btn-view-achievements:hover{border-color:var(--gold);}
   .btn-view-achievements .arrow{transition:transform 0.15s;}
@@ -412,14 +433,14 @@
   .ach-row.locked{opacity:0.55;}
   .ach-row img{width:36px;height:36px;border-radius:var(--radius);flex-shrink:0;image-rendering:pixelated;}
   .ach-row .info{flex:1;min-width:0;}
-  .ach-row .info .t{font-size:14.3px;font-weight:600;margin:0 0 2px;}
-  .ach-row .info .d{font-size:12.7px;color:var(--muted);margin:0;line-height:1.4;}
-  .ach-row .info .when{font-size:11.6px;color:var(--teal);margin:3px 0 0;}
+  .ach-row .info .t{font-size:0.8938rem;font-weight:600;margin:0 0 2px;}
+  .ach-row .info .d{font-size:0.7937rem;color:var(--muted);margin:0;line-height:1.4;}
+  .ach-row .info .when{font-size:0.725rem;color:var(--teal);margin:3px 0 0;}
   .ach-row .pts{
-    font-family:'Space Mono',monospace;color:var(--gold);font-size:13.2px;font-weight:700;flex-shrink:0;
+    font-family:'Space Mono',monospace;color:var(--gold);font-size:0.825rem;font-weight:700;flex-shrink:0;
   }
   .ach-row.locked .pts{color:var(--muted);}
-  .achievements-list-loading{padding:14px;text-align:center;color:var(--muted);font-size:13.8px;}
+  .achievements-list-loading{padding:14px;text-align:center;color:var(--muted);font-size:0.8625rem;}
 
   .guide-panel{
     margin-top:12px;background:var(--panel);border:1px solid var(--border);
@@ -427,29 +448,29 @@
   }
   .guide-btn{
     border-radius:6px;padding:9px;font-family:'Space Mono',monospace;font-weight:700;
-    font-size:12.5px;cursor:pointer;text-align:center;text-decoration:none;display:block;
+    font-size:0.7812rem;cursor:pointer;text-align:center;text-decoration:none;display:block;
   }
   .guide-btn-primary{background:var(--gold);border:none;color:#1a1408;}
   .guide-btn-outline{background:transparent;border:1px solid var(--teal);color:var(--teal);}
-  .guide-btn-ghost{flex:1;background:transparent;border:1px solid var(--border);color:var(--text);font-size:11.6px;padding:8px;}
-  .guide-btn-danger{flex:1;background:transparent;border:1px solid var(--danger);color:var(--danger);font-size:11.6px;padding:8px;}
+  .guide-btn-ghost{flex:1;background:transparent;border:1px solid var(--border);color:var(--text);font-size:0.725rem;padding:8px;}
+  .guide-btn-danger{flex:1;background:transparent;border:1px solid var(--danger);color:var(--danger);font-size:0.725rem;padding:8px;}
   .guide-btn:disabled{opacity:0.6;cursor:default;}
 
-  .guide-divider{display:flex;align-items:center;gap:10px;margin:2px 0;color:var(--muted);font-size:10.6px;letter-spacing:0.06em;text-transform:uppercase;}
+  .guide-divider{display:flex;align-items:center;gap:10px;margin:2px 0;color:var(--muted);font-size:0.6625rem;letter-spacing:0.06em;text-transform:uppercase;}
   .guide-divider::before,.guide-divider::after{content:'';flex:1;height:1px;background:var(--border);}
-  .guide-status-text{font-size:11.6px;color:var(--muted);margin:0;line-height:1.5;}
+  .guide-status-text{font-size:0.725rem;color:var(--muted);margin:0;line-height:1.5;}
   .guide-status-text.err{color:var(--danger);}
 
   .patch-result-list{display:flex;flex-direction:column;gap:1px;background:var(--border);border-radius:6px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);margin-top:4px;max-height:340px;overscroll-behavior:contain;}
   .patch-result-row{background:var(--panel);padding:9px 11px;display:flex;align-items:center;gap:10px;}
   .patch-result-row .info{flex:1;min-width:0;}
-  .patch-result-row .info .fn{font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .patch-result-row .info .pth{font-size:10.8px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .patch-result-row .info .fn{font-size:0.7812rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .patch-result-row .info .pth{font-size:0.675rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .patch-result-row button{
     flex-shrink:0;background:transparent;border:1px solid var(--gold);color:var(--gold);
-    border-radius:5px;padding:6px 10px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;
+    border-radius:5px;padding:6px 10px;font-family:'Space Mono',monospace;font-size:0.6875rem;font-weight:700;cursor:pointer;
   }
-  .hash-status{font-size:11.6px;border-radius:5px;padding:8px 10px;line-height:1.45;}
+  .hash-status{font-size:0.725rem;border-radius:5px;padding:8px 10px;line-height:1.45;}
   .hash-status.ok{background:rgba(89,201,165,0.12);color:var(--teal);border:1px solid rgba(89,201,165,0.3);}
   .hash-status.mismatch{background:rgba(226,104,92,0.12);color:var(--danger);border:1px solid rgba(226,104,92,0.3);}
   .hash-status.unknown{background:rgba(148,141,179,0.12);color:var(--muted);border:1px solid var(--border);}
@@ -464,7 +485,7 @@
     padding:12px 16px;border-bottom:1px solid #2a2a2a;
   }
   .guide-reader-header .guide-reader-fn{
-    font-family:'Space Mono',monospace;font-size:12px;color:#9a9a9a;
+    font-family:'Space Mono',monospace;font-size:0.75rem;color:#9a9a9a;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;
   }
   .guide-reader-toolbar{
@@ -474,7 +495,7 @@
   .guide-reader-toolbar button,.guide-find-bar button,.guide-marks-panel button.tool-btn,.guide-text-panel button{
     display:inline-flex;align-items:center;justify-content:center;gap:6px;
     background:transparent;border:1px solid #444;color:#fff;border-radius:4px;
-    min-width:38px;padding:7px 10px;font-family:'Space Mono',monospace;font-weight:700;font-size:12.5px;cursor:pointer;
+    min-width:38px;padding:7px 10px;font-family:'Space Mono',monospace;font-weight:700;font-size:0.7812rem;cursor:pointer;
   }
   .guide-reader-toolbar button:disabled,.guide-find-bar button:disabled,.guide-text-panel button:disabled{opacity:0.35;cursor:default;}
   .guide-reader-toolbar button.active,.guide-text-panel button.active{border-color:var(--gold);color:var(--gold);}
@@ -484,11 +505,11 @@
   }
   .guide-find-bar.open,.guide-marks-panel.open,.guide-text-panel.open{display:flex;}
   .guide-text-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-  .guide-text-row .lbl{font-family:'Space Mono',monospace;font-size:11.5px;color:#9a9a9a;width:38px;flex-shrink:0;}
-  .guide-text-row .size-label{font-family:'Space Mono',monospace;font-size:12.5px;color:#fff;min-width:26px;text-align:center;}
+  .guide-text-row .lbl{font-family:'Space Mono',monospace;font-size:0.7188rem;color:#9a9a9a;width:38px;flex-shrink:0;}
+  .guide-text-row .size-label{font-family:'Space Mono',monospace;font-size:0.7812rem;color:#fff;min-width:26px;text-align:center;}
   .guide-text-row .grow{flex:1;}
   .guide-font-options{display:flex;flex-wrap:wrap;gap:6px;flex:1;}
-  .guide-text-note{font-family:'Space Mono',monospace;font-size:11px;color:#9a9a9a;margin:0;line-height:1.5;}
+  .guide-text-note{font-family:'Space Mono',monospace;font-size:0.6875rem;color:#9a9a9a;margin:0;line-height:1.5;}
   .guide-menu-show{
     display:none;position:absolute;z-index:5;right:8px;top:calc(env(safe-area-inset-top, 0px) + 8px);
     width:36px;height:36px;align-items:center;justify-content:center;border-radius:50%;
@@ -503,22 +524,22 @@
   .guide-find-row{display:flex;align-items:center;gap:6px;}
   .guide-find-row input{
     flex:1;min-width:0;background:#1b1729;border:1px solid #444;color:#fff;border-radius:4px;
-    padding:8px 10px;font-family:'Space Mono',monospace;font-size:16px;
+    padding:8px 10px;font-family:'Space Mono',monospace;font-size:1rem;
   }
-  .guide-find-count{font-family:'Space Mono',monospace;font-size:11.5px;color:#9a9a9a;white-space:nowrap;}
+  .guide-find-count{font-family:'Space Mono',monospace;font-size:0.7188rem;color:#9a9a9a;white-space:nowrap;}
   .guide-find-back{flex:1;}
   .guide-marks-panel{max-height:45vh;overflow-y:auto;}
   .guide-marks-panel button.tool-btn{border-color:var(--gold);color:var(--gold);align-self:flex-start;}
-  .guide-marks-msg{font-family:'Space Mono',monospace;font-size:11.5px;color:#9a9a9a;margin:0;min-height:0;}
-  .guide-marks-empty{font-family:'Space Mono',monospace;font-size:12px;color:#9a9a9a;margin:2px 0;line-height:1.5;}
+  .guide-marks-msg{font-family:'Space Mono',monospace;font-size:0.7188rem;color:#9a9a9a;margin:0;min-height:0;}
+  .guide-marks-empty{font-family:'Space Mono',monospace;font-size:0.75rem;color:#9a9a9a;margin:2px 0;line-height:1.5;}
   .guide-marks-row{display:flex;align-items:stretch;gap:6px;}
   .guide-marks-go{
     flex:1;min-width:0;text-align:left;background:#161616;border:1px solid #333;border-left:3px solid var(--gold);color:#fff;
-    border-radius:4px;padding:8px 10px;font-family:'Space Mono',monospace;font-size:12px;cursor:pointer;
+    border-radius:4px;padding:8px 10px;font-family:'Space Mono',monospace;font-size:0.75rem;cursor:pointer;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
   .guide-marks-go .pct{color:var(--gold);margin-right:8px;}
-  .guide-marks-del{background:transparent;border:1px solid #444;color:#c9c9c9;border-radius:4px;width:38px;font-size:16px;cursor:pointer;}
+  .guide-marks-del{background:transparent;border:1px solid #444;color:#c9c9c9;border-radius:4px;width:38px;font-size:1rem;cursor:pointer;}
   ::highlight(guide-find){background-color:rgba(228,169,63,0.35);color:#fff;}
   ::highlight(guide-find-current){background-color:#e4a93f;color:#000;}
   ::highlight(guide-bookmark){background-color:rgba(228,169,63,0.22);}
@@ -528,7 +549,7 @@
   }
   .guide-reader-close{
     background:transparent;border:1px solid #444;color:#fff;border-radius:4px;flex-shrink:0;
-    padding:6px 14px;font-family:'Space Mono',monospace;font-size:12.5px;cursor:pointer;
+    padding:6px 14px;font-family:'Space Mono',monospace;font-size:0.7812rem;cursor:pointer;
   }
   .guide-reader-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 16px;position:relative;font-family:var(--guide-font,'Space Mono',monospace);font-weight:var(--guide-weight,400);}
   .guide-reader-body pre{
@@ -541,7 +562,7 @@
   .guide-reader-body.html-guide a{color:var(--teal) !important;}
   .guide-reader-body.html-guide pre{white-space:pre-wrap;word-break:break-word;}
   .guide-reader-body.html-guide img{max-width:100%;height:auto;}
-  .guide-reader-empty{padding:24px 8px;text-align:center;font-family:'Space Mono',monospace;font-size:13px;line-height:1.6;color:#c9c9c9;}
+  .guide-reader-empty{padding:24px 8px;text-align:center;font-family:'Space Mono',monospace;font-size:0.8125rem;line-height:1.6;color:#c9c9c9;}
   .guide-reader-body iframe{width:100%;height:100%;border:0;display:block;}
 
 
@@ -551,7 +572,7 @@
   }
   .rawg-score{
     font-family:'Rubik Distressed', cursive;
-    font-size:34px;
+    font-size:2.125rem;
     line-height:1;
     padding:6px 12px 8px;
     border-radius:5px;
@@ -565,8 +586,8 @@
   .rawg-score.tier-green{background:linear-gradient(135deg,#8fe0a8,#3fae5c);color:#0c2414;}
   .rawg-score.tier-yellow{background:linear-gradient(135deg,#f2df8a,#dcb52e);color:#3a2c05;}
   .rawg-score.tier-red{background:linear-gradient(135deg,#f0958a,#d8483a);color:#3a0a06;}
-  .rawg-score.tier-muted{background:var(--panel-2);color:var(--muted);border-color:var(--border);box-shadow:none;transform:rotate(-3deg);font-size:22px;}
-  .rawg-setup-note{font-size:11px;color:var(--muted);margin:2px 0 0;}
+  .rawg-score.tier-muted{background:var(--panel-2);color:var(--muted);border-color:var(--border);box-shadow:none;transform:rotate(-3deg);font-size:1.375rem;}
+  .rawg-setup-note{font-size:0.6875rem;color:var(--muted);margin:2px 0 0;}
   .rawg-setup-note a{color:var(--teal);cursor:pointer;}
 
   /* ---- Box art pinch-to-zoom viewer ----
@@ -587,7 +608,7 @@
   }
   .img-zoom-hint{
     position:absolute;left:0;right:0;bottom:calc(18px + env(safe-area-inset-bottom));
-    text-align:center;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);
+    text-align:center;font-family:'Space Mono',monospace;font-size:0.6875rem;color:var(--muted);
     pointer-events:none;transition:opacity 0.3s;
   }
   .img-zoom-hint.hidden{opacity:0;}
@@ -600,7 +621,7 @@
   #addgame-card select{
     width:100%;padding:10px 12px;background:var(--bg-alt);
     border:1px solid var(--border);border-radius:3px;color:var(--text);
-    font-size:14px;font-family:'Inter',sans-serif;
+    font-size:0.875rem;font-family:'Inter',sans-serif;
   }
   #addgame-card select:focus{outline:none;border-color:var(--gold);}
   #addgame-results{margin-top:16px;max-height:280px;overflow-y:auto;}
@@ -609,13 +630,13 @@
   }
   .ag-result:hover{background:var(--bg-alt);}
   .ag-result img{width:32px;height:32px;border-radius:2px;image-rendering:pixelated;flex-shrink:0;}
-  .ag-result .t{font-size:13px;flex:1;}
-  .ag-result .n{font-size:10.5px;color:var(--muted);font-family:'Space Mono',monospace;}
-  .ag-empty{font-size:12.5px;color:var(--muted);margin-top:14px;}
+  .ag-result .t{font-size:0.8125rem;flex:1;}
+  .ag-result .n{font-size:0.6562rem;color:var(--muted);font-family:'Space Mono',monospace;}
+  .ag-empty{font-size:0.7812rem;color:var(--muted);margin-top:14px;}
 
   .g-title{position:relative;}
   .manual-remove{
-    background:transparent;border:none;color:var(--muted);font-size:13px;
+    background:transparent;border:none;color:var(--muted);font-size:0.8125rem;
     margin-left:8px;padding:2px 6px;flex-shrink:0;
   }
   .manual-remove:hover{color:var(--danger);}
@@ -623,10 +644,10 @@
   /* ---- By year ---- */
   .year-group{margin-bottom:28px;}
   .year-heading{
-    font-family:'Space Mono',monospace;font-size:15px;color:var(--text);
+    font-family:'Space Mono',monospace;font-size:0.9375rem;color:var(--text);
     margin:0 0 12px;display:flex;align-items:baseline;gap:8px;
   }
-  .year-heading .n{font-size:11px;color:var(--muted);font-weight:400;}
+  .year-heading .n{font-size:0.6875rem;color:var(--muted);font-weight:400;}
   .year-icons{display:flex;flex-wrap:wrap;gap:12px;}
   .year-item{width:60px;text-align:center;cursor:pointer;}
   .year-item img{
@@ -634,12 +655,12 @@
     border:1px solid var(--border);display:block;margin:0 auto 5px;
   }
   .year-item .yt{
-    font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;
+    font-size:0.5625rem;color:var(--muted);white-space:nowrap;overflow:hidden;
     text-overflow:ellipsis;margin-bottom:3px;
   }
 
   .empty, .loading{
-    text-align:center;color:var(--muted);padding:30px 10px;font-size:13px;
+    text-align:center;color:var(--muted);padding:30px 10px;font-size:0.8125rem;
   }
   .loading::after{
     content:'';display:inline-block;width:12px;height:12px;margin-left:8px;
@@ -682,6 +703,15 @@
         </div>
         <button class="dropdown-item" id="btn-rawg-settings">RAWG Ratings</button>
         <button class="dropdown-item" id="btn-data-settings-open">Data</button>
+        <button class="dropdown-item dropdown-heading" id="btn-textsize-heading">Text Size <span id="textsize-heading-arrow">▸</span></button>
+        <div id="textsize-submenu" style="display:none;">
+          <div class="textsize-row">
+            <button class="textsize-btn" id="textsize-dec" aria-label="Smaller text">A−</button>
+            <span class="size-label" id="textsize-label">100%</span>
+            <button class="textsize-btn" id="textsize-inc" aria-label="Larger text">A+</button>
+            <button class="textsize-reset" id="textsize-reset">Reset</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -712,8 +742,8 @@
   <div id="dashboard">
 
     <div id="ra-placeholder" style="display:none; text-align:center; max-width: 440px; margin: 60px auto; padding: 0 20px;">
-      <p style="font-size: 14px; color: var(--text); line-height: 1.6;">Please click the settings menu to connect your RetroAchievements account and start tracking your gaming.</p>
-      <p style="font-size: 12px; color: var(--muted); margin-top: 8px;">Tap the <strong style="color: var(--gold);">☰</strong> menu above → <strong style="color: var(--gold);">Connect RetroAchievements</strong>.</p>
+      <p style="font-size:0.875rem; color: var(--text); line-height: 1.6;">Please click the settings menu to connect your RetroAchievements account and start tracking your gaming.</p>
+      <p style="font-size:0.75rem; color: var(--muted); margin-top: 8px;">Tap the <strong style="color: var(--gold);">☰</strong> menu above → <strong style="color: var(--gold);">Connect RetroAchievements</strong>.</p>
     </div>
 
     <div id="ra-content" style="display:none;">
@@ -851,7 +881,7 @@
       </div>
       <div style="display:flex; gap:8px;">
         <button class="btn-primary" id="rawg-save-btn" style="flex:1;">Save</button>
-        <button id="rawg-remove-btn" style="flex:1; background: transparent; border: 1px solid var(--danger); color: var(--danger); border-radius: var(--radius); font-family: 'Space Mono', monospace; font-weight: 700; font-size: 13px; cursor: pointer;">Remove key</button>
+        <button id="rawg-remove-btn" style="flex:1; background: transparent; border: 1px solid var(--danger); color: var(--danger); border-radius: var(--radius); font-family: 'Space Mono', monospace; font-weight: 700; font-size:0.8125rem; cursor: pointer;">Remove key</button>
       </div>
       <div id="rawg-status"></div>
     </div>
@@ -874,7 +904,7 @@
       <div class="field">
         <label>Import</label>
         <input type="file" id="data-import-file" accept="application/json" style="display:none;">
-        <button id="data-import-btn" style="width:100%; background: transparent; border: 1px solid var(--gold); color: var(--gold); border-radius: var(--radius); font-family: 'Space Mono', monospace; font-weight: 700; font-size: 13px; cursor: pointer; padding: 11px 20px;">Choose backup file…</button>
+        <button id="data-import-btn" style="width:100%; background: transparent; border: 1px solid var(--gold); color: var(--gold); border-radius: var(--radius); font-family: 'Space Mono', monospace; font-weight: 700; font-size:0.8125rem; cursor: pointer; padding: 11px 20px;">Choose backup file…</button>
         <div class="hint">Loads a previously exported backup into this device. Existing local data with matching keys will be overwritten.</div>
       </div>
 
@@ -1929,12 +1959,12 @@
             const awardedForMode = isHardcoreMode ? Number(g.NumAwardedHardcore || 0) : Number(g.NumAwarded || 0);
             const pctForMode = Number(g.MaxPossible) ? Math.round((awardedForMode / Number(g.MaxPossible)) * 100) : 0;
             const progressCell = isCustom
-              ? '<span style="color:var(--muted);font-size:12px;">—</span>'
+              ? '<span style="color:var(--muted);font-size:0.75rem;">—</span>'
               : `
                 <div class="bar">
                   <div class="progress-track"><div class="progress-fill ${pctForMode>=100?'complete':''} ${isHardcoreMode?'hardcore':''}" style="width:${pctForMode}%"></div></div>
                 </div>
-                <span style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)">${awardedForMode}/${g.MaxPossible} · ${pctForMode}%</span>
+                <span style="font-family:'Space Mono',monospace;font-size:0.6875rem;color:var(--muted)">${awardedForMode}/${g.MaxPossible} · ${pctForMode}%</span>
               `;
             const lastPlayedLabel = isCustom
               ? (g.manualBeatenDate ? new Date(g.manualBeatenDate).toLocaleDateString() : 'Never')
@@ -1944,8 +1974,8 @@
               <td><div class="g-title"><img src="${imgUrl(g.ImageIcon)}" alt=""><span>${g.Title}</span>${g.manual ? `<button class="manual-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : ''}</div></td>
               <td>${awardCell}</td>
               <td>${progressCell}</td>
-              <td style="font-family:'Space Mono',monospace;font-size:12px;color:${hoursColor}">${hoursLabel}</td>
-              <td style="color:var(--muted);font-size:12px;">${lastPlayedLabel}</td>
+              <td style="font-family:'Space Mono',monospace;font-size:0.75rem;color:${hoursColor}">${hoursLabel}</td>
+              <td style="color:var(--muted);font-size:0.75rem;">${lastPlayedLabel}</td>
             </tr>
           `;
           }).join('')}
@@ -2143,7 +2173,7 @@
       </div>
 
       <div class="field" style="text-align:left;margin-bottom:14px;">
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-family:inherit; font-size:13px; color:var(--text);">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-family:inherit; font-size:0.8125rem; color:var(--text);">
           <input type="checkbox" id="manual-beaten-checkbox" ${local.manualBeaten ? 'checked' : ''} style="width:16px;height:16px;">
           <span>Mark as beaten</span>
         </label>
@@ -2971,7 +3001,7 @@
     function renderRomStage(){
       if(!romBytes){
         patchWrap.innerHTML = `
-          <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">Select the ROM file for this game. Its checksum is what gets matched against the patch repo, so the results are patches actually compatible with your exact dump — not just anything with a similar name.</p>
+          <p style="font-size:0.7688rem;color:var(--muted);margin:0 0 10px;line-height:1.55;">Select the ROM file for this game. Its checksum is what gets matched against the patch repo, so the results are patches actually compatible with your exact dump — not just anything with a similar name.</p>
           <input type="file" id="patch-rom-input" style="display:none;">
           <button class="guide-btn guide-btn-primary" id="patch-rom-pick-btn">Select ROM File…</button>
         `;
@@ -3005,13 +3035,13 @@
         return;
       }
       patchWrap.innerHTML = `
-        <div style="font-size:12.3px;color:var(--text);">Base ROM: <strong>${romFilename}</strong></div>
-        <div style="font-size:10.8px;color:var(--muted);margin-top:2px;">CRC32 ${crc32Hex(romBytes)}</div>
+        <div style="font-size:0.7688rem;color:var(--text);">Base ROM: <strong>${romFilename}</strong></div>
+        <div style="font-size:0.675rem;color:var(--muted);margin-top:2px;">CRC32 ${crc32Hex(romBytes)}</div>
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button class="guide-btn guide-btn-ghost" id="patch-rom-change-btn">Use a different file…</button>
           ${romFromStorage ? '<button class="guide-btn guide-btn-danger" id="patch-rom-forget-btn">Forget saved ROM</button>' : ''}
         </div>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text);margin-top:10px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.75rem;color:var(--text);margin-top:10px;">
           <input type="checkbox" id="patch-remember-checkbox" style="width:15px;height:15px;flex-shrink:0;">
           <span>Remember this ROM for future patches of this game</span>
         </label>
@@ -3190,15 +3220,15 @@
     function renderResults(){
       const totalCount = results.official.length + results.byId.length + results.verified.length + results.unverified.length;
       const fallbackNote = (results.usedFallback && !results.byId.length)
-        ? `<p style="font-size:11px;color:var(--muted);margin:0 0 8px;line-height:1.5;">Couldn't confidently identify this console's folder in the repo, so this fell back to a filename-only search — hacks with unrelated names may be missing.</p>`
+        ? `<p style="font-size:0.6875rem;color:var(--muted);margin:0 0 8px;line-height:1.5;">Couldn't confidently identify this console's folder in the repo, so this fell back to a filename-only search — hacks with unrelated names may be missing.</p>`
         : '';
       const cappedNote = results.capped
-        ? `<p style="font-size:11px;color:var(--muted);margin:0 0 8px;line-height:1.5;">This console has more patches than could be checked in one pass — up to ${MAX_CHECKED_HACKS} hacks and ${MAX_CHECKED_OTHER} other patches (translations, fixes, etc.) were checked. Try the manual browse link below if you don't see the one you're after.</p>`
+        ? `<p style="font-size:0.6875rem;color:var(--muted);margin:0 0 8px;line-height:1.5;">This console has more patches than could be checked in one pass — up to ${MAX_CHECKED_HACKS} hacks and ${MAX_CHECKED_OTHER} other patches (translations, fixes, etc.) were checked. Try the manual browse link below if you don't see the one you're after.</p>`
         : '';
       if(totalCount === 0){
         patchWrap.innerHTML = `
           ${fallbackNote}${cappedNote}
-          <p style="font-size:12.3px;color:var(--muted);margin:0 0 10px;line-height:1.55;">Nothing in the RAPatches repo is filed under this game's RetroAchievements ID, no loose patch matches this ROM's checksum, no zip for this game/console was found either, and RetroAchievements has nothing officially linked to this entry either. If you're after a specific hack, double check you're on that hack's own RetroAchievements game page rather than the base game's.</p>
+          <p style="font-size:0.7688rem;color:var(--muted);margin:0 0 10px;line-height:1.55;">Nothing in the RAPatches repo is filed under this game's RetroAchievements ID, no loose patch matches this ROM's checksum, no zip for this game/console was found either, and RetroAchievements has nothing officially linked to this entry either. If you're after a specific hack, double check you're on that hack's own RetroAchievements game page rather than the base game's.</p>
           <a class="guide-btn guide-btn-outline" href="https://github.com/${RAPATCHES_OWNER}/${RAPATCHES_REPO}" target="_blank" rel="noopener">Browse RAPatches on GitHub ↗</a>
           <button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="width:100%;margin-top:8px;">‹ Back</button>
         `;
@@ -3208,7 +3238,7 @@
       patchWrap.innerHTML = `
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="flex-shrink:0;">‹ Back</button>
-          <input type="text" id="patch-filter-input" placeholder="Search hack name…" style="flex:1;min-width:0;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:12.5px;">
+          <input type="text" id="patch-filter-input" placeholder="Search hack name…" style="flex:1;min-width:0;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:0.7812rem;">
         </div>
         <div style="margin-top:10px;">${fallbackNote}${cappedNote}</div>
         <div id="patch-result-list-wrap"></div>
@@ -3227,7 +3257,7 @@
         const unverifiedRows = results.unverified.filter(matches);
 
         if(officialRows.length + byIdRows.length + verifiedRows.length + unverifiedRows.length === 0){
-          listWrap.innerHTML = `<p style="font-size:12.3px;color:var(--muted);margin:8px 0 0;">No hacks match “${filterInput.value.trim()}”.</p>`;
+          listWrap.innerHTML = `<p style="font-size:0.7688rem;color:var(--muted);margin:8px 0 0;">No hacks match “${filterInput.value.trim()}”.</p>`;
           return;
         }
 
@@ -3269,7 +3299,7 @@
     function showArchiveFallback(entry, reason){
       patchWrap.innerHTML = `
         <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
-        <p style="font-size:12.3px;color:var(--muted);margin:10px 0 0;line-height:1.55;">${reason} Only BPS, IPS, UPS, PPF, APS and xdelta patches are applied automatically here. You'll need a separate tool for this one.</p>
+        <p style="font-size:0.7688rem;color:var(--muted);margin:10px 0 0;line-height:1.55;">${reason} Only BPS, IPS, UPS, PPF, APS and xdelta patches are applied automatically here. You'll need a separate tool for this one.</p>
         <a class="guide-btn guide-btn-primary" style="margin-top:10px;" href="${entry.url}" download="${entry.label}">Download patch file</a>
       `;
       patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
@@ -3333,7 +3363,7 @@
       items.sort((a, b) => (b.matches === true) - (a.matches === true));
       patchWrap.innerHTML = `
         <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
-        <p style="font-size:12.3px;color:var(--muted);margin:10px 0;line-height:1.55;">This zip has more than one patch. Pick the one to apply.</p>
+        <p style="font-size:0.7688rem;color:var(--muted);margin:10px 0;line-height:1.55;">This zip has more than one patch. Pick the one to apply.</p>
         <div class="patch-result-list">
           ${items.map((m, idx) => resultRow(m,
             m.matches === true ? 'Checksum matches this ROM' : (m.matches === false ? "Checksum doesn't match this ROM" : 'No checksum to check up front'),
@@ -3371,7 +3401,7 @@
           ${notes.map(n => `<div class="hash-status ok" style="margin-top:8px;">${n}</div>`).join('')}
           <div class="hash-status ok" style="margin-top:8px;">Your ROM has been patched and saved as <strong>${outName}</strong>. Open it in your emulator to add this game to your RetroAchievements library.</div>
           <button class="guide-btn guide-btn-primary" id="patch-download-btn" style="margin-top:10px;width:100%;">${supportsFSAccess ? 'Save Patched ROM…' : 'Download Patched ROM'}</button>
-          <div style="font-size:10.8px;color:var(--muted);margin-top:4px;">${saveHint}</div>
+          <div style="font-size:0.675rem;color:var(--muted);margin-top:4px;">${saveHint}</div>
           <button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="width:100%;margin-top:8px;">‹ Back to results</button>
         `;
         patchWrap.querySelector('#patch-download-btn').addEventListener('click', async () => {
@@ -3608,8 +3638,8 @@
 
   function renderGuideSearchStep(title){
     return `
-      <p style="font-size:12.3px;color:var(--muted);margin:0;line-height:1.55;">Find your own guide on GameFAQs: click the link, choose your guide, select and copy all text, hit that Paste Guide Text button, then Paste and Save.</p>
-      <a href="https://gamefaqs.gamespot.com/search?game=${encodeURIComponent(title)}" id="guide-gf-link" target="_blank" rel="noopener" style="font-size:11.3px;color:var(--teal);text-decoration:none;align-self:flex-start;">Search GameFAQs for "${title}" ↗</a>
+      <p style="font-size:0.7688rem;color:var(--muted);margin:0;line-height:1.55;">Find your own guide on GameFAQs: click the link, choose your guide, select and copy all text, hit that Paste Guide Text button, then Paste and Save.</p>
+      <a href="https://gamefaqs.gamespot.com/search?game=${encodeURIComponent(title)}" id="guide-gf-link" target="_blank" rel="noopener" style="font-size:0.7063rem;color:var(--teal);text-decoration:none;align-self:flex-start;">Search GameFAQs for "${title}" ↗</a>
     `;
   }
   function renderGuideNoGuidePanel(gameId, title, consoleId, isReplacing){
@@ -3624,7 +3654,7 @@
         ${renderGuideSearchStep(title)}
         <button class="guide-btn guide-btn-outline" id="guide-paste-btn">Paste Guide Text</button>
         <div id="guide-paste-box" style="display:none;flex-direction:column;gap:8px;">
-          <textarea id="guide-paste-text" rows="8" placeholder="Paste the guide text here…" style="width:100%;box-sizing:border-box;background:var(--bg-alt);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:9px 10px;font-family:'Space Mono',monospace;font-size:12px;"></textarea>
+          <textarea id="guide-paste-text" rows="8" placeholder="Paste the guide text here…" style="width:100%;box-sizing:border-box;background:var(--bg-alt);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:9px 10px;font-family:'Space Mono',monospace;font-size:0.75rem;"></textarea>
           <button class="guide-btn guide-btn-primary" id="guide-paste-save">Save Guide</button>
           <p class="guide-status-text err" id="guide-paste-error" style="display:none;"></p>
         </div>
@@ -3643,8 +3673,8 @@
     return `
       <div style="display:flex;flex-direction:column;gap:8px;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-          <span style="font-size:12.3px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${guide.filename}</span>
-          <span style="font-size:10.8px;color:var(--muted);flex-shrink:0;letter-spacing:0.04em;">${guide.kind.toUpperCase()}</span>
+          <span style="font-size:0.7688rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${guide.filename}</span>
+          <span style="font-size:0.675rem;color:var(--muted);flex-shrink:0;letter-spacing:0.04em;">${guide.kind.toUpperCase()}</span>
         </div>
         <button class="guide-btn guide-btn-primary" id="guide-read-btn">Read Guide</button>
         <div style="display:flex;gap:8px;">
@@ -3751,7 +3781,7 @@
         }catch(e){
           triggerBtn.textContent = prevLabel;
           triggerBtn.disabled = false;
-          if(errorEl) errorEl.innerHTML = `<p style="font-size:11.6px;color:var(--danger);margin:6px 0 0;">Could not import that file: ${e.message}</p>`;
+          if(errorEl) errorEl.innerHTML = `<p style="font-size:0.725rem;color:var(--danger);margin:6px 0 0;">Could not import that file: ${e.message}</p>`;
         }
       });
       if(readBtn) readBtn.addEventListener('click', () => openGuideReader(gameId, title, guide));
@@ -4833,7 +4863,7 @@
     btn.disabled = true; btn.textContent = 'Preparing download…';
     try{
       await exportLocalData();
-      statusEl.innerHTML = '<p style="color:var(--teal);font-size:12.5px;margin-top:10px;">Backup downloaded.</p>';
+      statusEl.innerHTML = '<p style="color:var(--teal);font-size:0.7812rem;margin-top:10px;">Backup downloaded.</p>';
     }catch(e){
       statusEl.innerHTML = `<div class="error-box">Export failed: ${e.message}</div>`;
     }finally{
@@ -4847,10 +4877,10 @@
     const file = e.target.files && e.target.files[0];
     if(!file) return;
     const statusEl = $('#data-status');
-    statusEl.innerHTML = '<p style="color:var(--muted);font-size:12.5px;margin-top:10px;">Importing…</p>';
+    statusEl.innerHTML = '<p style="color:var(--muted);font-size:0.7812rem;margin-top:10px;">Importing…</p>';
     try{
       await importLocalData(file);
-      statusEl.innerHTML = '<p style="color:var(--teal);font-size:12.5px;margin-top:10px;">Import complete — reloading…</p>';
+      statusEl.innerHTML = '<p style="color:var(--teal);font-size:0.7812rem;margin-top:10px;">Import complete — reloading…</p>';
       setTimeout(() => window.location.reload(), 900);
     }catch(err){
       statusEl.innerHTML = `<div class="error-box">Import failed: ${err.message}</div>`;
@@ -4878,7 +4908,7 @@
       // No token exchange to verify against — run a real lookup instead.
       const result = await fetchRawgRatingLive('Super Mario Bros');
       if(!result) throw new Error('Key saved, but a test lookup came back empty — double-check the key is correct');
-      statusEl.innerHTML = '<p style="color:var(--teal);font-size:12.5px;margin-top:10px;">Connected — ratings will show on game details from now on.</p>';
+      statusEl.innerHTML = '<p style="color:var(--teal);font-size:0.7812rem;margin-top:10px;">Connected — ratings will show on game details from now on.</p>';
     }catch(e){
       statusEl.innerHTML = `<div class="error-box">Couldn't verify: ${e.message}</div>`;
     }finally{
@@ -4889,7 +4919,7 @@
   $('#rawg-remove-btn').addEventListener('click', async () => {
     await removeRawgCreds();
     $('#rawg-api-key').value = '';
-    $('#rawg-status').innerHTML = '<p style="color:var(--muted);font-size:12.5px;margin-top:10px;">RAWG key removed — ratings will stop showing until a new key is saved.</p>';
+    $('#rawg-status').innerHTML = '<p style="color:var(--muted);font-size:0.7812rem;margin-top:10px;">RAWG key removed — ratings will stop showing until a new key is saved.</p>';
   });
 
   async function loadAll(opts){
@@ -5148,6 +5178,57 @@
     const isOpen = submenu.style.display === 'block';
     submenu.style.display = isOpen ? 'none' : 'block';
     $('#ra-heading-arrow').textContent = isOpen ? '▸' : '▾';
+  });
+
+  // --- App-wide text size ---
+  // Every font-size in the stylesheet is in rem, relative to <html>'s font-size
+  // (16px by default) — so scaling that one value scales all text in the app
+  // together. Box art (and everything else sized in px/%/aspect-ratio rather
+  // than rem) is completely unaffected.
+  const TEXTSIZE_MIN = 80, TEXTSIZE_MAX = 160, TEXTSIZE_STEP = 10, TEXTSIZE_DEFAULT = 100, TEXTSIZE_BASE_PX = 16;
+  const TEXTSIZE_KEY = 'app-text-size-pct';
+  let textSizePct = TEXTSIZE_DEFAULT;
+
+  function applyTextSize(){
+    document.documentElement.style.fontSize = (TEXTSIZE_BASE_PX * textSizePct / 100) + 'px';
+    $('#textsize-label').textContent = textSizePct + '%';
+    $('#textsize-dec').disabled = textSizePct <= TEXTSIZE_MIN;
+    $('#textsize-inc').disabled = textSizePct >= TEXTSIZE_MAX;
+  }
+  async function saveTextSize(){
+    try{ await window.storage.set(TEXTSIZE_KEY, String(textSizePct), false); }catch(e){ /* non-fatal */ }
+  }
+  async function initTextSize(){
+    try{
+      const saved = await window.storage.get(TEXTSIZE_KEY, false);
+      const n = saved ? parseInt(saved.value, 10) : NaN;
+      if(!isNaN(n) && n >= TEXTSIZE_MIN && n <= TEXTSIZE_MAX) textSizePct = n;
+    }catch(e){ /* non-fatal — falls back to 100% */ }
+    applyTextSize();
+  }
+  initTextSize();
+
+  $('#btn-textsize-heading').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const submenu = $('#textsize-submenu');
+    const isOpen = submenu.style.display === 'block';
+    submenu.style.display = isOpen ? 'none' : 'block';
+    $('#textsize-heading-arrow').textContent = isOpen ? '▸' : '▾';
+  });
+  $('#textsize-dec').addEventListener('click', (e) => {
+    e.stopPropagation();
+    textSizePct = Math.max(TEXTSIZE_MIN, textSizePct - TEXTSIZE_STEP);
+    applyTextSize(); saveTextSize();
+  });
+  $('#textsize-inc').addEventListener('click', (e) => {
+    e.stopPropagation();
+    textSizePct = Math.min(TEXTSIZE_MAX, textSizePct + TEXTSIZE_STEP);
+    applyTextSize(); saveTextSize();
+  });
+  $('#textsize-reset').addEventListener('click', (e) => {
+    e.stopPropagation();
+    textSizePct = TEXTSIZE_DEFAULT;
+    applyTextSize(); saveTextSize();
   });
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
