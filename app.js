@@ -617,8 +617,7 @@
     return `rom:${creds.username.trim().toLowerCase()}:${gameId}`;
   }
   async function saveRom(gameId, filename, bytes){
-    try{ await window.storage.set(romKey(gameId), { filename, bytes }, false); }
-    catch(e){ /* non-fatal */ }
+    await window.storage.set(romKey(gameId), { filename, bytes }, false);
   }
   async function loadRom(gameId){
     try{
