@@ -1,0 +1,40 @@
+name: Build RAPatches index
+
+# Refreshes ra-patches-index.json: a flat list of every patch file path in
+# RetroAchievements/RAPatches. GitHub Pages serves it as a normal file, so
+# the app loads it same-origin instead of calling GitHub's tree API from
+# every visitor's own browser.
+on:
+  schedule:
+    - cron: '17 6 * * *'  # once a day; RAPatches doesn't change fast enough to need more
+  workflow_dispatch: {}    # lets you trigger a rebuild manually from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build index
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # raises the RAPatches API rate limit; scoped read-only to this repo by default
+        run: node tools/build-ra-index.mjs ra-patches-index.json
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- ra-patches-index.json; then
+            echo "No changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ra-patches-index.json
+          git commit -m "Update RAPatches index [automated]"
+          git push
