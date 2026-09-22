@@ -2401,8 +2401,17 @@
   const RAPATCHES_OWNER = 'RetroAchievements';
   const RAPATCHES_REPO = 'RAPatches';
 
+  // The file list is normally served pre-built: a GitHub Actions workflow
+  // (.github/workflows/build-ra-index.yml) crawls RAPatches once a day and
+  // commits ra-patches-index.json into this repo, so GitHub Pages serves it
+  // same-origin. That avoids every visitor's own browser calling GitHub's
+  // tree API directly, which is rate-limited per IP (60 requests/hour,
+  // shared by everyone behind that IP) — fine for occasional personal use,
+  // but a shared or mobile-carrier IP can burn through it. If the static
+  // file is missing (e.g. the workflow hasn't run yet on a fresh fork) or
+  // fails to load, this falls back to asking GitHub directly, same as before.
   async function getRAPatchesTree(){
-    const cacheKey = 'rapatches-tree-cache-v2'; // v2: the file list now includes .zip/.7z (older caches only had bare patches)
+    const cacheKey = 'rapatches-tree-cache-v3'; // v3: prefers the prebuilt static index
     try{
       const r = await window.storage.get(cacheKey, false);
       if(r && r.value){
@@ -2410,6 +2419,18 @@
         if(Date.now() - cached.ts < 24 * 60 * 60 * 1000) return cached;
       }
     }catch(e){ /* not cached yet */ }
+
+    try{
+      const staticResp = await fetch('./ra-patches-index.json', { cache: 'no-store' });
+      if(staticResp.ok){
+        const data = await staticResp.json();
+        if(Array.isArray(data.files) && data.files.length > 100){
+          const cached = { branch: data.branch || 'main', files: data.files.map(p => ({ path: p })), ts: Date.now(), truncated: false, source: 'static' };
+          try{ await window.storage.set(cacheKey, JSON.stringify(cached), false); }catch(e){ /* non-fatal */ }
+          return cached;
+        }
+      }
+    }catch(e){ /* fall through to the live API below */ }
 
     const metaResp = await fetch(`https://api.github.com/repos/${RAPATCHES_OWNER}/${RAPATCHES_REPO}`);
     if(!metaResp.ok) throw new Error(`Could not reach the RAPatches repo (${metaResp.status}).`);
@@ -2423,7 +2444,7 @@
       .filter(e => e.type === 'blob' && /\.(bps|ips|ups|ppf|aps|xdelta3?|vcdiff|vcd|zip|7z)$/i.test(e.path))
       .map(e => ({ path: e.path }));
 
-    const cached = { branch, files, ts: Date.now(), truncated: !!treeData.truncated };
+    const cached = { branch, files, ts: Date.now(), truncated: !!treeData.truncated, source: 'live' };
     try{ await window.storage.set(cacheKey, JSON.stringify(cached), false); }catch(e){ /* non-fatal */ }
     return cached;
   }
