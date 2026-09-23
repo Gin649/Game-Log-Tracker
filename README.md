@@ -52,13 +52,12 @@ The app is a static site — no build step, no dependencies to install. Everythi
 | `sw.js` | Service worker — caches the files above for offline use |
 | `manifest.json` | PWA install metadata (icons, name, start URL) |
 
-`sw.js` lists every cacheable file by name and only re-fetches them for returning visitors when `CACHE_NAME` at the top of the file changes. **Any time you edit `style.css` or one of the `.js` files, bump `CACHE_NAME`** (e.g. `gl-tracker-v53` → `gl-tracker-v54`) or the update won't reach anyone who already has the app installed/cached.
 
 ## Tech
 
 - Vanilla JS, no framework, no bundler
 - IndexedDB for all local storage
-- Service worker for offline caching (`sw.js`) — see [Project structure](#project-structure) above for what needs to change when you deploy an update
+- Service worker for offline caching (`sw.js`)
 - [RetroAchievements Web API](https://api-docs.retroachievements.org/) and [RAWG API](https://rawg.io/apidocs) for data
 - [RAPatches repository](https://github.com/RetroAchievements/RAPatches) for ROM hack patches, and an archive.org mirror of GameFAQs for text guides
 
