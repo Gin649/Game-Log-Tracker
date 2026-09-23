@@ -30,6 +30,121 @@
   }
   function crc32Hex(bytes){ return crc32(bytes).toString(16).padStart(8, '0'); }
 
+  // --- MD5 (RFC 1321) ---
+  // RetroAchievements' hash database (API_GetGameHashes) is keyed by MD5, not
+  // CRC32. Used only to verify a patched ROM's result against RA's known-good
+  // hash for a game — see raRomHash/verifyAgainstRaHash below. Implemented
+  // directly from the RFC, same as the patch formats above; verified against
+  // the RFC's own test vectors before shipping.
+  function md5Hex(bytes){
+    function rotl(x, c){ return (x << c) | (x >>> (32 - c)); }
+    const s = [
+      7,12,17,22, 7,12,17,22, 7,12,17,22, 7,12,17,22,
+      5, 9,14,20, 5, 9,14,20, 5, 9,14,20, 5, 9,14,20,
+      4,11,16,23, 4,11,16,23, 4,11,16,23, 4,11,16,23,
+      6,10,15,21, 6,10,15,21, 6,10,15,21, 6,10,15,21
+    ];
+    const K = new Int32Array(64);
+    for(let i = 0; i < 64; i++) K[i] = (Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296)) | 0;
+
+    const msgLen = bytes.length;
+    const padLen = Math.ceil((msgLen + 9) / 64) * 64;
+    const padded = new Uint8Array(padLen);
+    padded.set(bytes);
+    padded[msgLen] = 0x80;
+    const dv = new DataView(padded.buffer);
+    dv.setUint32(padLen - 8, (msgLen * 8) >>> 0, true);
+    dv.setUint32(padLen - 4, Math.floor(msgLen / 0x20000000), true);
+
+    let a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
+    for(let off = 0; off < padLen; off += 64){
+      const M = new Int32Array(16);
+      for(let j = 0; j < 16; j++) M[j] = dv.getInt32(off + j*4, true);
+      let A = a0, B = b0, C = c0, D = d0;
+      for(let i = 0; i < 64; i++){
+        let F, g;
+        if(i < 16){ F = (B & C) | (~B & D); g = i; }
+        else if(i < 32){ F = (D & B) | (~D & C); g = (5*i + 1) % 16; }
+        else if(i < 48){ F = B ^ C ^ D; g = (3*i + 5) % 16; }
+        else { F = C ^ (B | ~D); g = (7*i) % 16; }
+        F = (F + A + K[i] + M[g]) | 0;
+        A = D; D = C; C = B;
+        B = (B + rotl(F, s[i])) | 0;
+      }
+      a0 = (a0 + A) | 0; b0 = (b0 + B) | 0; c0 = (c0 + C) | 0; d0 = (d0 + D) | 0;
+    }
+    const toHexLE = (n) => {
+      const b = new Uint8Array(4);
+      new DataView(b.buffer).setInt32(0, n, true);
+      return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+    };
+    return toHexLE(a0) + toHexLE(b0) + toHexLE(c0) + toHexLE(d0);
+  }
+
+  // RetroAchievements hashes a handful of consoles differently from a plain
+  // whole-file MD5 — it strips copier/dump headers that aren't part of the
+  // actual game data, since two dumps of the same game with/without a header
+  // should still earn the same achievement set. This handles the common,
+  // well-documented cases (NES iNES header, SNES 512-byte copier header, N64
+  // byte-order normalization to big-endian/.z64). Everything else is hashed
+  // as-is, which matches RA's convention for most other cartridge consoles.
+  function raRomHash(consoleName, bytes){
+    const norm = normalizeForMatch(consoleName);
+    if(norm.includes('nintendo entertainment system') || norm.includes('famicom') || /(^| )nes( |$)/.test(norm)){
+      if(bytes.length > 16 && bytes[0] === 0x4E && bytes[1] === 0x45 && bytes[2] === 0x53 && bytes[3] === 0x1A){
+        return md5Hex(bytes.subarray(16));
+      }
+    }else if(norm.includes('super nintendo') || norm.includes('super famicom') || /(^| )snes( |$)/.test(norm)){
+      if(bytes.length % 0x8000 === 512){
+        return md5Hex(bytes.subarray(512));
+      }
+    }else if(norm.includes('nintendo 64') || /(^| )n64( |$)/.test(norm)){
+      if(bytes.length >= 4){
+        // Normalize to big-endian (.z64) byte order before hashing.
+        if(bytes[0] === 0x37 && bytes[1] === 0x80 && bytes[2] === 0x40 && bytes[3] === 0x12){
+          // .v64 — byte-swapped every 2 bytes
+          const out = new Uint8Array(bytes.length);
+          for(let i = 0; i + 1 < bytes.length; i += 2){ out[i] = bytes[i+1]; out[i+1] = bytes[i]; }
+          return md5Hex(out);
+        }
+        if(bytes[0] === 0x40 && bytes[1] === 0x12 && bytes[2] === 0x37 && bytes[3] === 0x80){
+          // .n64 — word-swapped every 4 bytes (little-endian)
+          const out = new Uint8Array(bytes.length);
+          for(let i = 0; i + 3 < bytes.length; i += 4){
+            out[i] = bytes[i+3]; out[i+1] = bytes[i+2]; out[i+2] = bytes[i+1]; out[i+3] = bytes[i];
+          }
+          return md5Hex(out);
+        }
+      }
+    }
+    return md5Hex(bytes);
+  }
+
+  // Applies AFTER a successful patch, only for results tied unambiguously to
+  // one RA game ID (the "official" RA-linked patch, and the "byId" group —
+  // files RAPatches names with this exact game's RA ID prefix). Checks the
+  // patched ROM's hash against RetroAchievements' own known-hash list for
+  // that game via API_GetGameHashes — this is the only way to verify an IPS
+  // patch's result, since IPS carries no checksum of its own. Non-fatal by
+  // design: a failed lookup returns "unknown" rather than a false mismatch.
+  async function verifyAgainstRaHash(targetGameId, targetBytes, consoleName_){
+    try{
+      const data = await raFetch('API_GetGameHashes.php', { i: targetGameId });
+      const list = (data && (data.Results || data.results)) || [];
+      const known = list.map(r => String(r.MD5 || r.Md5 || r.Hash || r.hash || '').toLowerCase()).filter(Boolean);
+      if(!known.length){
+        return { cls: 'unknown', text: "RetroAchievements doesn't have a hash on file for this game to check against — patch applied, but the result wasn't verified." };
+      }
+      const hash = raRomHash(consoleName_, targetBytes);
+      if(known.includes(hash)){
+        return { cls: 'ok', text: 'Matches a hash RetroAchievements has on file for this game — achievements should unlock normally.' };
+      }
+      return { cls: 'mismatch', text: `Doesn't match any hash RetroAchievements has on file for this game (got ${hash}) — achievements may not unlock. This can happen with a different ROM revision/region than RA expects, or if this isn't quite the right patch.` };
+    }catch(e){
+      return { cls: 'unknown', text: "Couldn't check the result against RetroAchievements' hash database, so this wasn't verified." };
+    }
+  }
+
   function readVLQ(bytes, pos){
     let data = 0, shift = 1;
     for(;;){
@@ -977,11 +1092,12 @@
 
         // IPS/zip patches carry no checksum, so filename/folder relevance is the only
         // thing keeping totally unrelated games' hacks (e.g. Metroid patches while
-        // searching for Mario) out of this list. Require the file to either share a
-        // title word (score > 0) or sit in a folder named after this game (inFolder) —
-        // both signal "clearly about this game" the way a bare console-folder scan
-        // (which just means "some file for this console") doesn't.
-        const noPreCheck = ipsAll.concat(zipAll).filter(c => c.inFolder || c.score > 0);
+        // searching for Mario) out of this list. Require ALL of the title's words to
+        // appear in the filename (score === 1) — a single shared word (e.g. "Super")
+        // isn't enough, since that alone matches every other "Super ___" game on the
+        // console. inFolder stands on its own: RAPatches' own folder-per-game layout is
+        // a reliable signal even when the file itself is named just "<RA ID>-Abbrev.ext".
+        const noPreCheck = ipsAll.concat(zipAll).filter(c => c.inFolder || c.score === 1);
         const unverifiedPicks = noPreCheck.filter(c => !idPaths.has(c.path));
 
         const byLabel = (a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true });
@@ -1089,8 +1205,14 @@
         listWrap.querySelectorAll('.patch-result-row button').forEach(btn => {
           btn.addEventListener('click', () => {
             const url = decodeURIComponent(btn.dataset.url);
-            const entry = results[btn.dataset.group].find(e => e.url === url);
-            if(entry) selectAndApply(entry);
+            const group = btn.dataset.group;
+            const entry = results[group].find(e => e.url === url);
+            // Only "official" (RA-linked) and "byId" (filename tagged with this exact
+            // RA game ID) unambiguously target this game's own gameId — "verified" and
+            // "unverified" entries can belong to a hack with its own, different RA ID,
+            // so there's nothing correct to check their result against here.
+            const verifyGameId = (group === 'official' || group === 'byId') ? gameId : null;
+            if(entry) selectAndApply(entry, verifyGameId);
           });
         });
       }
@@ -1122,7 +1244,7 @@
       patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
     }
 
-    async function selectAndApply(entry){
+    async function selectAndApply(entry, verifyGameId){
       patchWrap.innerHTML = '<div class="achievements-list-loading">Downloading patch…</div>';
       try{
         const kind = patchKindFromUrl(entry.url);
@@ -1136,8 +1258,8 @@
         if(!resp.ok) throw new Error(`Could not download that patch (${resp.status}).`);
         const bytes = new Uint8Array(await resp.arrayBuffer());
 
-        if(isZip){ await applyFromZip(entry, bytes); return; }
-        await applyPatchBytes(entry.label, kind, bytes);
+        if(isZip){ await applyFromZip(entry, bytes, verifyGameId); return; }
+        await applyPatchBytes(entry.label, kind, bytes, verifyGameId);
       }catch(e){
         patchWrap.innerHTML = `<div class="achievements-list-loading">Could not apply that patch: ${e.message}</div><button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="margin-top:8px;width:100%;">‹ Back to results</button>`;
         patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
@@ -1147,7 +1269,7 @@
     // Opens a downloaded zip, finds the BPS/IPS/UPS patch(es) inside, and applies the one
     // that matches this ROM. If it can't tell (several patches, or IPS which has no
     // checksum), it lets the person pick.
-    async function applyFromZip(entry, zipBytes){
+    async function applyFromZip(entry, zipBytes, verifyGameId){
       let items = [];
       try{
         const entries = readZipEntries(zipBytes).filter(e =>
@@ -1174,7 +1296,7 @@
       const matched = items.filter(i => i.matches === true);
       if(items.length === 1 || matched.length === 1){
         const pick = items.length === 1 ? items[0] : matched[0];
-        await applyPatchBytes(pick.label, pick.kind, pick.data);
+        await applyPatchBytes(pick.label, pick.kind, pick.data, verifyGameId);
         return;
       }
       items.sort((a, b) => (b.matches === true) - (a.matches === true));
@@ -1191,16 +1313,23 @@
       patchWrap.querySelectorAll('.patch-result-row button').forEach(btn => {
         btn.addEventListener('click', () => {
           const it = items[Number(btn.dataset.idx)];
-          applyPatchBytes(it.label, it.kind, it.data);
+          applyPatchBytes(it.label, it.kind, it.data, verifyGameId);
         });
       });
     }
 
-    async function applyPatchBytes(label, kind, patchBytes){
+    async function applyPatchBytes(label, kind, patchBytes, verifyGameId){
       try{
         patchWrap.innerHTML = '<div class="achievements-list-loading">Applying patch…</div>';
         await new Promise(r => setTimeout(r, 30)); // let the message paint before the heavy work
         const { target, notes } = applyPatchStrict(kind, patchBytes, romBytes);
+
+        let raCheck = null;
+        if(verifyGameId){
+          patchWrap.innerHTML = '<div class="achievements-list-loading">Verifying against RetroAchievements…</div>';
+          raCheck = await verifyAgainstRaHash(verifyGameId, target, consoleName);
+        }
+
         const blob = new Blob([target], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
         const romExtMatch = /\.[^./\\]+$/.exec(romFilename || '');
@@ -1214,9 +1343,35 @@
         const saveHint = supportsFSAccess && romFileHandle
           ? 'The save dialog opens in the same folder as the ROM you loaded.'
           : (supportsFSAccess ? 'Pick a folder to save it in.' : 'It downloads to your browser\'s default download folder.');
+
+        // romhack.ing's search page — this is a plain browser navigation
+        // (an <a> link, not a fetch()), so the CORS wall and robots.txt block
+        // that ruled out live-fetching a description don't apply here: the
+        // user's browser can load the page fine even though our own tooling
+        // can't. Filters go through a base64-encoded JSON array (confirmed
+        // against a real romhack.ing search URL) rather than the plain
+        // queryString param, which isn't field-scoped: index 8 is {field:
+        // "title", operator:"must", value:<title>}, index 9 is the fixed,
+        // non-game-specific {field:"categories", operator:"must",
+        // value:"Hack"}. Prefilled but not guaranteed exact — the user can
+        // refine the search themselves right there.
+        const hackSearchTitle = label
+          .replace(PATCH_FILE_RE, '')
+          .replace(/^\d+[-_]/, '')
+          .replace(/[_.]+/g, ' ')
+          .trim();
+        const rhdiFilters = [null, null, null, null, null, null, null, null,
+          { field: 'title', operator: 'must', value: hackSearchTitle },
+          { field: 'categories', operator: 'must', value: 'Hack' }
+        ];
+        const rhdiFiltersB64 = btoa(unescape(encodeURIComponent(JSON.stringify(rhdiFilters))));
+        const hackSearchUrl = `https://romhack.ing/search/hack?page=0&sortField=releaseDate&sortDirection=desc&queryString=&filters=${encodeURIComponent(rhdiFiltersB64)}`;
+
         patchWrap.innerHTML = `
           ${notes.map(n => `<div class="hash-status ok" style="margin-top:8px;">${n}</div>`).join('')}
+          ${raCheck ? `<div class="hash-status ${raCheck.cls}" style="margin-top:8px;">${raCheck.text}</div>` : ''}
           <div class="hash-status ok" style="margin-top:8px;">Your ROM has been patched and saved as <strong>${outName}</strong>. Open it in your emulator to add this game to your RetroAchievements library.</div>
+          <a class="guide-btn guide-btn-outline" href="${hackSearchUrl}" target="_blank" rel="noopener" style="width:100%;margin-top:10px;display:block;text-align:center;box-sizing:border-box;">What does this hack do? ↗</a>
           <button class="guide-btn guide-btn-primary" id="patch-download-btn" style="margin-top:10px;width:100%;">${supportsFSAccess ? 'Save Patched ROM…' : 'Download Patched ROM'}</button>
           <div style="font-size:0.675rem;color:var(--muted);margin-top:4px;">${saveHint}</div>
           <button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="width:100%;margin-top:8px;">‹ Back to results</button>
