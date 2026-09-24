@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gl-tracker-v63;
+const CACHE_NAME = 'gl-tracker-v64;
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
