@@ -120,6 +120,28 @@
     return md5Hex(bytes);
   }
 
+  // N64 dumps exist in three byte orders: .z64 (big-endian, what patches and RetroAchievements
+  // are built against), .v64 (every 2 bytes swapped) and .n64 (every 4 bytes reversed). The first
+  // four bytes tell them apart. A .v64/.n64 dump is the right game with a "wrong" checksum, so it is
+  // converted to .z64 order before any checksum or patching happens. Returns { bytes, converted }.
+  function n64ToBigEndian(bytes){
+    if(!bytes || bytes.length < 4) return { bytes, converted: null };
+    const [a, b, c, d] = bytes;
+    if(a === 0x37 && b === 0x80 && c === 0x40 && d === 0x12){ // .v64
+      const out = new Uint8Array(bytes.length);
+      for(let i = 0; i + 1 < bytes.length; i += 2){ out[i] = bytes[i+1]; out[i+1] = bytes[i]; }
+      if(bytes.length % 2) out[bytes.length - 1] = bytes[bytes.length - 1];
+      return { bytes: out, converted: 'v64' };
+    }
+    if(a === 0x40 && b === 0x12 && c === 0x37 && d === 0x80){ // .n64
+      const out = new Uint8Array(bytes.length);
+      for(let i = 0; i + 3 < bytes.length; i += 4){ out[i] = bytes[i+3]; out[i+1] = bytes[i+2]; out[i+2] = bytes[i+1]; out[i+3] = bytes[i]; }
+      for(let i = bytes.length - (bytes.length % 4); i < bytes.length; i++) out[i] = bytes[i];
+      return { bytes: out, converted: 'n64' };
+    }
+    return { bytes, converted: null };
+  }
+
   // Applies AFTER a successful patch, only for results tied unambiguously to
   // one RA game ID (the "official" RA-linked patch, and the "byId" group —
   // files RAPatches names with this exact game's RA ID prefix). Checks the
@@ -892,6 +914,34 @@
     let romBytes = null;
     let romFilename = null;
     let romFromStorage = false;
+    let romConvertedFrom = null; // 'v64' | 'n64' when an N64 dump was converted to .z64 order on load
+    let romUnzippedFrom = null;  // zip file name when the ROM was unpacked from a zip
+    let romLoadError = null;
+    // Every way of loading a ROM goes through here: unzips it if it's a zip (the checksum has to be of
+    // the ROM inside, not of the zip file), then converts N64 dumps to .z64 byte order.
+    async function setRom(bytes, filename){
+      romLoadError = null; romUnzippedFrom = null; romConvertedFrom = null;
+      if(bytes && bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4B && (bytes[2] === 0x03 || bytes[2] === 0x05)){
+        try{
+          const notRom = /\.(txt|nfo|md|diz|url|htm|html|pdf|jpe?g|png|gif|ini|sfv|md5|sha1|xml|db)$/i;
+          const entries = readZipEntries(bytes)
+            .filter(e => !/\/$/.test(e.name) && !/^__MACOSX\//.test(e.name) && !notRom.test(e.name))
+            .sort((x, y) => y.csize - x.csize); // the ROM is the biggest file in the zip
+          if(!entries.length) throw new Error('there is no ROM file inside it');
+          bytes = await extractZipEntry(bytes, entries[0]);
+          romUnzippedFrom = filename;
+          filename = entries[0].name.split('/').pop();
+        }catch(e){
+          romBytes = null; romFilename = null;
+          romLoadError = `Couldn't open ${filename}: ${(e && e.message) || 'unknown error'}. Try extracting the ROM from the zip yourself and selecting that file.`;
+          return;
+        }
+      }
+      const n = n64ToBigEndian(bytes);
+      romBytes = n.bytes;
+      romConvertedFrom = n.converted;
+      romFilename = n.converted ? String(filename || '').replace(/\.(v64|n64)$/i, '.z64') : filename;
+    }
     let romFileHandle = null; // FileSystemFileHandle for the loaded ROM, when the File System Access API is available — lets "Save Patched ROM" default to the same folder
     let rememberRom = false;
     let results = null; // { official: [...], verified: [...], unverified: [...] }
@@ -903,7 +953,7 @@
 
     async function init(){
       const saved = await loadRom(gameId);
-      if(saved){ romBytes = saved.bytes; romFilename = saved.filename; romFromStorage = true; }
+      if(saved){ await setRom(saved.bytes, saved.filename); romFromStorage = !!romBytes; }
       renderRomStage();
     }
 
@@ -911,6 +961,7 @@
     function renderRomStage(){
       if(!romBytes){
         patchWrap.innerHTML = `
+          ${romLoadError ? `<div class="hash-status mismatch" style="margin-bottom:10px;">${romLoadError}</div>` : ''}
           <p style="font-size:0.7688rem;color:var(--muted);margin:0 0 10px;line-height:1.55;">Select the ROM file for this game. Its checksum is what gets matched against the patch repo, so the results are patches actually compatible with your exact dump — not just anything with a similar name.</p>
           <input type="file" id="patch-rom-input" style="display:none;">
           <button class="guide-btn guide-btn-primary" id="patch-rom-pick-btn">Select ROM File…</button>
@@ -921,10 +972,9 @@
             try{
               const [handle] = await window.showOpenFilePicker({ excludeAcceptAllOption: false });
               const file = await handle.getFile();
-              romBytes = new Uint8Array(await file.arrayBuffer());
-              romFilename = file.name;
+              await setRom(new Uint8Array(await file.arrayBuffer()), file.name);
               romFromStorage = false;
-              romFileHandle = handle;
+              romFileHandle = romBytes ? handle : null;
               renderRomStage();
             }catch(e){
               if(e && e.name !== 'AbortError') input.click(); // picker unavailable for some reason — fall back
@@ -936,8 +986,7 @@
         input.addEventListener('change', async () => {
           const file = input.files && input.files[0];
           if(!file) return;
-          romBytes = new Uint8Array(await file.arrayBuffer());
-          romFilename = file.name;
+          await setRom(new Uint8Array(await file.arrayBuffer()), file.name);
           romFromStorage = false;
           romFileHandle = null;
           renderRomStage();
@@ -947,6 +996,8 @@
       patchWrap.innerHTML = `
         <div style="font-size:0.7688rem;color:var(--text);">Base ROM: <strong>${romFilename}</strong></div>
         <div style="font-size:0.675rem;color:var(--muted);margin-top:2px;">CRC32 ${crc32Hex(romBytes)}</div>
+        ${romUnzippedFrom ? `<div style="font-size:0.675rem;color:var(--muted);margin-top:2px;">Unpacked from ${romUnzippedFrom}, so the checksum is of the ROM itself.</div>` : ''}
+        ${romConvertedFrom ? `<div style="font-size:0.675rem;color:var(--muted);margin-top:2px;">Converted from .${romConvertedFrom} to .z64 byte order, which is what patches and RetroAchievements expect. The patched ROM will be saved as .z64.</div>` : ''}
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button class="guide-btn guide-btn-ghost" id="patch-rom-change-btn">Use a different file…</button>
           ${romFromStorage ? '<button class="guide-btn guide-btn-danger" id="patch-rom-forget-btn">Forget saved ROM</button>' : ''}
