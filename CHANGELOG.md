@@ -4,16 +4,20 @@ All notable changes to Game Log — Tracker are documented here. Newest first.
 
 ## v2.0.2
 
-## Added and Fixed
--Added GameFaqs cheat database search as a button in Game Profile 
--Playtime data is more accurate and loads the most recent games first 
--Fixed bug that wasn't allowing new updates to cache, introduced hard refresh with every launch after close. Also, if app is left idle and there is an update, notification dot will display on menu bar to prompt update.
--Small style changes and added mouse controls to scroll consoles when using PC version of the app
+### Added and Fixed
+- Added GameFaqs cheat database search as a button in Game Profile
+- Playtime data is more accurate
+- Playtime loads the most recent games first
+- Fixed bug that wasn't allowing new updates to cache
+- Updates now apply automatically the next time the app is opened after being closed
+- If app is left idle and there is an update, a notification dot will display on the menu bar to prompt the update
+- Small style changes
+- Added mouse controls to scroll consoles when using PC version of the app
 
 ## v2.0.1
 
 ### Added
--Romhack.ing link added to Rom hack menu that links out to more details about the ROMhack
+- Romhack.ing link added to Rom hack menu that links out to more details about the ROMhack
 
 ## v2.0 - Big Update
 
