@@ -5,14 +5,14 @@ All notable changes to Game Log — Tracker are documented here. Newest first.
 ## v2.0.2
 
 ## Added and Fixed
--Cheat Searching of the GameFaq database as a button in Game Profile
--Playtime data is more accurate and loads the most recent games first
--Small format changes for Cosmetics
+-Added GameFaqs cheat database as a button in Game Profile  
+-Playtime data is more accurate and loads the most recent games first  
+-Small style changes
 
 ## v2.0.1
 
 ### Added
--Romhack.ing link added to Rom hack menu that links out to more details about the romhack
+-Romhack.ing link added to Rom hack menu that links out to more details about the ROMhack
 
 ## v2.0 - Big Update
 
