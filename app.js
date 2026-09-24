@@ -533,6 +533,195 @@
     try{ await window.storage.delete('ra-credentials', false); }catch(e){}
   }
 
+  // --- "Need Cheats?" (GameFAQs) ---
+  // Pressing the button opens that game's GameFAQs cheats page in a new tab. GameFAQs blocks
+  // in-app fetching, so it only links out. The link needs the game's numeric GameFAQs ID, which is
+  // looked up on Wikidata (free, and its API allows browser requests) the first time and then
+  // remembered per game. GameFAQs shows the same cheats for every platform version, so any of a
+  // game's IDs works. If no match is found, it opens GameFAQs' search for the title instead.
+  const CHEATS_URL = id => `https://gamefaqs.gamespot.com/-/${id}-/cheats`; // if this pattern doesn't reach the cheats page, fix it here only
+  const WD_API = 'https://www.wikidata.org/w/api.php';
+  const WD_SPARQL = 'https://query.wikidata.org/sparql';
+  // RA console name (lowercase) -> Wikidata platform labels (lowercase) that count as a match.
+  // Consoles not listed here are matched on title only.
+  const WD_PLATFORMS = {
+    'game boy': ['game boy'],
+    'game boy color': ['game boy color'],
+    'game boy advance': ['game boy advance'],
+    'snes/super famicom': ['super nintendo entertainment system', 'super famicom', 'snes'],
+    'nes/famicom': ['nintendo entertainment system', 'family computer', 'famicom', 'nes'],
+    'genesis/mega drive': ['sega genesis', 'mega drive', 'sega mega drive', 'genesis'],
+    'nintendo 64': ['nintendo 64'],
+    'playstation': ['playstation'],
+    'playstation 2': ['playstation 2'],
+    'playstation portable': ['playstation portable'],
+    'nintendo ds': ['nintendo ds'],
+    'master system': ['sega master system', 'master system'],
+    'game gear': ['game gear', 'sega game gear'],
+    'sega cd': ['sega cd', 'mega-cd', 'sega mega-cd'],
+    'saturn': ['sega saturn', 'saturn'],
+    'dreamcast': ['dreamcast', 'sega dreamcast'],
+    'pc engine/turbografx-16': ['turbografx-16', 'pc engine', 'turbografx-16/pc engine'],
+    'atari 2600': ['atari 2600'],
+    'atari 7800': ['atari 7800'],
+    'atari lynx': ['atari lynx'],
+    'virtual boy': ['virtual boy'],
+    'neo geo pocket': ['neo geo pocket', 'neo geo pocket color'],
+    'wonderswan': ['wonderswan', 'wonderswan color']
+  };
+
+  // RA titles carry tags and "X, The" ordering that Wikidata doesn't use.
+  function cheatsCleanTitle(t){
+    let s = String(t || '').replace(/\[[^\]]*\]/g, ' ').replace(/~[^~]*~/g, ' ').replace(/\s+/g, ' ').trim();
+    s = s.replace(/^(.*?),\s*(the|a|an)\b(.*)$/i, '$2 $1$3');
+    return s.replace(/\s+/g, ' ').trim();
+  }
+  function cheatsNormTitle(t){
+    return cheatsCleanTitle(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+  // 2 = same title, 1 = one contains the other (without a sequel number/numeral tacked on), 0 = no match
+  function cheatsTitleScore(a, b){
+    if(!a || !b) return 0;
+    if(a === b) return 2;
+    const short = a.length <= b.length ? a : b;
+    const long = a.length <= b.length ? b : a;
+    if(short.length / long.length < 0.6 || !(' ' + long + ' ').includes(' ' + short + ' ')) return 0;
+    const extra = (' ' + long + ' ').replace(' ' + short + ' ', ' ').trim().split(' ');
+    if(extra.some(w => /^\d+$/.test(w) || /^(ii|iii|iv|v|vi|vii|viii|ix|x)$/.test(w))) return 0;
+    return 1;
+  }
+  // cands: [{ qid, title, names[], itemPlats[], statements:[{ id, preferred, qplats[] }] }]
+  function pickWikidataMatch(title, consoleName, cands){
+    const target = cheatsNormTitle(title);
+    const accepted = WD_PLATFORMS[String(consoleName || '').trim().toLowerCase()] || null;
+    let best = null;
+    (cands || []).forEach(c => {
+      let ts = 0;
+      (c.names || []).forEach(n => { ts = Math.max(ts, cheatsTitleScore(target, cheatsNormTitle(n))); });
+      if(!ts || !c.statements || !c.statements.length) return;
+      const itemHasConsole = accepted && c.itemPlats.length ? c.itemPlats.some(p => accepted.includes(p)) : null;
+      c.statements.forEach(s => {
+        // true = ID is confirmed to be this console's version; false = wrong console;
+        // null = can't tell (e.g. the game is on several platforms and Wikidata doesn't say which one this ID is for)
+        let ok = null;
+        if(accepted){
+          if(s.qplats.length) ok = s.qplats.some(p => accepted.includes(p));
+          else if(itemHasConsole === false) ok = false;
+          else if(itemHasConsole === true && c.itemPlats.length === 1 && c.statements.length === 1) ok = true;
+        }
+        if(ok === false) return;
+        const score = ts * 10 + (ok === true ? 5 : 0) + (s.preferred ? 1 : 0);
+        if(!best || score > best.score) best = { score, id:s.id, qid:c.qid, title:c.title, platformOk:ok, ids:c.statements.map(x => x.id) };
+      });
+    });
+    return best;
+  }
+  async function wdJson(url){
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    try{
+      const r = await fetch(url, { signal: ctrl.signal });
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.json();
+    }finally{ clearTimeout(timer); }
+  }
+  // Resolves to { found, id?, qid?, title?, platformOk?, at }. Throws on network/API errors
+  // (those are shown to the user and NOT cached).
+  async function lookupCheats(title, consoleName){
+    if(/^\s*~/.test(title || '')) return { v:2, found:false, reason:'hack', at:Date.now() };
+    const search = cheatsCleanTitle(title);
+    if(!search) return { v:2, found:false, at:Date.now() };
+    const sp = new URLSearchParams({ action:'wbsearchentities', search, language:'en', uselang:'en', type:'item', limit:'20', format:'json', origin:'*' });
+    const sr = await wdJson(`${WD_API}?${sp}`);
+    const hits = (sr.search || []).filter(h => /^Q\d+$/.test(h.id));
+    if(!hits.length) return { v:2, found:false, at:Date.now() };
+    const sparql = `SELECT ?item ?id ?rank ?qplatLabel ?platLabel WHERE {
+      VALUES ?item { ${hits.map(h => 'wd:' + h.id).join(' ')} }
+      ?item p:P4769 ?st . ?st ps:P4769 ?id . ?st wikibase:rank ?rank .
+      FILTER(?rank != wikibase:DeprecatedRank)
+      OPTIONAL { ?st pq:P400 ?qplat . ?qplat rdfs:label ?qplatLabel . FILTER(LANG(?qplatLabel) = "en") }
+      OPTIONAL { ?item wdt:P400 ?plat . ?plat rdfs:label ?platLabel . FILTER(LANG(?platLabel) = "en") }
+    }`;
+    const rows = await wdJson(`${WD_SPARQL}?${new URLSearchParams({ query:sparql, format:'json' })}`);
+    const byQ = {};
+    hits.forEach(h => {
+      byQ[h.id] = { qid:h.id, title:h.label || h.id, names:[h.label, h.match && h.match.text].filter(Boolean), statements:{}, itemPlats:[] };
+    });
+    ((rows.results && rows.results.bindings) || []).forEach(b => {
+      const c = byQ[b.item.value.split('/').pop()];
+      if(!c) return;
+      const st = c.statements[b.id.value] || (c.statements[b.id.value] = { id:b.id.value, preferred:false, qplats:[] });
+      if(/PreferredRank$/.test(b.rank.value)) st.preferred = true;
+      if(b.qplatLabel && !st.qplats.includes(b.qplatLabel.value.toLowerCase())) st.qplats.push(b.qplatLabel.value.toLowerCase());
+      if(b.platLabel && !c.itemPlats.includes(b.platLabel.value.toLowerCase())) c.itemPlats.push(b.platLabel.value.toLowerCase());
+    });
+    const cands = Object.values(byQ).map(c => ({ ...c, statements: Object.values(c.statements) }));
+    const m = pickWikidataMatch(title, consoleName, cands);
+    return m && /^\d+$/.test(String(m.id))
+      ? { v:2, found:true, id:String(m.id), ids:(m.ids || []).map(String).filter(x => /^\d+$/.test(x)), qid:m.qid, title:m.title, platformOk:m.platformOk, at:Date.now() }
+      : { v:2, found:false, at:Date.now() };
+  }
+
+  function cheatsAutoKey(gameId){ return `cheatsauto:${creds.username.trim().toLowerCase()}:${gameId}`; }
+  async function loadCheatsAuto(gameId){
+    try{
+      const r = await window.storage.get(cheatsAutoKey(gameId), false);
+      if(r && r.value){
+        const o = JSON.parse(r.value);
+        if(o && typeof o === 'object' && o.v === 2 && (!o.found || /^\d+$/.test(String(o.id)))) return o;
+      }
+    }catch(e){ /* not looked up yet */ }
+    return null;
+  }
+  async function saveCheatsAuto(gameId, o){
+    try{ await window.storage.set(cheatsAutoKey(gameId), JSON.stringify(o), false); }catch(e){ /* non-fatal */ }
+  }
+  // Cached match if we have one, otherwise a Wikidata lookup. Falls back to GameFAQs' own search.
+  async function resolveCheatsUrl(gameId, title, consoleName){
+    const searchUrl = `https://gamefaqs.gamespot.com/search?game=${encodeURIComponent(title)}`;
+    let auto = await loadCheatsAuto(gameId);
+    const retryMissAfter = 7 * 24 * 3600 * 1000; // re-check "not found" results weekly
+    if(!auto || (!auto.found && Date.now() - (auto.at || 0) > retryMissAfter)){
+      try{
+        auto = await lookupCheats(title, consoleName);
+        await saveCheatsAuto(gameId, auto);
+      }catch(e){ auto = null; } // network problem: not cached, so the next tap tries again
+    }
+    return auto && auto.found ? CHEATS_URL(auto.id) : searchUrl;
+  }
+
+  function setupCheatsUI(gameId, title, card, consoleName){
+    const btn = card.querySelector('#modal-cheats-btn');
+    if(!btn) return;
+    // Read the saved match right away (local only, no network) so a repeat tap can open the page
+    // instantly, inside the tap itself, which browsers require to allow a new tab.
+    let readyUrl = null, busy = false;
+    loadCheatsAuto(gameId).then(o => { if(o && o.found) readyUrl = CHEATS_URL(o.id); });
+
+    btn.addEventListener('click', () => {
+      if(readyUrl){ window.open(readyUrl, '_blank', 'noopener'); return; }
+      if(busy) return;
+      busy = true;
+      const idleHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      btn.innerHTML = '<span class="cheats-spinner" aria-hidden="true"></span>Finding cheats…';
+      // Open the tab first (still inside the tap), then send it to the page once we know where.
+      const tab = window.open('', '_blank');
+      try{ if(tab) tab.document.write('<title>Finding cheats…</title><body style="font-family:sans-serif;background:#15121f;color:#eee;padding:24px">Finding cheats…</body>'); }catch(e){}
+      resolveCheatsUrl(gameId, title, consoleName).then(url => {
+        if(url.indexOf('/-/') !== -1) readyUrl = url;
+        if(tab && !tab.closed){ tab.location.href = url; } else { window.open(url, '_blank'); }
+      }).finally(() => {
+        busy = false;
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+        btn.innerHTML = idleHtml;
+      });
+    });
+  }
+
   // --- Game guides (manually imported — never fetched automatically; see
   // the "Game Guide" panel in the game profile for why) ---
   function guideKey(gameId){
@@ -1287,6 +1476,8 @@
       <button class="btn-view-achievements" id="modal-guide-btn"><span class="arrow">▸</span> Game Guide</button>
       <div class="guide-panel" id="modal-guide-panel" style="display:none;"></div>
 
+      <button class="btn-view-achievements" id="modal-cheats-btn"><span class="arrow">↗</span> Need Cheats?</button>
+
       ${isCartridgeConsole(local.ConsoleName) ? `
       <button class="btn-view-achievements" id="modal-patch-btn"><span class="arrow">▸</span> ROM Hacks</button>
       <div class="guide-panel" id="modal-patch-panel" style="display:none;"></div>
@@ -1318,6 +1509,7 @@
 
     attachRawgLookup(gameId, local.Title, card);
     setupGameGuideUI(gameId, local.Title, card, local.ConsoleID);
+    setupCheatsUI(gameId, local.Title, card, local.ConsoleName);
     if(isCartridgeConsole(local.ConsoleName)) setupRomPatchUI(gameId, local.Title, card, local.ConsoleName);
   }
 
@@ -1412,6 +1604,8 @@
       <button class="btn-view-achievements" id="modal-guide-btn"><span class="arrow">▸</span> Game Guide</button>
       <div class="guide-panel" id="modal-guide-panel" style="display:none;"></div>
 
+      <button class="btn-view-achievements" id="modal-cheats-btn"><span class="arrow">↗</span> Need Cheats?</button>
+
       ${isCartridgeConsole(console_) ? `
       <button class="btn-view-achievements" id="modal-patch-btn"><span class="arrow">▸</span> ROM Hacks</button>
       <div class="guide-panel" id="modal-patch-panel" style="display:none;"></div>
@@ -1427,6 +1621,7 @@
 
     attachRawgLookup(gameId, title, card);
     setupGameGuideUI(gameId, title, card, ext.ConsoleID || (local && local.ConsoleID));
+    setupCheatsUI(gameId, title, card, console_);
     if(isCartridgeConsole(console_)) setupRomPatchUI(gameId, title, card, console_);
 
     const achBtn = card.querySelector('#modal-view-ach-btn');
