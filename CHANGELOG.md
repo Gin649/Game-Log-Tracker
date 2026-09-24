@@ -2,10 +2,12 @@
 
 All notable changes to Game Log — Tracker are documented here. Newest first.
 
-## 2.0.2
+## v2.0.2
 
-## Added 
+## Added and Fixed
 -Cheat Searching of the GameFaq database as a button in Game Profile
+-Playtime data is more accurate and loads the most recent games first
+-Small format changes for Cosmetics
 
 ## v2.0.1
 
