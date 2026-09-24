@@ -540,6 +540,7 @@
   // remembered per game. GameFAQs shows the same cheats for every platform version, so any of a
   // game's IDs works. If no match is found, it opens GameFAQs' search for the title instead.
   const CHEATS_URL = id => `https://gamefaqs.gamespot.com/-/${id}-/cheats`; // if this pattern doesn't reach the cheats page, fix it here only
+  const CHEATS_CACHE_V = 3; // bump to make every game re-run its lookup once
   const WD_API = 'https://www.wikidata.org/w/api.php';
   const WD_SPARQL = 'https://query.wikidata.org/sparql';
   // RA console name (lowercase) -> Wikidata platform labels (lowercase) that count as a match.
@@ -576,9 +577,12 @@
     s = s.replace(/^(.*?),\s*(the|a|an)\b(.*)$/i, '$2 $1$3');
     return s.replace(/\s+/g, ' ').trim();
   }
+  // Publisher/brand possessives that some databases include and others drop.
+  function cheatsStripBrand(t){
+    return String(t || '').replace(/^(?:walt\s+disney|disney|tom\s+clancy|sid\s+meier|marvel|clive\s+barker|nickelodeon)['’]?s\s+(?=\S)/i, '').trim();
+  }
   function cheatsNormTitle(t){
-    return cheatsCleanTitle(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+    return foldText(cheatsStripBrand(cheatsCleanTitle(t))).replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
   }
   // 2 = same title, 1 = one contains the other (without a sequel number/numeral tacked on), 0 = no match
   function cheatsTitleScore(a, b){
@@ -629,13 +633,23 @@
   // Resolves to { found, id?, qid?, title?, platformOk?, at }. Throws on network/API errors
   // (those are shown to the user and NOT cached).
   async function lookupCheats(title, consoleName){
-    if(/^\s*~/.test(title || '')) return { v:2, found:false, reason:'hack', at:Date.now() };
+    if(/^\s*~/.test(title || '')) return { v:CHEATS_CACHE_V, found:false, reason:'hack', at:Date.now() };
     const search = cheatsCleanTitle(title);
-    if(!search) return { v:2, found:false, at:Date.now() };
-    const sp = new URLSearchParams({ action:'wbsearchentities', search, language:'en', uselang:'en', type:'item', limit:'20', format:'json', origin:'*' });
-    const sr = await wdJson(`${WD_API}?${sp}`);
-    const hits = (sr.search || []).filter(h => /^Q\d+$/.test(h.id));
-    if(!hits.length) return { v:2, found:false, at:Date.now() };
+    if(!search) return { v:CHEATS_CACHE_V, found:false, at:Date.now() };
+    // Wikidata's search is prefix-based, so try the title as given, without a leading brand
+    // ("Disney's Goof Troop" -> "Goof Troop"), and with "Disney's" added ("Goof Troop" -> "Disney's Goof Troop").
+    const variants = [];
+    const stripped = cheatsStripBrand(search);
+    [search, stripped, /^disney/i.test(search) ? '' : `Disney's ${stripped}`, /pokemon/i.test(search) ? search.replace(/pokemon/gi, 'Pokémon') : ''].forEach(v => { if(v && !variants.includes(v)) variants.push(v); });
+    const settled = await Promise.allSettled(variants.map(v =>
+      wdJson(`${WD_API}?${new URLSearchParams({ action:'wbsearchentities', search:v, language:'en', uselang:'en', type:'item', limit:'20', format:'json', origin:'*' })}`)));
+    if(settled.every(r => r.status === 'rejected')) throw settled[0].reason;
+    const seen = {}, hits = [];
+    settled.forEach(r => { if(r.status === 'fulfilled') (r.value.search || []).forEach(h => {
+      if(/^Q\d+$/.test(h.id) && !seen[h.id]){ seen[h.id] = 1; hits.push(h); }
+    }); });
+    hits.length = Math.min(hits.length, 40);
+    if(!hits.length) return { v:CHEATS_CACHE_V, found:false, at:Date.now() };
     const sparql = `SELECT ?item ?id ?rank ?qplatLabel ?platLabel WHERE {
       VALUES ?item { ${hits.map(h => 'wd:' + h.id).join(' ')} }
       ?item p:P4769 ?st . ?st ps:P4769 ?id . ?st wikibase:rank ?rank .
@@ -659,8 +673,8 @@
     const cands = Object.values(byQ).map(c => ({ ...c, statements: Object.values(c.statements) }));
     const m = pickWikidataMatch(title, consoleName, cands);
     return m && /^\d+$/.test(String(m.id))
-      ? { v:2, found:true, id:String(m.id), ids:(m.ids || []).map(String).filter(x => /^\d+$/.test(x)), qid:m.qid, title:m.title, platformOk:m.platformOk, at:Date.now() }
-      : { v:2, found:false, at:Date.now() };
+      ? { v:CHEATS_CACHE_V, found:true, id:String(m.id), ids:(m.ids || []).map(String).filter(x => /^\d+$/.test(x)), qid:m.qid, title:m.title, platformOk:m.platformOk, at:Date.now() }
+      : { v:CHEATS_CACHE_V, found:false, at:Date.now() };
   }
 
   function cheatsAutoKey(gameId){ return `cheatsauto:${creds.username.trim().toLowerCase()}:${gameId}`; }
@@ -669,7 +683,7 @@
       const r = await window.storage.get(cheatsAutoKey(gameId), false);
       if(r && r.value){
         const o = JSON.parse(r.value);
-        if(o && typeof o === 'object' && o.v === 2 && (!o.found || /^\d+$/.test(String(o.id)))) return o;
+        if(o && typeof o === 'object' && o.v === CHEATS_CACHE_V && (!o.found || /^\d+$/.test(String(o.id)))) return o;
       }
     }catch(e){ /* not looked up yet */ }
     return null;
@@ -1211,12 +1225,18 @@
     });
   }
 
+  // App-wide title-comparison rule: ignore case AND accents, so "Pokémon" and "Pokemon" are the same
+  // (é = e, ñ = n, etc.). Use this on both sides whenever titles are searched or compared.
+  function foldText(s){
+    return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
   function renderLibrary(){
     const wrap = $('#lib-table-wrap');
     libraryData.forEach(g => { g.estHours = (estHoursCache[g.GameID] && estHoursCache[g.GameID].hours) ?? -1; });
-    const searchVal = ($('#lib-search').value || '').toLowerCase();
+    const searchVal = foldText($('#lib-search').value || '');
     let rows = libraryData.filter(g =>
-      g.Title.toLowerCase().includes(searchVal) &&
+      foldText(g.Title).includes(searchVal) &&
       (systemFilter === 'All' || g.ConsoleName === systemFilter)
     );
 
@@ -1814,11 +1834,11 @@
   // ============================================================================
   // --- Add game manually ---
   function rankGames(games, query){
-    const q = query.trim().toLowerCase();
+    const q = foldText(query.trim());
     if(!q || !games) return [];
     return games
       .map(g => {
-        const title = String(g.Title ?? g.title ?? '').toLowerCase();
+        const title = foldText(g.Title ?? g.title ?? '');
         let score = -1;
         if(title === q) score = 3;
         else if(title.startsWith(q)) score = 2;
