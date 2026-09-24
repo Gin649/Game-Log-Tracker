@@ -215,12 +215,17 @@
     width:100%;aspect-ratio:1/1;object-fit:cover;background:var(--bg-alt);
     display:block;
   }
-  .cart .body{padding:8px;}
+  .cart .body{padding:8px;display:flex;flex-direction:column;flex:1;}
   .cart .title{
     font-size:0.7188rem;font-weight:600;margin:0 0 2px;line-height:1.3;
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
   }
-  .cart .console{font-size:0.5938rem;color:var(--muted);margin:0 0 6px;}
+  .cart .console{font-size:0.5938rem;color:var(--muted);margin:0;}
+  /* Bar + earned/pct label + playtime, grouped so they always sit flush at
+     the bottom of the card — margin-top:auto eats whatever space the title
+     doesn't use, so this block lines up the same whether a title wraps to
+     one line or two. */
+  .cart .cart-progress-group{margin-top:auto;padding-top:8px;}
   .progress-track{
     background:var(--bg-alt);border-radius:20px;height:5px;overflow:hidden;margin-bottom:4px;
   }
@@ -629,6 +634,38 @@
     animation:spin 0.7s linear infinite;vertical-align:middle;
   }
   @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* Small inline spinner shown in place of a playtime value while it's
+     still being fetched — distinct from '—', which means RA/estimate
+     genuinely has nothing for this game. */
+  .pt-pending{
+    display:inline-block;width:10px;height:10px;border-radius:50%;
+    border:2px solid var(--border);border-top-color:var(--gold);
+    animation:spin 0.7s linear infinite;vertical-align:middle;
+  }
+
+  .pt-refresh-btn{
+    background:transparent;border:1px solid var(--border);color:var(--muted);
+    width:22px;height:22px;border-radius:50%;font-size:0.75rem;line-height:1;
+    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+    padding:0;flex-shrink:0;
+  }
+  .pt-refresh-btn:hover{color:var(--text);border-color:var(--muted);}
+  .pt-refresh-btn:disabled{cursor:wait;opacity:0.6;}
+  .pt-refresh-btn.spinning{animation:spin 0.7s linear infinite;}
+
+  /* Click-and-drag horizontal scrolling (desktop mouse) for the library
+     table and beaten-by-year sections. Scoping overflow-x to these two
+     wraps (rather than letting wide content push the whole page wide)
+     also keeps a horizontal overflow, if one happens, local and scrollable
+     instead of dragging the rest of the page along with it. Touch already
+     pans these natively, so no drag JS runs for touch input. */
+  #lib-table-wrap, #year-wrap{
+    overflow-x:auto;-webkit-overflow-scrolling:touch;cursor:grab;
+  }
+  #lib-table-wrap.dragging, #year-wrap.dragging{
+    cursor:grabbing;user-select:none;-webkit-user-select:none;
+  }
 
   @media (max-width:520px){
     .profile-hero{flex-direction:column;align-items:flex-start;}
