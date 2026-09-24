@@ -319,12 +319,13 @@
   }
 
   // --- Playtime ---
-  // RetroAchievements now tracks real playtime directly (UserTotalPlaytime,
-  // in seconds) for accounts with this feature enabled, returned by the
-  // same GetGameInfoAndUserProgress call we already make per game — so this
-  // costs no extra requests. Some games can still come back with 0/no value
-  // if RA hasn't computed real time for that play history yet (e.g. it
-  // predates the feature), in which case we fall back to our own estimate:
+  // RetroAchievements tracks real playtime directly (UserTotalPlaytime, in
+  // seconds) on the standard, non-beta API — no account opt-in required —
+  // returned by the same GetGameInfoAndUserProgress call we already make
+  // per game, so this costs no extra requests. Some games can still come
+  // back with 0/no value: not every client reports playtime to RA (e.g.
+  // some standalone emulators and RALibRetro don't send it at all), in
+  // which case we fall back to our own estimate:
   // for a beaten/completed/mastered game, the calendar span from first
   // unlock to the one that earned the award; otherwise, unlock timestamps
   // grouped into "sessions" (gaps under 30 minutes count as continuous
@@ -1153,16 +1154,18 @@
       const est = estHoursCache[g.GameID];
       const hoursHtml = est
         ? `<span class="val" style="color:var(--gold)">${est.real ? '' : '≈ '}${formatDuration(est)}</span>`
-        : 'estimating…';
+        : '<span class="pt-pending" title="Loading playtime…"></span>';
       return `
         <div class="cart" data-game-id="${g.GameID}">
           <img class="art" src="${imgUrl(g.ImageIcon)}" alt="${g.Title}">
           <div class="body">
             <p class="title">${g.Title}</p>
             <p class="console">${g.ConsoleName}</p>
-            <div class="progress-track"><div class="progress-fill ${pct>=100?'complete':''} ${statsMode==='hardcore'?'hardcore':''}" style="width:${pct}%"></div></div>
-            <div class="prog-lbl"><span>${earned}/${total}</span><span>${pct}%</span></div>
-            <div class="hours">${hoursHtml}</div>
+            <div class="cart-progress-group">
+              <div class="progress-track"><div class="progress-fill ${pct>=100?'complete':''} ${statsMode==='hardcore'?'hardcore':''}" style="width:${pct}%"></div></div>
+              <div class="prog-lbl"><span>${earned}/${total}</span><span>${pct}%</span></div>
+              <div class="hours">${hoursHtml}</div>
+            </div>
           </div>
         </div>
       `;
@@ -1273,7 +1276,7 @@
             const isCustom = g.customConsole === true;
             const est = estHoursCache[g.GameID];
             const earned = Number(g.NumAwarded || 0);
-            const hoursLabel = isCustom ? '—' : (est ? formatDuration(est, true) : '…');
+            const hoursLabel = isCustom ? '—' : (est ? formatDuration(est, true) : '<span class="pt-pending" title="Loading playtime…"></span>');
             const hoursColor = 'var(--gold)';
             const awardCell = isCustom
               ? (g.manualBeaten ? '<span class="pill pill-teal">Beaten</span>' : '<span class="pill pill-muted">In progress</span>')
@@ -1628,7 +1631,13 @@
       <div class="modal-progress">
         <div class="row"><span>Your progress</span><span>${earned}/${totalAch || '?'} · ${pct}%</span></div>
         <div class="row"><span>Status</span><span>${awardPill(awardKind)}</span></div>
-        <div class="row"><span>${est && est.real ? 'Playtime' : (est && est.beaten ? 'Time to beat' : 'Est. playtime')}</span><span style="color:var(--gold)">${est ? formatDuration(est) : '—'}</span></div>
+        <div class="row">
+          <span id="modal-playtime-label">${est && est.real ? 'Playtime' : (est && est.beaten ? 'Time to beat' : 'Est. playtime')}</span>
+          <span style="display:flex;align-items:center;gap:8px;">
+            <span id="modal-playtime-val" style="color:var(--gold)">${est ? formatDuration(est) : '—'}</span>
+            <button id="modal-playtime-refresh" class="pt-refresh-btn" title="Re-check playtime with RetroAchievements" aria-label="Refresh playtime">⟳</button>
+          </span>
+        </div>
       </div>
 
       <button class="btn-view-achievements" id="modal-view-ach-btn"><span class="arrow">▸</span> View Achievements</button>
@@ -1654,6 +1663,32 @@
 
       <p class="modal-note">Ratings via <a href="https://rawg.io" target="_blank" rel="noopener" style="color:var(--teal)">RAWG</a>.</p>
     `;
+
+    const ptRefreshBtn = card.querySelector('#modal-playtime-refresh');
+    if(ptRefreshBtn){
+      ptRefreshBtn.addEventListener('click', async () => {
+        ptRefreshBtn.disabled = true;
+        ptRefreshBtn.classList.add('spinning');
+        try{
+          const fresh = await getEstimatedHours(gameId, true); // force: bypass the 12h cache
+          if(card.dataset.gameId !== String(gameId)) return; // user moved on to another game
+          const valEl = card.querySelector('#modal-playtime-val');
+          const labelEl = card.querySelector('#modal-playtime-label');
+          if(valEl) valEl.textContent = formatDuration(fresh);
+          if(labelEl) labelEl.textContent = fresh.real ? 'Playtime' : (fresh.beaten ? 'Time to beat' : 'Est. playtime');
+          // Keep the recent-games/library views in sync with the fresh value too.
+          renderRecentGames(recentGamesData);
+          try{ renderLibrary(); }catch(e){ /* non-fatal */ }
+        }catch(e){
+          console.error('Manual playtime refresh failed:', e);
+        }finally{
+          if(card.dataset.gameId === String(gameId)){
+            ptRefreshBtn.disabled = false;
+            ptRefreshBtn.classList.remove('spinning');
+          }
+        }
+      });
+    }
 
     attachRawgLookup(gameId, title, card);
     setupGameGuideUI(gameId, title, card, ext.ConsoleID || (local && local.ConsoleID));
@@ -2290,7 +2325,22 @@
       );
     }
 
-    loadEstimatedHoursFor([...recentGamesData, ...libraryData], () => {
+    // Fetch playtime in order of recency: the "recently played" list first
+    // (it's already recency-sorted by RA), then everything else in the
+    // library sorted by its own last-played date — so the games you're
+    // actually looking at fill in first instead of racing through the
+    // library in whatever order the API happened to return it.
+    const recentIds = new Set(recentGamesData.map(g => g.GameID));
+    const remainingByRecency = libraryData
+      .filter(g => !recentIds.has(g.GameID))
+      .slice()
+      .sort((a, b) => {
+        const ta = a.lastPlayed ? (parseRADate(a.lastPlayed) || 0).getTime?.() || 0 : 0;
+        const tb = b.lastPlayed ? (parseRADate(b.lastPlayed) || 0).getTime?.() || 0 : 0;
+        return tb - ta; // most recently played first, never-played last
+      });
+
+    loadEstimatedHoursFor([...recentGamesData, ...remainingByRecency], () => {
       renderRecentGames(recentGamesData);
       try{ renderLibrary(); }catch(e){ console.error('renderLibrary failed:', e); }
     }, forceIds);
@@ -2378,6 +2428,54 @@
     }
   });
   $('#lib-search').addEventListener('input', renderLibrary);
+
+  // --- Click-and-drag horizontal scrolling (desktop mouse only) ---
+  // Touch already pans these regions natively via the browser, so this only
+  // listens for real mouse input — mousedown/mousemove/mouseup never fire
+  // for touch interaction in modern browsers, so it can't conflict with or
+  // double-handle touch scrolling.
+  function enableDragToScroll(el){
+    if(!el) return;
+    let isDown = false;
+    let moved = false;
+    let startX = 0;
+    let startScrollLeft = 0;
+
+    el.addEventListener('mousedown', (e) => {
+      if(e.button !== 0) return; // left button only
+      isDown = true;
+      moved = false;
+      startX = e.pageX;
+      startScrollLeft = el.scrollLeft;
+      el.classList.add('dragging');
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if(!isDown) return;
+      const dx = e.pageX - startX;
+      if(!moved && Math.abs(dx) > 3) moved = true; // small threshold so plain clicks still work
+      if(moved){
+        el.scrollLeft = startScrollLeft - dx;
+        e.preventDefault();
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      if(!isDown) return;
+      isDown = false;
+      el.classList.remove('dragging');
+      if(moved){
+        // A drag ending over a row/header would otherwise also fire a
+        // native click right after (opening the game modal, sorting the
+        // column, etc.) — swallow just that one click.
+        const suppressClick = (e) => { e.stopPropagation(); e.preventDefault(); };
+        el.addEventListener('click', suppressClick, { capture: true, once: true });
+        setTimeout(() => el.removeEventListener('click', suppressClick, { capture: true }), 0);
+      }
+    });
+  }
+  enableDragToScroll($('#lib-table-wrap'));
+  enableDragToScroll($('#year-wrap'));
 
   // Custom pull-to-refresh: refreshes app data instead of the browser doing
   // a full native page reload (which was resetting in-memory state and
