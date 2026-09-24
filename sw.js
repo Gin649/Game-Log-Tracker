@@ -1,4 +1,19 @@
-const CACHE_NAME = 'gl-tracker-v64;
+// ==============================================================================
+// GAME LOG TRACKER — SERVICE WORKER
+//
+// UPDATE MODEL
+//   • Every release: change CACHE_NAME below (v72 -> v73, ...). That one-line
+//     change makes sw.js differ byte-for-byte, which is how browsers detect a new
+//     version. Nothing else needs to change.
+//   • A new version installs quietly in the background and then WAITS. The page
+//     (bootstrap.js) notices, shows the gold dot on the menu button, and only
+//     when the user taps "Update app" does it send SKIP_WAITING (handled below).
+//   • Until then the old version keeps serving its own matching files, so the
+//     app never runs a mix of old and new code.
+// ==============================================================================
+
+const CACHE_PREFIX = 'gl-tracker-';
+const CACHE_NAME = CACHE_PREFIX + 'v74';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -14,65 +29,64 @@ const ASSETS_TO_CACHE = [
   './apple-touch-icon.png'
 ];
 
-// Install Event: cache interface assets, and take over immediately instead
-// of waiting for every open tab to fully close before this version applies.
+// INSTALL: download this version's files into its own versioned cache.
+// {cache:'reload'} skips the browser's HTTP cache, so a fresh deploy can't
+// end up stored under the new version number with stale files (GitHub Pages
+// lets browsers cache files for several minutes).
+// There is deliberately NO skipWaiting() here — the new version waits for the
+// user's go-ahead (see the message handler).
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('Caching tracker shell assets');
-      return cache.addAll(ASSETS_TO_CACHE);
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(ASSETS_TO_CACHE.map((url) => new Request(url, { cache: 'reload' })))
+    )
   );
 });
 
-// Activate Event: delete older cache versions, and claim existing open
-// pages right away so an update applies on next load, not next full restart.
+// MESSAGE: the page sends this when the user taps "Update app".
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+// ACTIVATE: delete every OLD version of this app's cache so no stale files
+// remain, then take control of open pages. Only caches starting with
+// "gl-tracker-" are touched — other apps hosted on the same github.io address
+// share this origin's cache storage and must be left alone.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    caches.keys()
+      .then((keys) => Promise.all(
+        keys
+          .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+          .map((key) => caches.delete(key))
+      ))
+      .then(() => self.clients.claim())
   );
 });
 
-// Fetch Event:
-// - Anything not served from this app's own origin (RetroAchievements, RAWG,
-//   archive.org, etc.) is left entirely alone — the service worker never
-//   touches it. (This replaces an older check that skipped any URL containing
-//   "api", which only existed for the old proxy.)
-// - The HTML page itself uses network-first, so a fix deployed to GitHub
-//   Pages shows up on next load, with the cached copy used only as an
-//   offline fallback.
-// - Static assets (icons, manifest) stay cache-first — they rarely change
-//   and this keeps the app fast and available offline.
+// FETCH:
+// - Anything not from this app's own origin (RetroAchievements, RAWG,
+//   archive.org, etc.) is left entirely alone.
+// - Everything else, INCLUDING the HTML page, is served from THIS version's
+//   cache only. That keeps index.html, app.js and style.css from ever coming
+//   from different versions while an update is waiting. New code arrives only
+//   through the update flow above.
+// - Files that aren't in the cache go to the network as normal.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (new URL(event.request.url).origin !== self.location.origin) return;
-
-  const isPageRequest = event.request.mode === 'navigate' || event.request.url.endsWith('index.html');
-
-  if (isPageRequest) {
-    event.respondWith(
-      fetch(event.request)
-        .then((networkResponse) => {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-          return networkResponse;
-        })
-        .catch(() => caches.match(event.request))
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      return cachedResponse || fetch(event.request);
-    })
-  );
+  event.respondWith(serveFromVersionedCache(event.request));
 });
+
+async function serveFromVersionedCache(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request, { ignoreSearch: true });
+  if (cached) return cached;
+  if (request.mode === 'navigate') {
+    const shell = await cache.match('./index.html');
+    if (shell) return shell;
+  }
+  return fetch(request);
+}
