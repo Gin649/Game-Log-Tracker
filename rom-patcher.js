@@ -903,6 +903,27 @@
   // ============================================================================
   // SECTION — The "ROM Hacks" panel UI in the game detail modal
   // ============================================================================
+  // romhack.ing search link for a hack, with its Title filter prefilled. This is a plain browser
+  // navigation (an <a> link, not a fetch()), so the CORS wall and robots.txt block that ruled out
+  // live-fetching a description don't apply: the user's own browser loads the page fine. Filters go
+  // through a base64-encoded JSON array (confirmed against a real romhack.ing search URL) rather
+  // than the plain queryString param, which isn't field-scoped: index 8 is {field:"title",
+  // operator:"must", value:<name>}, index 9 is the fixed {field:"categories", operator:"must",
+  // value:"Hack"}. Prefilled but not guaranteed exact; the user can refine the search right there.
+  function romhackSearchUrl(label){
+    // Only the hack's name goes in the Title field: anything in brackets after it (a version number,
+    // "(v2.2)", "[Beta]", even one cut off before its closing bracket) is dropped.
+    const baseName = String(label || '').replace(/\.(bps|ips|ups|ppf|aps|xdelta3?|vcdiff|vcd|zip|7z|rar)$/i, '').replace(/^\d+[-_]/, '');
+    const title = baseName.replace(/\s*[(\[][^)\]]*[)\]]?/g, '').replace(/[_.]+/g, ' ').replace(/\s+/g, ' ').trim()
+      || baseName.replace(/[_.]+/g, ' ').trim();
+    const filters = [null, null, null, null, null, null, null, null,
+      { field: 'title', operator: 'must', value: title },
+      { field: 'categories', operator: 'must', value: 'Hack' }
+    ];
+    const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(filters))));
+    return `https://romhack.ing/search/hack?page=0&sortField=releaseDate&sortDirection=desc&queryString=&filters=${encodeURIComponent(b64)}`;
+  }
+
   // --- ROM patch panel ---
   function setupRomPatchUI(gameId, title, card, consoleName){
     const patchBtn = card.querySelector('#modal-patch-btn');
@@ -1196,6 +1217,7 @@
       return `
         <div class="patch-result-row">
           <div class="info"><div class="fn">${entry.label}</div><div class="pth">${badge}</div></div>
+          <a class="patch-info-link" href="${romhackSearchUrl(entry.label)}" target="_blank" rel="noopener">What does it do? ↗</a>
           <button data-group="${group}" data-idx="${idx}">Use</button>
         </div>
       `;
@@ -1280,6 +1302,7 @@
       return `
         <div class="patch-result-row">
           <div class="info"><div class="fn">${entry.label}</div><div class="pth">${badge}</div></div>
+          <a class="patch-info-link" href="${romhackSearchUrl(entry.label)}" target="_blank" rel="noopener">What does it do? ↗</a>
           <button data-group="${group}" data-url="${encodeURIComponent(entry.url)}">Use</button>
         </div>
       `;
@@ -1395,34 +1418,10 @@
           ? 'The save dialog opens in the same folder as the ROM you loaded.'
           : (supportsFSAccess ? 'Pick a folder to save it in.' : 'It downloads to your browser\'s default download folder.');
 
-        // romhack.ing's search page — this is a plain browser navigation
-        // (an <a> link, not a fetch()), so the CORS wall and robots.txt block
-        // that ruled out live-fetching a description don't apply here: the
-        // user's browser can load the page fine even though our own tooling
-        // can't. Filters go through a base64-encoded JSON array (confirmed
-        // against a real romhack.ing search URL) rather than the plain
-        // queryString param, which isn't field-scoped: index 8 is {field:
-        // "title", operator:"must", value:<title>}, index 9 is the fixed,
-        // non-game-specific {field:"categories", operator:"must",
-        // value:"Hack"}. Prefilled but not guaranteed exact — the user can
-        // refine the search themselves right there.
-        const hackSearchTitle = label
-          .replace(PATCH_FILE_RE, '')
-          .replace(/^\d+[-_]/, '')
-          .replace(/[_.]+/g, ' ')
-          .trim();
-        const rhdiFilters = [null, null, null, null, null, null, null, null,
-          { field: 'title', operator: 'must', value: hackSearchTitle },
-          { field: 'categories', operator: 'must', value: 'Hack' }
-        ];
-        const rhdiFiltersB64 = btoa(unescape(encodeURIComponent(JSON.stringify(rhdiFilters))));
-        const hackSearchUrl = `https://romhack.ing/search/hack?page=0&sortField=releaseDate&sortDirection=desc&queryString=&filters=${encodeURIComponent(rhdiFiltersB64)}`;
-
         patchWrap.innerHTML = `
           ${notes.map(n => `<div class="hash-status ok" style="margin-top:8px;">${n}</div>`).join('')}
           ${raCheck ? `<div class="hash-status ${raCheck.cls}" style="margin-top:8px;">${raCheck.text}</div>` : ''}
           <div class="hash-status ok" style="margin-top:8px;">Your ROM has been patched and saved as <strong>${outName}</strong>. Open it in your emulator to add this game to your RetroAchievements library.</div>
-          <a class="guide-btn guide-btn-outline" href="${hackSearchUrl}" target="_blank" rel="noopener" style="width:100%;margin-top:10px;display:block;text-align:center;box-sizing:border-box;">What does this hack do? ↗</a>
           <button class="guide-btn guide-btn-primary" id="patch-download-btn" style="margin-top:10px;width:100%;">${supportsFSAccess ? 'Save Patched ROM…' : 'Download Patched ROM'}</button>
           <div style="font-size:0.675rem;color:var(--muted);margin-top:4px;">${saveHint}</div>
           <button class="guide-btn guide-btn-ghost" id="patch-back-btn" style="width:100%;margin-top:8px;">‹ Back to results</button>
