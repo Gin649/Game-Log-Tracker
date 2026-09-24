@@ -2474,8 +2474,7 @@
       }
     });
   }
-  enableDragToScroll($('#lib-table-wrap'));
-  enableDragToScroll($('#year-wrap'));
+  enableDragToScroll($('#system-chips')); // the console-name chips above the library / beaten-by-year lists
 
   // Custom pull-to-refresh: refreshes app data instead of the browser doing
   // a full native page reload (which was resetting in-memory state and
@@ -2533,6 +2532,23 @@
   });
   document.querySelectorAll('.dropdown-item:not(.dropdown-heading)').forEach(item => {
     item.addEventListener('click', closeDropdownMenu);
+  });
+
+  // --- App update indicator ---
+  // bootstrap.js registers the service worker and reports when a newer version has downloaded and is
+  // waiting (window.gltUpdateReady + the 'glt-update-ready' event). Show the gold dot on the menu
+  // button and an "Update available" item; tapping it swaps in the new version and reloads.
+  function showUpdateAvailable(){
+    $('#btn-menu').classList.add('has-update');
+    $('#btn-update-app').style.display = 'block';
+  }
+  if(window.gltUpdateReady) showUpdateAvailable(); // it may have been announced before this script ran
+  window.addEventListener('glt-update-ready', showUpdateAvailable);
+  $('#btn-update-app').addEventListener('click', () => {
+    const item = $('#btn-update-app');
+    item.textContent = 'Updating…';
+    item.disabled = true;
+    if(window.gltApplyUpdate) window.gltApplyUpdate(); else location.reload();
   });
   $('#btn-ra-heading').addEventListener('click', (e) => {
     e.stopPropagation();
