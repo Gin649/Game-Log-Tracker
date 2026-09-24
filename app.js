@@ -678,6 +678,8 @@
     try{ await window.storage.set(cheatsAutoKey(gameId), JSON.stringify(o), false); }catch(e){ /* non-fatal */ }
   }
   // Cached match if we have one, otherwise a Wikidata lookup. Falls back to GameFAQs' own search.
+  // Resolves to { url, final }: final=false means a network problem, so it isn't remembered and
+  // the next tap should try again.
   async function resolveCheatsUrl(gameId, title, consoleName){
     const searchUrl = `https://gamefaqs.gamespot.com/search?game=${encodeURIComponent(title)}`;
     let auto = await loadCheatsAuto(gameId);
@@ -686,18 +688,27 @@
       try{
         auto = await lookupCheats(title, consoleName);
         await saveCheatsAuto(gameId, auto);
-      }catch(e){ auto = null; } // network problem: not cached, so the next tap tries again
+      }catch(e){ return { url:searchUrl, final:false }; }
     }
-    return auto && auto.found ? CHEATS_URL(auto.id) : searchUrl;
+    return { url: auto.found ? CHEATS_URL(auto.id) : searchUrl, final:true };
   }
 
   function setupCheatsUI(gameId, title, card, consoleName){
     const btn = card.querySelector('#modal-cheats-btn');
     if(!btn) return;
-    // Read the saved match right away (local only, no network) so a repeat tap can open the page
-    // instantly, inside the tap itself, which browsers require to allow a new tab.
-    let readyUrl = null, busy = false;
-    loadCheatsAuto(gameId).then(o => { if(o && o.found) readyUrl = CHEATS_URL(o.id); });
+    // The lookup starts as soon as the game profile opens, so by the time the button is tapped the
+    // link is usually already known and the page opens instantly, inside the tap itself (which
+    // browsers require to allow a new tab). The saved result means it's only ever done once per game.
+    let readyUrl = null, failed = false, pending = null, busy = false;
+    function start(){
+      failed = false;
+      pending = resolveCheatsUrl(gameId, title, consoleName).then(r => {
+        if(r.final) readyUrl = r.url; else failed = true;
+        return r;
+      });
+      return pending;
+    }
+    start();
 
     btn.addEventListener('click', () => {
       if(readyUrl){ window.open(readyUrl, '_blank', 'noopener'); return; }
@@ -710,9 +721,8 @@
       // Open the tab first (still inside the tap), then send it to the page once we know where.
       const tab = window.open('', '_blank');
       try{ if(tab) tab.document.write('<title>Finding cheats…</title><body style="font-family:sans-serif;background:#15121f;color:#eee;padding:24px">Finding cheats…</body>'); }catch(e){}
-      resolveCheatsUrl(gameId, title, consoleName).then(url => {
-        if(url.indexOf('/-/') !== -1) readyUrl = url;
-        if(tab && !tab.closed){ tab.location.href = url; } else { window.open(url, '_blank'); }
+      (failed ? start() : pending).then(r => {
+        if(tab && !tab.closed){ tab.location.href = r.url; } else { window.open(r.url, '_blank'); }
       }).finally(() => {
         busy = false;
         btn.disabled = false;
