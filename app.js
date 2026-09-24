@@ -713,7 +713,8 @@
     // The lookup starts as soon as the game profile opens, so by the time the button is tapped the
     // link is usually already known and the page opens instantly, inside the tap itself (which
     // browsers require to allow a new tab). The saved result means it's only ever done once per game.
-    let readyUrl = null, failed = false, pending = null, busy = false;
+    let readyUrl = null, blockedUrl = null, failed = false, pending = null, busy = false;
+    const idleHtml = btn.innerHTML;
     function start(){
       failed = false;
       pending = resolveCheatsUrl(gameId, title, consoleName).then(r => {
@@ -725,23 +726,28 @@
     start();
 
     btn.addEventListener('click', () => {
+      // A page the browser refused to open earlier (see below) opens on this tap.
+      if(blockedUrl){ const u = blockedUrl; blockedUrl = null; btn.innerHTML = idleHtml; window.open(u, '_blank', 'noopener'); return; }
       if(readyUrl){ window.open(readyUrl, '_blank', 'noopener'); return; }
       if(busy) return;
       busy = true;
-      const idleHtml = btn.innerHTML;
       btn.disabled = true;
       btn.setAttribute('aria-busy', 'true');
       btn.innerHTML = '<span class="cheats-spinner" aria-hidden="true"></span>Finding cheats…';
-      // Open the tab first (still inside the tap), then send it to the page once we know where.
-      const tab = window.open('', '_blank');
-      try{ if(tab) tab.document.write('<title>Finding cheats…</title><body style="font-family:sans-serif;background:#15121f;color:#eee;padding:24px">Finding cheats…</body>'); }catch(e){}
       (failed ? start() : pending).then(r => {
-        if(tab && !tab.closed){ tab.location.href = r.url; } else { window.open(r.url, '_blank'); }
+        // This tap ended a moment ago, so some browsers (phones especially) may block a new tab opened now.
+        const tab = window.open(r.url, '_blank');
+        if(tab){
+          try{ tab.opener = null; }catch(e){}
+          btn.innerHTML = idleHtml;
+        }else{
+          blockedUrl = r.url;
+          btn.innerHTML = '<span class="arrow">↗</span> Open cheats page';
+        }
       }).finally(() => {
         busy = false;
         btn.disabled = false;
         btn.removeAttribute('aria-busy');
-        btn.innerHTML = idleHtml;
       });
     });
   }
