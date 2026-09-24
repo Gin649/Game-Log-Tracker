@@ -2,6 +2,11 @@
 
 All notable changes to Game Log — Tracker are documented here. Newest first.
 
+## 2.0.2
+
+## Added 
+-Cheat Searching of the GameFaq database as a button in Game Profile
+
 ## v2.0.1
 
 ### Added
