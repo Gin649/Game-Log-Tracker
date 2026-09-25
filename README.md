@@ -4,6 +4,8 @@ A lightweight, installable Progressive Web App for tracking your [RetroAchieveme
 
 **Live app:** <https://gin649.github.io/Game-Log-Tracker>
 
+Link to my Discord to Discuss: <https://discord.gg/mQq8hAewe>
+
 See [CHANGELOG.md](CHANGELOG.md) for the full version history, including everything new in v2.0.
 
 ## Features
