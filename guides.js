@@ -708,7 +708,11 @@
     sans:    { label: 'Sans',        css: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" },
     serif:   { label: 'Serif',       css: "Georgia, 'Noto Serif', 'Times New Roman', serif" }
   };
-  let guideFontSize = GUIDE_FONT_DEFAULT, guideFontKey = 'space', guideBold = false;
+  const GUIDE_THEMES = {
+    default: { label: 'Default' },
+    retro:   { label: 'Retro' }
+  };
+  let guideFontSize = GUIDE_FONT_DEFAULT, guideFontKey = 'space', guideBold = false, guideTheme = 'default';
   async function loadReaderPref(key){
     try{ const r = await window.storage.get(key, false); return r && r.value ? r.value : null; }
     catch(e){ return null; /* nothing saved yet */ }
@@ -722,6 +726,8 @@
     const f = await loadReaderPref('guide-font-family');
     if(f && GUIDE_FONTS[f]) guideFontKey = f;
     guideBold = (await loadReaderPref('guide-bold')) === '1';
+    const th = await loadReaderPref('guide-theme');
+    if(th && GUIDE_THEMES[th]) guideTheme = th;
   })();
 
   function updateTextPanel(){
@@ -732,6 +738,9 @@
     $('#guide-bold-btn').setAttribute('aria-pressed', guideBold ? 'true' : 'false');
     document.querySelectorAll('#guide-font-options button').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.font === guideFontKey);
+    });
+    document.querySelectorAll('#guide-theme-options button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.theme === guideTheme);
     });
   }
   // Applies size/font/bold. When the text reflows (keepPlace), the line that was at the
@@ -745,6 +754,7 @@
     body.style.setProperty('--guide-font-size', guideFontSize + 'px');
     body.style.setProperty('--guide-font', GUIDE_FONTS[guideFontKey].css);
     body.style.setProperty('--guide-weight', guideBold ? '700' : '400');
+    $('#guide-reader-overlay').dataset.theme = guideTheme;
     updateTextPanel();
     if(keepPlace){
       requestAnimationFrame(() => {
@@ -776,6 +786,21 @@
         guideFontKey = key;
         applyGuideTextStyle(true);
         await saveReaderPref('guide-font-family', key);
+      });
+      box.appendChild(btn);
+    });
+  })();
+  (function buildThemeOptions(){
+    const box = $('#guide-theme-options');
+    Object.keys(GUIDE_THEMES).forEach(key => {
+      const btn = document.createElement('button');
+      btn.dataset.theme = key;
+      btn.textContent = GUIDE_THEMES[key].label;
+      btn.addEventListener('click', async () => {
+        if(guideTheme === key) return;
+        guideTheme = key;
+        applyGuideTextStyle(false); // a color change doesn't reflow text, so no need to keep scroll anchor
+        await saveReaderPref('guide-theme', key);
       });
       box.appendChild(btn);
     });
