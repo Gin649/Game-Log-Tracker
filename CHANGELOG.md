@@ -11,7 +11,7 @@ All notable changes to Game Log — Tracker are documented here. Newest first.
 - Fixed bug that wasn't allowing new updates to cache
 - Updates now apply automatically the next time the app is opened after being closed
 - If app is left idle and there is an update, a notification dot will display on the menu bar to prompt the update
-- Small style changes
+- Small style changes, added retro theme to Guides, click Aa to switch theme
 - Added mouse controls to scroll consoles when using PC version of the app
 
 ## v2.0.1
