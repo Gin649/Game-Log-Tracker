@@ -52,23 +52,31 @@
       }
     };
 
+    // Watches one installing worker and announces once it's fully downloaded. Only matters when
+    // there's already a controller (an older version running this page) — a bare first-ever install
+    // has no earlier version to update FROM, so there's nothing to announce.
+    function watchInstalling(worker) {
+      if (!worker) return;
+      worker.addEventListener('statechange', () => {
+        if (worker.state === 'installed' && navigator.serviceWorker.controller) announceUpdate();
+      });
+    }
+
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
         .then((registration) => {
           reg = registration;
 
           // A newer version may already be waiting from an earlier visit (downloaded, never applied).
-          // The controller check skips the very first install, where there is nothing to update from.
           if (reg.waiting && navigator.serviceWorker.controller) announceUpdate();
+          // A newer version may already be mid-download — this happens on the very first page load
+          // after deploying an update, since the browser can start installing it as soon as register()
+          // notices sw.js changed, before this .then() callback runs. Without this check, the
+          // 'updatefound' event below fires and is missed, and the update is never announced.
+          else watchInstalling(reg.installing);
 
-          // A newer version started downloading: announce it once it has fully installed.
-          reg.addEventListener('updatefound', () => {
-            const incoming = reg.installing;
-            if (!incoming) return;
-            incoming.addEventListener('statechange', () => {
-              if (incoming.state === 'installed' && navigator.serviceWorker.controller) announceUpdate();
-            });
-          });
+          // A newer version starts downloading later, while this page stays open: catch it as it happens.
+          reg.addEventListener('updatefound', () => watchInstalling(reg.installing));
 
           // Check whenever the app comes back to the foreground / is reopened / regains connection.
           document.addEventListener('visibilitychange', () => {
