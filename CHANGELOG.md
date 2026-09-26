@@ -2,6 +2,16 @@
 
 All notable changes to Game Log — Tracker are documented here. Newest first.
 
+## v2.0.3
+
+### Added and Changed
+- New **Backlog** tab for games you've added but haven't played yet, separate from the Game Library — tab order is now Overview, Game Library, Beaten by Year, Backlog
+- The **+ Add game** button now lives in Backlog instead of Game Library
+- RetroAchievements games move themselves from Backlog to Game Library automatically once RA shows real progress on them
+- Non-RA (manually tracked) games get a **Now Playing** checkbox in their profile — checking it moves the game into the Game Library; checking **Mark as beaten** turns Now Playing on too and saves the date to Beaten by Year
+- Backlog now shows **"Not on RA"** for non-RA games instead of a blank dash in the achievements column
+- Non-RA game profiles now have a **Link to RetroAchievements** panel to search RA and convert the entry into a real RA-tracked game, complete with an achievement progress bar, once it turns out to be on RetroAchievements after all
+
 ## v2.0.2
 
 ### Added and Fixed
