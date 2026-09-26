@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Game Log — Tracker are documented here. Newest first.
+All notable changes to Game Log — Tracker are documented here. Newest first. 
 
 ## v2.0.3
 
