@@ -1,4 +1,4 @@
-# Game Log — Tracker v2.0
+# Game Log — Tracker v2.0.3  Latest Updates Deployed
 
 A lightweight, installable Progressive Web App for tracking your [RetroAchievements](https://retroachievements.org) library — recent activity, in-progress games, completions by year, and playtime — with **no account, no login, and no cloud sync**. You can also log games that aren't on RetroAchievements or that you haven't played yet, including modern titles, right alongside your RA library. Everything stays on your device.
 
@@ -6,7 +6,7 @@ A lightweight, installable Progressive Web App for tracking your [RetroAchieveme
 
 Link to my Discord to Discuss: <https://discord.gg/mQq8hAewe>
 
-See [CHANGELOG.md](CHANGELOG.md) for the full version history, including everything new in v2.0.
+See [CHANGELOG.md](CHANGELOG.md) for the full additions, fixes and changes.
 
 ## Features
 
