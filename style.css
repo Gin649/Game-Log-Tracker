@@ -624,13 +624,13 @@
   .lib-search-row .lib-search{margin-bottom:0;flex:1;}
   .lib-search-row .btn-ghost{flex-shrink:0;white-space:nowrap;}
 
-  #addgame-card select{
+  #addgame-card select, .field select{
     width:100%;padding:10px 12px;background:var(--bg-alt);
     border:1px solid var(--border);border-radius:3px;color:var(--text);
     font-size:0.875rem;font-family:'Inter',sans-serif;
   }
-  #addgame-card select:focus{outline:none;border-color:var(--gold);}
-  #addgame-results{margin-top:16px;max-height:280px;overflow-y:auto;}
+  #addgame-card select:focus, .field select:focus{outline:none;border-color:var(--gold);}
+  #addgame-results, #link-ra-results{margin-top:16px;max-height:280px;overflow-y:auto;}
   .ag-result{
     display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:4px;cursor:pointer;
   }
