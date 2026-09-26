@@ -891,6 +891,7 @@
       const manual = await loadManualGames();
       await saveManualGames(manual.filter(g => g.GameID !== gameId));
       renderSystemChips();
+      renderBacklog();
       renderLibrary();
       renderByYear();
     });
@@ -1211,7 +1212,9 @@
           if(statsMode === 'hardcore') return g.HighestAwardKind === 'beaten-hardcore' || g.HighestAwardKind === 'mastered';
           return true;
         })
-      : libraryData;
+      : activeTab === 'backlog'
+      ? libraryData.filter(isBacklogGame)
+      : libraryData.filter(g => !isBacklogGame(g));
     source.forEach(g => { counts[g.ConsoleName] = (counts[g.ConsoleName] || 0) + 1; });
     const systems = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
 
@@ -1228,6 +1231,7 @@
       chip.addEventListener('click', () => {
         systemFilter = chip.getAttribute('data-sys');
         renderSystemChips();
+        renderBacklog();
         renderLibrary();
         renderByYear();
       });
@@ -1240,11 +1244,28 @@
     return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
 
+  // --- Backlog vs Library membership ---
+  // A manually-added RA game (not customConsole) sits in the Backlog until RA
+  // itself reports real progress for it — at which point loadAll() drops it
+  // from the manual list entirely and it becomes a normal library entry, so
+  // "still manual and not custom" always means "not actually played yet".
+  // A customConsole (non-RA) game sits in the Backlog until the user checks
+  // "Now Playing" on it. manualBeaten===true with no manualStarted flag is
+  // treated as already started too, so games marked beaten before this
+  // feature existed don't fall back into the Backlog.
+  function isBacklogGame(g){
+    if(g.manual !== true) return false;
+    if(!g.customConsole) return true;
+    const started = g.manualStarted === true || g.manualBeaten === true;
+    return !started;
+  }
+
   function renderLibrary(){
     const wrap = $('#lib-table-wrap');
     libraryData.forEach(g => { g.estHours = (estHoursCache[g.GameID] && estHoursCache[g.GameID].hours) ?? -1; });
     const searchVal = foldText($('#lib-search').value || '');
     let rows = libraryData.filter(g =>
+      !isBacklogGame(g) &&
       foldText(g.Title).includes(searchVal) &&
       (systemFilter === 'All' || g.ConsoleName === systemFilter)
     );
@@ -1317,6 +1338,60 @@
         renderLibrary();
       });
     });
+    wrap.querySelectorAll('tbody tr').forEach(row => {
+      row.addEventListener('click', () => openGameModal(Number(row.getAttribute('data-game-id'))));
+    });
+    wrap.querySelectorAll('.manual-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeManualGame(Number(btn.getAttribute('data-remove-id')));
+      });
+    });
+  }
+
+  // Games that have been added but never actually played: manually-added RA
+  // games RA hasn't seen progress on yet, and customConsole games the user
+  // hasn't checked "Now Playing" on. No award/progress/playtime columns here
+  // since none of that exists yet for any of these.
+  function renderBacklog(){
+    const wrap = $('#backlog-table-wrap');
+    if(!wrap) return;
+    const searchInput = $('#backlog-search');
+    const searchVal = foldText(searchInput ? searchInput.value : '');
+    let rows = libraryData.filter(g =>
+      isBacklogGame(g) &&
+      foldText(g.Title).includes(searchVal) &&
+      (systemFilter === 'All' || g.ConsoleName === systemFilter)
+    );
+    rows = rows.slice().sort((a, b) => String(a.Title).toLowerCase().localeCompare(String(b.Title).toLowerCase()));
+
+    const countEl = $('#backlog-count');
+    if(countEl) countEl.textContent = rows.length ? `(${rows.length})` : '';
+
+    if(rows.length === 0){
+      wrap.innerHTML = '<div class="empty">Nothing in your backlog — add a game to start tracking it.</div>';
+      return;
+    }
+
+    wrap.innerHTML = `
+      <table class="lib-table">
+        <thead><tr>
+          <th>Game</th>
+          <th>System</th>
+          <th>Achievements</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(g => `
+            <tr data-game-id="${g.GameID}">
+              <td><div class="g-title"><img src="${imgUrl(g.ImageIcon)}" alt=""><span>${g.Title}</span>${g.manual ? `<button class="manual-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : ''}</div></td>
+              <td style="color:var(--muted);font-size:0.75rem;">${g.ConsoleName || '—'}</td>
+              <td style="font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--muted)">${g.customConsole ? 'Not on RA' : (Number(g.MaxPossible) || 0)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+
     wrap.querySelectorAll('tbody tr').forEach(row => {
       row.addEventListener('click', () => openGameModal(Number(row.getAttribute('data-game-id'))));
     });
@@ -1470,6 +1545,30 @@
         manual[manualIdx] = { ...manual[manualIdx], manualBeaten: beaten, manualBeatenDate: beaten ? dateStr : null };
         await saveManualGames(manual);
       }
+      renderSystemChips();
+      renderBacklog();
+      renderLibrary();
+      renderByYear();
+    });
+  }
+
+  // Moves a customConsole game out of the Backlog and into the Library once
+  // the user starts it — separate from "beaten" so a game can sit in the
+  // Library as in-progress before it's ever marked complete.
+  async function updateManualStartedStatus(gameId, started){
+    return enqueueTask(async () => {
+      const idx = libraryData.findIndex(g => g.GameID === gameId);
+      if(idx === -1) return;
+      libraryData[idx] = { ...libraryData[idx], manualStarted: started };
+
+      const manual = await loadManualGames();
+      const manualIdx = manual.findIndex(g => g.GameID === gameId);
+      if(manualIdx !== -1){
+        manual[manualIdx] = { ...manual[manualIdx], manualStarted: started };
+        await saveManualGames(manual);
+      }
+      renderSystemChips();
+      renderBacklog();
       renderLibrary();
       renderByYear();
     });
@@ -1498,7 +1597,14 @@
       <div class="modal-progress">
         <div class="row"><span>Progress</span><span style="color:var(--muted)">—</span></div>
         <div class="row"><span>Playtime</span><span style="color:var(--muted)">—</span></div>
-        <div class="row"><span>Status</span><span>${local.manualBeaten ? '<span class="pill pill-teal">Beaten</span>' : '<span class="pill pill-muted">In progress</span>'}</span></div>
+        <div class="row"><span>Status</span><span>${local.manualBeaten ? '<span class="pill pill-teal">Beaten</span>' : (local.manualStarted ? '<span class="pill pill-muted">In progress</span>' : '<span class="pill pill-muted">Not started</span>')}</span></div>
+      </div>
+
+      <div class="field" style="text-align:left;margin-bottom:14px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-family:inherit; font-size:0.8125rem; color:var(--text);">
+          <input type="checkbox" id="manual-started-checkbox" ${(local.manualStarted || local.manualBeaten) ? 'checked' : ''} style="width:16px;height:16px;">
+          <span>Now Playing</span>
+        </label>
       </div>
 
       <div class="field" style="text-align:left;margin-bottom:14px;">
@@ -1517,6 +1623,9 @@
 
       <button class="btn-view-achievements" id="modal-cheats-btn"><span class="arrow">↗</span> Need Cheats?</button>
 
+      <button class="btn-view-achievements" id="modal-link-ra-btn"><span class="arrow">▸</span> Link to RetroAchievements</button>
+      <div class="guide-panel" id="modal-link-ra-panel" style="display:none;"></div>
+
       ${isCartridgeConsole(local.ConsoleName) ? `
       <button class="btn-view-achievements" id="modal-patch-btn"><span class="arrow">▸</span> ROM Hacks</button>
       <div class="guide-panel" id="modal-patch-panel" style="display:none;"></div>
@@ -1529,27 +1638,140 @@
       <p class="modal-note">Not on RetroAchievements — tracked manually, and not included in any RetroAchievements-based stats. Ratings via <a href="https://rawg.io" target="_blank" rel="noopener" style="color:var(--teal)">RAWG</a>.</p>
     `;
 
+    const startedCheckbox = card.querySelector('#manual-started-checkbox');
     const checkbox = card.querySelector('#manual-beaten-checkbox');
     const dateWrap = card.querySelector('#manual-beaten-date-wrap');
     const dateInput = card.querySelector('#manual-beaten-date');
+
+    // A game can't be "not playing" and "beaten" at once — unchecking Now
+    // Playing clears a beaten mark too, moving the game back to the Backlog.
+    startedCheckbox.addEventListener('change', async () => {
+      const nowStarted = startedCheckbox.checked;
+      if(!nowStarted && checkbox.checked){
+        checkbox.checked = false;
+        dateWrap.style.display = 'none';
+        await updateManualBeatenStatus(gameId, false, null);
+        local.manualBeaten = false; local.manualBeatenDate = null;
+      }
+      await updateManualStartedStatus(gameId, nowStarted);
+      local.manualStarted = nowStarted;
+    });
 
     checkbox.addEventListener('change', async () => {
       dateWrap.style.display = checkbox.checked ? 'block' : 'none';
       if(checkbox.checked && !dateInput.value){
         dateInput.value = new Date().toISOString().slice(0, 10);
       }
+      // Being beaten implies having been played — start it too if it wasn't already.
+      if(checkbox.checked && !startedCheckbox.checked){
+        startedCheckbox.checked = true;
+        await updateManualStartedStatus(gameId, true);
+        local.manualStarted = true;
+      }
       await updateManualBeatenStatus(gameId, checkbox.checked, dateInput.value || null);
+      local.manualBeaten = checkbox.checked; local.manualBeatenDate = dateInput.value || null;
     });
     dateInput.addEventListener('change', async () => {
       if(checkbox.checked){
         await updateManualBeatenStatus(gameId, true, dateInput.value || null);
+        local.manualBeatenDate = dateInput.value || null;
       }
     });
 
     attachRawgLookup(gameId, local.Title, card);
     setupGameGuideUI(gameId, local.Title, card, local.ConsoleID);
     setupCheatsUI(gameId, local.Title, card, local.ConsoleName);
+    setupLinkRaUI(gameId, local, card);
     if(isCartridgeConsole(local.ConsoleName)) setupRomPatchUI(gameId, local.Title, card, local.ConsoleName);
+  }
+
+  // Lets the user search RetroAchievements for a real match to an existing
+  // customConsole entry, and convert it once they pick one. Same collapsible-
+  // panel pattern as the guide/cheats buttons above it.
+  function setupLinkRaUI(gameId, local, card){
+    const btn = card.querySelector('#modal-link-ra-btn');
+    const panel = card.querySelector('#modal-link-ra-panel');
+    if(!btn || !panel) return;
+    let built = false;
+
+    btn.addEventListener('click', async () => {
+      const nowOpen = panel.style.display === 'none';
+      panel.style.display = nowOpen ? 'block' : 'none';
+      btn.classList.toggle('open', nowOpen);
+      if(!nowOpen || built) return;
+      built = true;
+
+      panel.innerHTML = `
+        <div class="field">
+          <label>System</label>
+          <select id="link-ra-system"><option>Loading systems…</option></select>
+        </div>
+        <div class="field">
+          <label>Game title</label>
+          <input id="link-ra-title" type="text" value="${local.Title.replace(/"/g, '&quot;')}" autocomplete="off">
+        </div>
+        <button class="btn-primary" id="link-ra-search-btn">Search</button>
+        <div id="link-ra-results"></div>
+      `;
+
+      const sel = panel.querySelector('#link-ra-system');
+      try{
+        const consoles = await getConsoleList();
+        const sorted = (consoles || [])
+          .map(c => ({ id: c.ID ?? c.id, name: c.Name ?? c.name }))
+          .filter(c => c.id != null && c.name)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        sel.innerHTML = sorted.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      }catch(e){
+        sel.innerHTML = '<option value="">Could not load systems</option>';
+      }
+
+      const runSearch = async () => {
+        const consoleId = sel.value;
+        const query = panel.querySelector('#link-ra-title').value.trim();
+        const resultsEl = panel.querySelector('#link-ra-results');
+        if(!query || !consoleId){
+          resultsEl.innerHTML = '<div class="ag-empty">Pick a system and enter a title.</div>';
+          return;
+        }
+        resultsEl.innerHTML = '<div class="loading">Searching</div>';
+        try{
+          const list = await getGameListForConsole(consoleId);
+          const matches = rankGames(list, query);
+          if(matches.length === 0){
+            resultsEl.innerHTML = '<div class="ag-empty">No matching games found on this system.</div>';
+            return;
+          }
+          const consoleName = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : '';
+          resultsEl.innerHTML = matches.map(g => {
+            const id = g.ID ?? g.id;
+            const title = g.Title ?? g.title;
+            const icon = g.ImageIcon ?? g.imageIcon;
+            const numAch = g.NumAchievements ?? g.numAchievements ?? 0;
+            return `
+              <div class="ag-result" data-game-id="${id}">
+                <img src="${imgUrl(icon)}" alt="">
+                <span class="t">${title}</span>
+                <span class="n">${numAch} ach.</span>
+              </div>
+            `;
+          }).join('');
+          resultsEl.querySelectorAll('.ag-result').forEach(el => {
+            el.addEventListener('click', () => {
+              const id = Number(el.getAttribute('data-game-id'));
+              const match = matches.find(g => Number(g.ID ?? g.id) === id);
+              if(match) convertCustomToRaGame(gameId, match, consoleId, consoleName);
+            });
+          });
+        }catch(e){
+          resultsEl.innerHTML = `<div class="error-box">Search failed: ${e.message}</div>`;
+        }
+      };
+      panel.querySelector('#link-ra-search-btn').addEventListener('click', runSearch);
+      panel.querySelector('#link-ra-title').addEventListener('keydown', (e) => {
+        if(e.key === 'Enter') runSearch();
+      });
+    });
   }
 
 
@@ -2007,6 +2229,28 @@
     return (json && json.results) || [];
   }
 
+  // Shared by addManualGame (fresh add) and convertCustomToRaGame (linking an
+  // existing custom entry to its real RA game) — same shape of "tracked but
+  // not yet actually played" entry either way.
+  function buildManualRaEntry(g, consoleId, consoleName){
+    return {
+      GameID: Number(g.ID ?? g.id),
+      Title: g.Title ?? g.title,
+      ConsoleID: Number(consoleId),
+      ConsoleName: g.ConsoleName ?? g.consoleName ?? consoleName,
+      ImageIcon: g.ImageIcon ?? g.imageIcon,
+      MaxPossible: g.NumAchievements ?? g.numAchievements ?? 0,
+      NumAwarded: 0,
+      NumAwardedHardcore: 0,
+      HighestAwardKind: null,
+      HighestAwardDate: null,
+      MostRecentAwardedDate: null,
+      pct: 0,
+      lastPlayed: null,
+      manual: true,
+    };
+  }
+
   async function addManualGame(g, consoleId, consoleName){
     return enqueueTask(async () => {
       const gameId = Number(g.ID ?? g.id);
@@ -2014,26 +2258,12 @@
         closeAddGameModal();
         return; // already tracked for real
       }
-      const entry = {
-        GameID: gameId,
-        Title: g.Title ?? g.title,
-        ConsoleID: Number(consoleId),
-        ConsoleName: g.ConsoleName ?? g.consoleName ?? consoleName,
-        ImageIcon: g.ImageIcon ?? g.imageIcon,
-        MaxPossible: g.NumAchievements ?? g.numAchievements ?? 0,
-        NumAwarded: 0,
-        NumAwardedHardcore: 0,
-        HighestAwardKind: null,
-        HighestAwardDate: null,
-        MostRecentAwardedDate: null,
-        pct: 0,
-        lastPlayed: null,
-        manual: true,
-      };
+      const entry = buildManualRaEntry(g, consoleId, consoleName);
       libraryData = [...libraryData, entry];
       const manual = await loadManualGames();
       await saveManualGames([...manual, entry]);
       renderSystemChips();
+      renderBacklog();
       renderLibrary();
       renderByYear();
       closeAddGameModal();
@@ -2067,6 +2297,7 @@
         customConsole: true, // not on RA at all — no achievement data will ever exist for this entry
         genre: genre,
         released: rawgGame.released || null,
+        manualStarted: false,
         manualBeaten: false,
         manualBeatenDate: null,
       };
@@ -2074,9 +2305,36 @@
       const manual = await loadManualGames();
       await saveManualGames([...manual, entry]);
       renderSystemChips();
+      renderBacklog();
       renderLibrary();
       renderByYear();
       closeAddGameModal();
+    });
+  }
+
+  // Converts an existing customConsole (non-RA) entry into a real RA-tracked
+  // one once the user finds it now exists on RetroAchievements. Drops the
+  // old synthetic entry and swaps in a normal manual RA entry in its place —
+  // same "tracked but not yet actually played" shape addManualGame() creates,
+  // so it stays in the Backlog (per isBacklogGame) until RA reports real
+  // progress, but its profile now uses the RA modal with a progress bar.
+  async function convertCustomToRaGame(oldGameId, g, consoleId, consoleName){
+    return enqueueTask(async () => {
+      const gameId = Number(g.ID ?? g.id);
+      libraryData = libraryData.filter(x => x.GameID !== oldGameId);
+      let manual = (await loadManualGames()).filter(x => x.GameID !== oldGameId);
+
+      if(!libraryData.some(x => x.GameID === gameId)){
+        const entry = buildManualRaEntry(g, consoleId, consoleName);
+        libraryData = [...libraryData, entry];
+        manual = [...manual, entry];
+      }
+      await saveManualGames(manual);
+      renderSystemChips();
+      renderBacklog();
+      renderLibrary();
+      renderByYear();
+      closeGameModal();
     });
   }
 
@@ -2226,6 +2484,7 @@
     await enqueueTask(async () => {
     $('#recent-games').innerHTML = '<div class="loading">Loading</div>';
     $('#recent-unlocks').innerHTML = '<div class="loading">Loading</div>';
+    $('#backlog-table-wrap').innerHTML = '<div class="loading">Loading</div>';
     $('#lib-table-wrap').innerHTML = '<div class="loading">Loading</div>';
 
     try{
@@ -2295,6 +2554,12 @@
 
     try{ renderSystemChips(); }
     catch(e){ console.error('renderSystemChips failed:', e); }
+
+    try{ renderBacklog(); }
+    catch(e){
+      console.error('renderBacklog failed:', e);
+      $('#backlog-table-wrap').innerHTML = `<div class="error-box">Couldn't display your backlog: ${e.message}</div>`;
+    }
 
     try{ renderLibrary(); }
     catch(e){
@@ -2414,6 +2679,7 @@
     if(lastProfile) renderProfile(lastProfile);
     renderRecentGames(recentGamesData);
     renderSystemChips();
+    renderBacklog();
     renderLibrary();
     renderByYear();
     if(openAchievementsGameId != null){
@@ -2428,6 +2694,7 @@
     }
   });
   $('#lib-search').addEventListener('input', renderLibrary);
+  $('#backlog-search').addEventListener('input', renderBacklog);
 
   // --- Click-and-drag horizontal scrolling (desktop mouse only) ---
   // Touch already pans these regions natively via the browser, so this only
@@ -2623,7 +2890,7 @@
       btn.classList.add('active');
       panel.classList.add('active');
       activeTab = tabName;
-      $('#system-chips').classList.toggle('visible', tabName === 'library' || tabName === 'year');
+      $('#system-chips').classList.toggle('visible', tabName === 'library' || tabName === 'year' || tabName === 'backlog');
 
       try{ renderSystemChips(); }
       catch(e){ console.error('renderSystemChips failed:', e); }
