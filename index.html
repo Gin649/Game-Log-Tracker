@@ -205,17 +205,20 @@
         <select id="addgame-system"><option>Loading systems…</option></select>
       </div>
       <div class="field" id="addgame-custom-console-field" style="display:none;">
-        <label>Console name</label>
-        <input id="addgame-custom-console" type="text" placeholder="e.g. Nintendo 3DS" autocomplete="off">
-        <div class="hint">Not on RetroAchievements — box art and details are pulled from RAWG instead, and this game won't count toward any RetroAchievements-based stats.</div>
+        <div class="hint">Not on RetroAchievements — pick the platform after you find a match below. Box art and details are pulled from RAWG, and this game won't count toward any RetroAchievements-based stats.</div>
       </div>
       <div class="field">
         <label>Game title</label>
         <input id="addgame-title" type="text" placeholder="e.g. Chrono Trigger" autocomplete="off">
+        <div class="hint" id="addgame-multi-hint">Tip: check off several results to add them all at once — handy for adding a batch from the same system.</div>
       </div>
       <button class="btn-primary" id="addgame-search-btn">Search</button>
 
       <div id="addgame-results"></div>
+      <div id="addgame-selection-bar" class="addgame-selection-bar" style="display:none;">
+        <span id="addgame-selection-count"></span>
+        <button class="btn-primary" id="addgame-add-selected-btn">Add selected</button>
+      </div>
     </div>
   </div>
 </div>
