@@ -202,6 +202,11 @@
   const achievementsListCache = {}; // in-memory, keyed by GameID — full per-achievement list with earn dates, opportunistically filled by getEstimatedHours()
   let systemFilter = 'All';
 
+  // Games checked in the Add Game modal's RA-system search but not yet
+  // committed — keyed by GameID, carries what's needed to add it later so
+  // selections survive typing a new search query. Cleared on modal open/close.
+  let addGameSelections = new Map();
+
   // Serializes loadAll() against manual add/remove operations so they can
   // never interleave — e.g. adding a game while the initial post-login load
   // is still fetching used to let that load's later completion silently
@@ -426,6 +431,15 @@
           if(d2) dates.push(d2.getTime());
         });
         hours = beaten ? beatenSpanHoursFromTimestamps(dates) : estimateHoursFromTimestamps(dates);
+      }
+
+      // This per-game call sees real progress sooner than RA's bulk
+      // completion-progress fetch does — use it to move a manually-added
+      // game out of the Backlog right away instead of waiting on that.
+      const hasRealProgress = real || Number(data && data.NumAwardedToUser) > 0;
+      if(hasRealProgress){
+        try{ await promoteManualGameToReal(gameId, data); }
+        catch(e){ console.error('promoteManualGameToReal failed:', e); }
       }
     }catch(e){ hours = null; }
 
@@ -885,8 +899,74 @@
     catch(e){ /* non-fatal */ }
   }
 
-  async function removeManualGame(gameId){
-    return enqueueTask(async () => {
+  // Holds games that this per-game endpoint has already confirmed real
+  // progress on, but RA's bulk API_GetUserCompletionProgress hasn't caught
+  // up to yet (see promoteManualGameToReal below) — so a promoted game
+  // survives a full reload instead of falling back into the Backlog the
+  // moment the bulk fetch rebuilds libraryData from scratch. loadAll() drops
+  // an entry from here as soon as the bulk fetch confirms it independently.
+  function pendingRealGamesKey(){
+    return `ra-pending-real:${creds.username.trim().toLowerCase()}`;
+  }
+  async function loadPendingRealGames(){
+    try{
+      const r = await window.storage.get(pendingRealGamesKey(), false);
+      if(r && r.value) return JSON.parse(r.value);
+    }catch(e){ /* none saved yet */ }
+    return [];
+  }
+  async function savePendingRealGames(list){
+    try{ await window.storage.set(pendingRealGamesKey(), JSON.stringify(list), false); }
+    catch(e){ /* non-fatal */ }
+  }
+
+  // A manually-added RA game normally waits for the next full reload's bulk
+  // completion-progress fetch to notice it's actually been played — but that
+  // bulk endpoint can lag behind a real play session by a while. This
+  // per-game endpoint (getEstimatedHours below already fetches it for every
+  // game, backlog included, during background loading) tends to reflect a
+  // session sooner, so promote the game out of the Backlog the moment this
+  // sees real progress on it instead of waiting for a bulk fetch to agree.
+  async function promoteManualGameToReal(gameId, data){
+    const idx = libraryData.findIndex(g => g.GameID === gameId);
+    if(idx === -1 || !libraryData[idx].manual || libraryData[idx].customConsole) return;
+
+    const old = libraryData[idx];
+    const maxPossible = Number(data.NumAchievements ?? old.MaxPossible ?? 0);
+    const numAwarded = Number(data.NumAwardedToUser ?? 0);
+    const entry = {
+      GameID: gameId,
+      Title: data.Title || old.Title,
+      ConsoleID: data.ConsoleID ?? old.ConsoleID,
+      ConsoleName: data.ConsoleName || old.ConsoleName,
+      ImageIcon: data.ImageIcon || old.ImageIcon,
+      MaxPossible: maxPossible,
+      NumAwarded: numAwarded,
+      NumAwardedHardcore: Number(data.NumAwardedToUserHardcore ?? 0),
+      HighestAwardKind: data.HighestAwardKind ?? null,
+      HighestAwardDate: data.HighestAwardDate ?? null,
+      // This endpoint doesn't report MostRecentAwardedDate — keep whatever
+      // the entry already had (usually nothing yet, this early).
+      MostRecentAwardedDate: old.MostRecentAwardedDate ?? null,
+      lastPlayed: old.lastPlayed || old.MostRecentAwardedDate || null,
+      pct: maxPossible ? Math.round((numAwarded / maxPossible) * 100) : 0,
+    };
+    libraryData[idx] = entry;
+
+    await enqueueTask(async () => {
+      const manual = await loadManualGames();
+      await saveManualGames(manual.filter(g => g.GameID !== gameId));
+      const pending = await loadPendingRealGames();
+      await savePendingRealGames([...pending.filter(g => g.GameID !== gameId), entry]);
+    });
+
+    renderSystemChips();
+    renderBacklog();
+    renderLibrary();
+    renderByYear();
+  }
+
+  async function removeManualGame(gameId){    return enqueueTask(async () => {
       libraryData = libraryData.filter(g => g.GameID !== gameId);
       const manual = await loadManualGames();
       await saveManualGames(manual.filter(g => g.GameID !== gameId));
@@ -2117,9 +2197,10 @@
   async function openAddGameModal(){
     $('#addgame-backdrop').classList.add('open');
     $('#addgame-title').value = '';
-    $('#addgame-custom-console').value = '';
     $('#addgame-custom-console-field').style.display = 'none';
     $('#addgame-results').innerHTML = '';
+    addGameSelections.clear();
+    renderAddGameSelectionBar();
     const sel = $('#addgame-system');
     sel.innerHTML = '<option>Loading systems…</option>';
     try{
@@ -2138,10 +2219,22 @@
   $('#addgame-system').addEventListener('change', () => {
     const isCustom = $('#addgame-system').value === '__custom__';
     $('#addgame-custom-console-field').style.display = isCustom ? 'block' : 'none';
+    const multiHint = $('#addgame-multi-hint');
+    if(multiHint) multiHint.style.display = isCustom ? 'none' : 'block'; // the multi-select checkboxes are RA-search only
   });
+
+  // Reflects addGameSelections (checked but not yet committed) in the modal.
+  function renderAddGameSelectionBar(){
+    const bar = $('#addgame-selection-bar');
+    if(!bar) return;
+    const n = addGameSelections.size;
+    bar.style.display = n > 0 ? 'flex' : 'none';
+    if(n > 0) $('#addgame-selection-count').textContent = `${n} game${n === 1 ? '' : 's'} selected`;
+  }
 
   function closeAddGameModal(){
     $('#addgame-backdrop').classList.remove('open');
+    addGameSelections.clear();
   }
 
   async function searchAddGame(){
@@ -2151,9 +2244,8 @@
     const resultsEl = $('#addgame-results');
 
     if(consoleId === '__custom__'){
-      const customConsole = $('#addgame-custom-console').value.trim();
-      if(!query || !customConsole){
-        resultsEl.innerHTML = '<div class="ag-empty">Enter a console name and a title.</div>';
+      if(!query){
+        resultsEl.innerHTML = '<div class="ag-empty">Enter a title to search.</div>';
         return;
       }
       resultsEl.innerHTML = '<div class="loading">Searching RAWG</div>';
@@ -2163,18 +2255,33 @@
           resultsEl.innerHTML = '<div class="ag-empty">No matching games found on RAWG.</div>';
           return;
         }
-        resultsEl.innerHTML = results.map(g => `
-          <div class="ag-result" data-rawg-id="${g.id}">
-            <img src="${g.background_image || ''}" alt="">
-            <span class="t">${g.name}</span>
-            <span class="n">${g.released ? g.released.slice(0,4) : ''}</span>
-          </div>
-        `).join('');
-        resultsEl.querySelectorAll('.ag-result').forEach(el => {
-          el.addEventListener('click', () => {
-            const id = Number(el.getAttribute('data-rawg-id'));
-            const match = results.find(g => g.id === id);
-            if(match) addManualGameFromRawg(match, customConsole);
+        // Platform choices come straight from each result's own RAWG data
+        // instead of being typed in — no typos, and the same real-world
+        // platform (e.g. "PlayStation 4") always ends up spelled the same
+        // way across every custom game, which keeps the System filter tidy.
+        resultsEl.innerHTML = results.map(g => {
+          const plats = (g.platforms || [])
+            .map(p => p && p.platform && p.platform.name)
+            .filter(Boolean);
+          const platOptions = plats.length
+            ? plats.map(p => `<option value="${p}">${p}</option>`).join('')
+            : `<option value="">Unknown platform</option>`;
+          return `
+            <div class="ag-result ag-result-custom" data-rawg-id="${g.id}">
+              <img src="${g.background_image || ''}" alt="">
+              <span class="t">${g.name}</span>
+              <span class="n">${g.released ? g.released.slice(0,4) : ''}</span>
+              <select class="ag-platform-select">${platOptions}</select>
+              <button class="ag-add-btn" type="button" title="Add game" aria-label="Add game">+</button>
+            </div>
+          `;
+        }).join('');
+        resultsEl.querySelectorAll('.ag-result-custom').forEach(row => {
+          const id = Number(row.getAttribute('data-rawg-id'));
+          const match = results.find(g => g.id === id);
+          const select = row.querySelector('.ag-platform-select');
+          row.querySelector('.ag-add-btn').addEventListener('click', () => {
+            if(match) addManualGameFromRawg(match, select.value || 'Unknown');
           });
         });
       }catch(e){
@@ -2197,24 +2304,43 @@
       }
       const consoleName = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : '';
       resultsEl.innerHTML = matches.map(g => {
-        const id = g.ID ?? g.id;
+        const id = Number(g.ID ?? g.id);
         const title = g.Title ?? g.title;
         const icon = g.ImageIcon ?? g.imageIcon;
         const numAch = g.NumAchievements ?? g.numAchievements ?? 0;
+        const checked = addGameSelections.has(id);
         return `
-          <div class="ag-result" data-game-id="${id}">
+          <div class="ag-result ${checked ? 'selected' : ''}" data-game-id="${id}">
+            <input type="checkbox" class="ag-checkbox" ${checked ? 'checked' : ''} aria-label="Select ${title}">
             <img src="${imgUrl(icon)}" alt="">
             <span class="t">${title}</span>
             <span class="n">${numAch} ach.</span>
           </div>
         `;
       }).join('');
-      resultsEl.querySelectorAll('.ag-result').forEach(el => {
-        el.addEventListener('click', () => {
-          const id = Number(el.getAttribute('data-game-id'));
-          const match = matches.find(g => Number(g.ID ?? g.id) === id);
-          if(match) addManualGame(match, consoleId, consoleName);
+      resultsEl.querySelectorAll('.ag-result').forEach(row => {
+        const id = Number(row.getAttribute('data-game-id'));
+        const match = matches.find(g => Number(g.ID ?? g.id) === id);
+        const checkbox = row.querySelector('.ag-checkbox');
+        const applySelection = () => {
+          if(checkbox.checked){
+            addGameSelections.set(id, { g: match, consoleId, consoleName });
+            row.classList.add('selected');
+          }else{
+            addGameSelections.delete(id);
+            row.classList.remove('selected');
+          }
+          renderAddGameSelectionBar();
+        };
+        // Checking the box toggles it natively; clicking elsewhere on the row
+        // toggles it manually — either way applySelection reads the box's
+        // resulting state, so the two paths never fight each other.
+        row.addEventListener('click', (e) => {
+          if(e.target === checkbox) return;
+          checkbox.checked = !checkbox.checked;
+          applySelection();
         });
+        checkbox.addEventListener('change', applySelection);
       });
     }catch(e){
       resultsEl.innerHTML = `<div class="error-box">Search failed: ${e.message}</div>`;
@@ -2229,7 +2355,7 @@
     return (json && json.results) || [];
   }
 
-  // Shared by addManualGame (fresh add) and convertCustomToRaGame (linking an
+  // Shared by addManualGamesBulk (fresh adds) and convertCustomToRaGame (linking an
   // existing custom entry to its real RA game) — same shape of "tracked but
   // not yet actually played" entry either way.
   function buildManualRaEntry(g, consoleId, consoleName){
@@ -2251,17 +2377,25 @@
     };
   }
 
-  async function addManualGame(g, consoleId, consoleName){
+  // Adds every checked search result in one shot: a single manual-games
+  // read/write and a single set of re-renders, rather than the old
+  // one-at-a-time flow's read/write/render/close per game — that's what
+  // made checking off several games and adding them together practical.
+  async function addManualGamesBulk(selections){
     return enqueueTask(async () => {
-      const gameId = Number(g.ID ?? g.id);
-      if(libraryData.some(x => x.GameID === gameId)){
-        closeAddGameModal();
-        return; // already tracked for real
-      }
-      const entry = buildManualRaEntry(g, consoleId, consoleName);
-      libraryData = [...libraryData, entry];
       const manual = await loadManualGames();
-      await saveManualGames([...manual, entry]);
+      const existingIds = new Set(libraryData.map(x => x.GameID));
+      const newEntries = [];
+      selections.forEach(({ g, consoleId, consoleName }) => {
+        const gameId = Number(g.ID ?? g.id);
+        if(existingIds.has(gameId)) return; // already tracked for real, or a duplicate selection
+        existingIds.add(gameId);
+        newEntries.push(buildManualRaEntry(g, consoleId, consoleName));
+      });
+      if(newEntries.length){
+        libraryData = [...libraryData, ...newEntries];
+        await saveManualGames([...manual, ...newEntries]);
+      }
       renderSystemChips();
       renderBacklog();
       renderLibrary();
@@ -2315,9 +2449,9 @@
   // Converts an existing customConsole (non-RA) entry into a real RA-tracked
   // one once the user finds it now exists on RetroAchievements. Drops the
   // old synthetic entry and swaps in a normal manual RA entry in its place —
-  // same "tracked but not yet actually played" shape addManualGame() creates,
-  // so it stays in the Backlog (per isBacklogGame) until RA reports real
-  // progress, but its profile now uses the RA modal with a progress bar.
+  // same "tracked but not yet actually played" shape addManualGamesBulk()
+  // creates, so it stays in the Backlog (per isBacklogGame) until RA reports
+  // real progress, but its profile now uses the RA modal with a progress bar.
   async function convertCustomToRaGame(oldGameId, g, consoleId, consoleName){
     return enqueueTask(async () => {
       const gameId = Number(g.ID ?? g.id);
@@ -2344,6 +2478,10 @@
     if(e.target.id === 'addgame-backdrop') closeAddGameModal();
   });
   $('#addgame-search-btn').addEventListener('click', searchAddGame);
+  $('#addgame-add-selected-btn').addEventListener('click', () => {
+    if(addGameSelections.size === 0) return;
+    addManualGamesBulk([...addGameSelections.values()]);
+  });
   $('#addgame-title').addEventListener('keydown', (e) => {
     if(e.key === 'Enter') searchAddGame();
   });
@@ -2533,6 +2671,17 @@
       const stillManual = manual.filter(g => !realIds.has(g.GameID));
       if(stillManual.length !== manual.length) await saveManualGames(stillManual);
       libraryData = [...libraryData, ...stillManual];
+
+      // Also bring back anything promoteManualGameToReal() confirmed earlier
+      // (via the faster per-game endpoint) that this bulk fetch still hasn't
+      // caught up to — otherwise it'd vanish from both Backlog and Library
+      // for however much longer RA takes to reflect it here. Once the bulk
+      // fetch does agree, drop it from here — it's now included for real.
+      const pendingReal = await loadPendingRealGames();
+      const stillPending = pendingReal.filter(g => !realIds.has(g.GameID));
+      if(stillPending.length !== pendingReal.length) await savePendingRealGames(stillPending);
+      libraryData = [...libraryData, ...stillPending];
+
       if(lastProfile) renderProfile(lastProfile);
     }catch(e){
       console.error('Failed to load live library data:', e);
