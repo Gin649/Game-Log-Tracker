@@ -8,6 +8,8 @@ All notable changes to Game Log — Tracker are documented here. Newest first.
 - Backlog games move to the Game Library faster: the per-game endpoint that already runs in the background for every game (including Backlog ones) now promotes a game the instant it sees real playtime or achievements, instead of waiting on RetroAchievements' slower bulk completion-progress endpoint to catch up
 - Adding a non-RA game (PS3/PS4/PS5, Steam/PC, Xbox, etc.) no longer needs a typed-in console name — pick from a platform dropdown pulled straight from that game's own RAWG data instead, so the same platform is always spelled the same way across every custom game
 - Add Game now supports adding several RetroAchievements games at once: check off multiple results from a search (selections persist across new searches), then add them all in one go with the **Add selected** button
+- Sorting by name in Game Library and Backlog now ignores leading RA tags like ~Hack~ and ~Homebrew~ 
+- Game Library's Award column is now sortable: beaten games first (alphabetical), then in-progress (alphabetical); click again to flip the order
 
 ## v2.0.3
 
