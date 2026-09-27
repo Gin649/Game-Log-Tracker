@@ -1324,6 +1324,24 @@
     return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
 
+  // RA titles often carry a leading tag like "~Hack~" or "~Homebrew~" — still
+  // shown in the UI, but ignored for sorting so these games fall alphabetically
+  // under the real title instead of clumping together under "~".
+  function sortableTitle(title){
+    return foldText(String(title || '').replace(/^(?:~[^~]*~\s*)+/, ''));
+  }
+
+  // Whether a game currently shows as "done" rather than "in progress" — the
+  // same rule awardPill() uses to choose a pill, kept in sync with it so the
+  // Award column sorts into exactly the two groups it visibly displays,
+  // including how the casual/hardcore toggle changes what counts as done.
+  function isGameAwarded(g){
+    if(g.customConsole) return !!g.manualBeaten;
+    const kind = g.HighestAwardKind;
+    if(statsMode === 'hardcore') return kind === 'mastered' || kind === 'beaten-hardcore';
+    return !!kind;
+  }
+
   // --- Backlog vs Library membership ---
   // A manually-added RA game (not customConsole) sits in the Backlog until RA
   // itself reports real progress for it — at which point loadAll() drops it
@@ -1352,8 +1370,16 @@
 
     const { key, dir } = librarySort;
     rows = rows.slice().sort((a,b) => {
+      if(key === 'HighestAwardKind'){
+        const aRank = isGameAwarded(a) ? 0 : 1;
+        const bRank = isGameAwarded(b) ? 0 : 1;
+        const rankDiff = dir === 'desc' ? (aRank - bRank) : (bRank - aRank);
+        if(rankDiff !== 0) return rankDiff;
+        return sortableTitle(a.Title).localeCompare(sortableTitle(b.Title)); // beaten-then-in-progress, alphabetical within each group either way
+      }
       let av = a[key], bv = b[key];
-      if(typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+      if(key === 'Title'){ av = sortableTitle(av); bv = sortableTitle(bv); }
+      else if(typeof av === 'string'){ av = av.toLowerCase(); bv = bv.toLowerCase(); }
       if(av < bv) return dir === 'asc' ? -1 : 1;
       if(av > bv) return dir === 'asc' ? 1 : -1;
       return 0;
@@ -1443,7 +1469,7 @@
       foldText(g.Title).includes(searchVal) &&
       (systemFilter === 'All' || g.ConsoleName === systemFilter)
     );
-    rows = rows.slice().sort((a, b) => String(a.Title).toLowerCase().localeCompare(String(b.Title).toLowerCase()));
+    rows = rows.slice().sort((a, b) => sortableTitle(a.Title).localeCompare(sortableTitle(b.Title)));
 
     const countEl = $('#backlog-count');
     if(countEl) countEl.textContent = rows.length ? `(${rows.length})` : '';
