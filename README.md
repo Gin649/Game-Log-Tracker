@@ -1,4 +1,4 @@
-# Game Log — Tracker v2.0.3  Latest Updates Deployed
+# Game Log — Tracker v2.0.4  Latest Updates Deployed on Sept 27/26
 
 A lightweight, installable Progressive Web App for tracking your [RetroAchievements](https://retroachievements.org) library — recent activity, in-progress games, completions by year, and playtime — with **no account, no login, and no cloud sync**. You can also log games that aren't on RetroAchievements or that you haven't played yet, including modern titles, right alongside your RA library. Everything stays on your device.
 
@@ -11,10 +11,11 @@ See [CHANGELOG.md](CHANGELOG.md) for the full additions, fixes and changes.
 ## Features
 
 - **Overview** — profile stats, recently played games with live playtime and completion %, and a feed of recent unlocks
-- **Game Library** — every game you've played on RA, searchable, sortable, with progress bars, award status, and estimated/real playtime for each
-- **Beaten by Year** — a yearly breakdown of everything you've completed or mastered
+- **Game Library** — every RA game you've actually played, plus any manually-tracked game you've started, searchable, sortable, with progress bars, award status, and estimated/real playtime for each
+- **Beaten by Year** — a yearly breakdown of everything you've completed or mastered, RA and manually-tracked games alike
+- **Backlog** — everything you've added but haven't actually played yet lives here, separate from your Game Library, with the **+ Add game** button. A RetroAchievements game moves itself to the Library automatically the first time RA sees you've played it; a manually-tracked (non-RA) game moves over once you check **Now Playing** on its profile
 - **Casual / Hardcore toggle** — every stat, list, and progress bar switches between casual and hardcore-only numbers
-- **Manually-tracked games** — add any game you haven't played yet, or that isn't on RetroAchievements (including modern titles), via [RAWG](https://rawg.io) for box art and details. If it's on, or later gets added to, RetroAchievements, your manual entry merges with its RA data the first time you play it — so tracking just continues, with nothing to redo
+- **Manually-tracked games** — add any game you haven't played yet, or that isn't on RetroAchievements (including modern titles), via [RAWG](https://rawg.io) for box art and details. Check off several search results at once to add a batch of RA games in one go. For a non-RA game, pick its platform from a dropdown pulled straight from RAWG's own data — no typing required. Mark a non-RA game **Now Playing** once you start it, and mark it beaten to log the date to Beaten by Year. If a manually-tracked game is on, or later gets added to, RetroAchievements, it merges with real RA data automatically once you play it — or use **Link to RetroAchievements** on its profile to match a non-RA entry up yourself — so tracking just continues, with nothing to redo
 - **Optional RAWG ratings** — show a review-score badge (Metacritic where available) on each game's detail view
 - **ROM Hack Patching** — load a ROM you own and search [RetroAchievements' RAPatches repository](https://github.com/RetroAchievements/RAPatches) for hacks and translations for that exact game, verified against your ROM's checksum where the patch format supports it. Results are searchable by name, sorted alphabetically, and scroll rather than cut off. On browsers that support it, saving a patched ROM opens a save dialog defaulting to the same folder as the ROM you loaded
 - **Game Guides** — pull in GameFAQs text guides for a game (via an archive.org mirror) right inside the app, with in-guide search, bookmarks, an adjustable reading font size, and your reading position saved automatically. Don't like the default guide? Copy and paste in any guide you find on GameFAQs yourself — pasted guides get the exact same reader features
