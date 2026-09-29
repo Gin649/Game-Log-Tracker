@@ -432,6 +432,26 @@
     font-family:'Space Mono',monospace;color:var(--gold);font-size:0.825rem;font-weight:700;flex-shrink:0;
   }
   .ach-row.locked .pts{color:var(--muted);}
+
+  /* Gold "!" badge for a missable achievement — matches RA's own site marker.
+     Shown on the achievement row itself, and doubles as the filter toggle's icon. */
+  .ach-missable-badge{
+    flex-shrink:0;width:20px;height:20px;border-radius:50%;
+    border:2px dotted var(--gold);color:var(--gold);
+    display:inline-flex;align-items:center;justify-content:center;
+    font-family:'Space Mono',monospace;font-weight:700;font-size:0.75rem;line-height:1;
+  }
+  .ach-filter-row{padding:10px 12px;background:var(--panel);border-bottom:1px solid var(--border);}
+  .ach-filter-btn{
+    display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
+    background:transparent;border:1px solid var(--gold-dim);border-radius:999px;
+    color:var(--gold);font-family:'Inter',sans-serif;font-size:0.75rem;font-weight:600;cursor:pointer;
+  }
+  .ach-filter-btn:hover{border-color:var(--gold);}
+  .ach-filter-btn.active{background:var(--gold);border-color:var(--gold);color:var(--bg);}
+  .ach-filter-btn.active .ach-missable-badge{border-color:var(--bg);color:var(--bg);}
+  .ach-filter-count{font-family:'Space Mono',monospace;font-size:0.6875rem;opacity:0.85;}
+
   .achievements-list-loading{padding:14px;text-align:center;color:var(--muted);font-size:0.8625rem;}
 
   .guide-panel{
