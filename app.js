@@ -482,6 +482,26 @@
     return list;
   }
 
+  // GetGameInfoAndUserProgress (used for earn-dates/progress) doesn't reliably
+  // include each achievement's Missable/Progression/WinCondition type, but
+  // GetGameExtended (already fetched for the modal) does — so borrow it from
+  // there instead of a second network round-trip.
+  function attachAchievementTypes(list, ext){
+    const extAch = ext && ext.Achievements;
+    if(!extAch) return list;
+    (list || []).forEach(a => {
+      const id = a.ID ?? a.id;
+      const match = extAch[id] ?? extAch[String(id)];
+      const t = match && (match.type || match.Type);
+      if(t) a.type = t;
+    });
+    return list;
+  }
+
+  function isMissable(a){
+    return String((a && (a.Type || a.type)) || '').toLowerCase() === 'missable';
+  }
+
   function achRowHtml(a, isLocked, isHardcoreMode){
     const badge = imgUrl('/Badge/' + a.BadgeName + (isLocked ? '_lock' : '') + '.png');
     const earnedDate = isHardcoreMode ? a.DateEarnedHardcore : a.DateEarned;
@@ -494,6 +514,7 @@
           ${!isLocked ? `<p class="when">Unlocked ${timeAgo(earnedDate)}</p>` : ''}
         </div>
         <div class="pts">${a.Points ?? ''}</div>
+        ${isMissable(a) ? '<span class="ach-missable-badge" title="Missable — can be permanently missed during a playthrough">!</span>' : ''}
       </div>
     `;
   }
@@ -507,6 +528,43 @@
     const earned = list.filter(a => isHardcoreMode ? a.DateEarnedHardcore : a.DateEarned);
     const locked = list.filter(a => isHardcoreMode ? !a.DateEarnedHardcore : !a.DateEarned);
     return earned.map(a => achRowHtml(a, false, isHardcoreMode)).join('') + locked.map(a => achRowHtml(a, true, isHardcoreMode)).join('');
+  }
+
+  // Wraps renderAchievementsList with the "Missable Only" filter bar RA's own
+  // site shows — only rendered when the set actually has any missable
+  // achievements, since most sets on RA haven't been typed at all yet.
+  let achMissableOnly = false;
+  function renderAchievementsPanel(list, isHardcoreMode, missableOnly){
+    if(!list || list.length === 0) return '<div class="achievements-list-loading">No achievement data available.</div>';
+    const missableCount = list.filter(isMissable).length;
+    const filterBar = missableCount > 0
+      ? `<div class="ach-filter-row">
+           <button class="ach-filter-btn ${missableOnly ? 'active' : ''}" id="ach-missable-toggle" type="button">
+             <span class="ach-missable-badge" aria-hidden="true">!</span> Missable Only <span class="ach-filter-count">${missableCount}</span>
+           </button>
+         </div>`
+      : '';
+    const rows = missableOnly ? list.filter(isMissable) : list;
+    const body = rows.length === 0
+      ? '<div class="achievements-list-loading">No missable achievements in this set.</div>'
+      : renderAchievementsList(rows, isHardcoreMode);
+    return filterBar + body;
+  }
+
+  // Shared by the initial "View Achievements" open and the casual/hardcore
+  // toggle's refresh, so the missable filter and its button survive a mode
+  // switch instead of resetting back to the full list.
+  function renderAchWrapContent(achWrap, gameId){
+    const list = achievementsListCache[gameId];
+    if(!achWrap || !list) return;
+    achWrap.innerHTML = renderAchievementsPanel(list, statsMode === 'hardcore', achMissableOnly);
+    const toggleBtn = achWrap.querySelector('#ach-missable-toggle');
+    if(toggleBtn){
+      toggleBtn.addEventListener('click', () => {
+        achMissableOnly = !achMissableOnly;
+        renderAchWrapContent(achWrap, gameId);
+      });
+    }
   }
 
   // RA marks a game "Beaten" once the player has earned every achievement
@@ -2033,11 +2091,13 @@
       achBtn.classList.toggle('open', nowOpen);
       if(nowOpen && !achLoaded){
         achLoaded = true;
+        achMissableOnly = false; // fresh game's panel starts unfiltered
         achWrap.innerHTML = '<div class="achievements-list-loading">Loading achievements…</div>';
         try{
           const list = await getAchievementsList(gameId);
+          attachAchievementTypes(list, ext);
           if(card.dataset.gameId !== String(gameId)) return; // user moved on
-          achWrap.innerHTML = renderAchievementsList(list, statsMode === 'hardcore');
+          renderAchWrapContent(achWrap, gameId);
           openAchievementsGameId = gameId;
         }catch(e){
           if(card.dataset.gameId !== String(gameId)) return;
@@ -2060,6 +2120,7 @@
         beatenAchWrap.innerHTML = '<div class="achievements-list-loading">Loading achievements…</div>';
         try{
           const list = await getAchievementsList(gameId);
+          attachAchievementTypes(list, ext);
           if(card.dataset.gameId !== String(gameId)) return; // user moved on
           beatenAchWrap.innerHTML = renderBeatenAchievementsList(list, statsMode === 'hardcore');
           openBeatenAchievementsGameId = gameId;
@@ -2858,9 +2919,8 @@
     renderLibrary();
     renderByYear();
     if(openAchievementsGameId != null){
-      const list = achievementsListCache[openAchievementsGameId];
       const achWrap = document.getElementById('modal-achievements');
-      if(achWrap && list) achWrap.innerHTML = renderAchievementsList(list, statsMode === 'hardcore');
+      renderAchWrapContent(achWrap, openAchievementsGameId);
     }
     if(openBeatenAchievementsGameId != null){
       const list = achievementsListCache[openBeatenAchievementsGameId];
