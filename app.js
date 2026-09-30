@@ -1130,7 +1130,10 @@
     const btn = card.querySelector('#modal-yt-btn');
     const panel = card.querySelector('#modal-yt-panel');
     if(!btn || !panel) return;
-    const searchQuery = `${title} ${consoleName || ''} walkthrough`.replace(/\s+/g, ' ').trim();
+    // RA hack titles carry a tag like "~Hack~" — drop the tildes and everything between them,
+    // since YouTube can't handle them in the search.
+    const cleanTitle = String(title || '').replace(/~[^~]*~/g, ' ').replace(/~/g, ' ');
+    const searchQuery = `${cleanTitle} ${consoleName || ''} walkthrough`.replace(/\s+/g, ' ').trim();
     const searchUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(searchQuery);
     let items = [];
     let built = false;
@@ -1207,7 +1210,7 @@
       built = true;
       panel.innerHTML = `
         <a class="guide-btn guide-btn-primary yt-find" href="${ytEsc(searchUrl)}" target="_blank" rel="noopener">Find a walkthrough ↗</a>
-        <p class="yt-hint">Opens a YouTube search for “${ytEsc(searchQuery)}”. Copy a video link, come back, and paste it below.</p>
+        <p class="yt-hint">Opens a YouTube search for “${ytEsc(searchQuery)}”. On a video, tap <b>Share</b> → <b>Copy link</b>, come back here, and paste it below.</p>
         <div class="yt-add-row">
           <input type="url" class="yt-input" placeholder="Paste a YouTube link" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
           <button class="yt-save-btn" type="button">Save</button>
