@@ -6,6 +6,7 @@ All notable changes to Game Log — Tracker are documented here. Newest first.
  
 ### Added
 - Missable achievements now show a gold "!" badge in a game's achievement list, matching RetroAchievements' own site, plus a "Missable Only" filter toggle to narrow the list down to just those
+- Added the ability to reorder achievements in a game's profile by dragging or using the arrow buttons, with your custom order saved automatically per game and included in Data backups.
 
 ### Fixed
 - App sync could feel sluggish right after this update if several backlog games turned out to already have real progress — they now move to the Library in one batched update instead of triggering a separate full re-render for each one
