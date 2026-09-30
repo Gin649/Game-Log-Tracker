@@ -2,6 +2,15 @@
 
 All notable changes to Game Log — Tracker are documented here. Newest first. 
 
+## v2.0.6
+ 
+### Added
+- New: Search YouTube walkthroughs. Every game profile now has a Search YouTube button.
+- Find a walkthrough opens a YouTube search for that game's title and console, with a hint on how to copy the link, using Share → Copy link.
+- Paste as many YouTube links as you like and they're saved per game, with thumbnails and titles.
+- Tap a saved link to play it in the built-in player, which can be maximized to full screen.
+- Saved links are included in Data backups.
+
 ## v2.0.5
  
 ### Added
