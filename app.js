@@ -513,8 +513,8 @@
           <p class="d">${a.Description || ''}</p>
           ${!isLocked ? `<p class="when">Unlocked ${timeAgo(earnedDate)}</p>` : ''}
         </div>
-        <div class="pts">${a.Points ?? ''}</div>
         ${isMissable(a) ? '<span class="ach-missable-badge" title="Missable — can be permanently missed during a playthrough">!</span>' : ''}
+        <div class="pts">${a.Points ?? ''}</div>
       </div>
     `;
   }
@@ -540,7 +540,7 @@
     const filterBar = missableCount > 0
       ? `<div class="ach-filter-row">
            <button class="ach-filter-btn ${missableOnly ? 'active' : ''}" id="ach-missable-toggle" type="button">
-             <span class="ach-missable-badge" aria-hidden="true">!</span> Missable Only <span class="ach-filter-count">${missableCount}</span>
+             <span class="ach-missable-badge" aria-hidden="true">!</span> Missable Only (<span class="ach-filter-count">${missableCount}</span>)
            </button>
          </div>`
       : '';
@@ -2051,7 +2051,7 @@
       <button class="btn-view-achievements" id="modal-view-ach-btn"><span class="arrow">▸</span> View Achievements</button>
       <div class="achievements-list" id="modal-achievements" style="display:none;"></div>
 
-      <button class="btn-view-achievements" id="modal-view-beaten-ach-btn"><span class="arrow">▸</span> Beaten Achievements</button>
+      <button class="btn-view-achievements" id="modal-view-beaten-ach-btn"><span class="arrow">▸</span> View Beaten Achievements</button>
       <div class="achievements-list" id="modal-beaten-achievements" style="display:none;"></div>
 
       <button class="btn-view-achievements" id="modal-guide-btn"><span class="arrow">▸</span> Game Guide</button>
