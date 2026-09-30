@@ -2,7 +2,7 @@
    GAME LOG TRACKER — STYLES
    ============================================================================== */
 
-  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&family=Metal+Mania&family=Rubik+Distressed&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&family=Metal+Mania&family=Rubik+Distressed&family=Comic+Neue:wght@700&display=swap');
 
   :root{
     --bg:#15121f;
@@ -436,12 +436,12 @@
   /* Gold "!" badge for a missable achievement — matches RA's own site marker.
      Shown on the achievement row itself, and doubles as the filter toggle's icon. */
   .ach-missable-badge{
-    flex-shrink:0;width:20px;height:20px;border-radius:50%;
+    flex-shrink:0;width:22px;height:22px;border-radius:50%;
     border:2px dotted var(--gold);color:var(--gold);
     display:inline-flex;align-items:center;justify-content:center;
-    font-family:'Space Mono',monospace;font-weight:700;font-size:0.75rem;line-height:1;
+    font-family:'Comic Sans MS','Comic Neue',cursive;font-weight:700;font-size:0.95rem;line-height:1;
   }
-  .ach-filter-row{padding:10px 12px;background:var(--panel);border-bottom:1px solid var(--border);}
+  .ach-filter-row{padding:10px 12px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;justify-content:flex-end;}
   .ach-filter-btn{
     display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
     background:transparent;border:1px solid var(--gold-dim);border-radius:999px;
