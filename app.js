@@ -502,11 +502,19 @@
     return String((a && (a.Type || a.type)) || '').toLowerCase() === 'missable';
   }
 
-  function achRowHtml(a, isLocked, isHardcoreMode){
+  function achRowHtml(a, isLocked, isHardcoreMode, reorderMode){
     const badge = imgUrl('/Badge/' + a.BadgeName + (isLocked ? '_lock' : '') + '.png');
     const earnedDate = isHardcoreMode ? a.DateEarnedHardcore : a.DateEarned;
+    const reorderControls = reorderMode
+      ? `<div class="ach-reorder-controls">
+           <button class="ach-move-btn" data-dir="up" type="button" aria-label="Move up">▲</button>
+           <button class="ach-drag-handle" type="button" aria-label="Drag to reorder">⠿</button>
+           <button class="ach-move-btn" data-dir="down" type="button" aria-label="Move down">▼</button>
+         </div>`
+      : '';
     return `
-      <div class="ach-row ${isLocked ? 'locked' : ''}">
+      <div class="ach-row ${isLocked ? 'locked' : ''}" data-id="${a.ID ?? a.id}">
+        ${reorderControls}
         <img src="${badge}" alt="">
         <div class="info">
           <p class="t">${a.Title || 'Untitled'}</p>
@@ -519,45 +527,95 @@
     `;
   }
 
-  function renderAchievementsList(list, isHardcoreMode){
+  // --- Custom achievement order (per game, saved on-device) ---
+  // Stored as an array of achievement IDs under its own key, so it rides along
+  // in the Data export/import backup automatically. Achievements added to the
+  // set later (not in the saved array) are appended at the end; IDs that no
+  // longer exist are ignored.
+  const achOrderCache = {}; // gameId -> array of IDs, or null when no custom order
+  let achReorderMode = false;
+  function achOrderKey(gameId){
+    return `ach-order:${creds.username.trim().toLowerCase()}:${gameId}`;
+  }
+  async function loadAchOrder(gameId){
+    try{
+      const r = await window.storage.get(achOrderKey(gameId), false);
+      if(r && r.value){
+        const arr = JSON.parse(r.value);
+        if(Array.isArray(arr)){ achOrderCache[gameId] = arr; return arr; }
+      }
+    }catch(e){ /* no custom order saved */ }
+    achOrderCache[gameId] = null;
+    return null;
+  }
+  async function saveAchOrder(gameId, ids){
+    achOrderCache[gameId] = ids;
+    try{ await window.storage.set(achOrderKey(gameId), JSON.stringify(ids), false); }
+    catch(e){ /* non-fatal */ }
+  }
+  async function clearAchOrder(gameId){
+    achOrderCache[gameId] = null;
+    try{ await window.storage.delete(achOrderKey(gameId), false); }catch(e){}
+  }
+  function applyAchOrder(list, order){
+    if(!order) return list;
+    const pos = new Map(order.map((id, i) => [String(id), i]));
+    const idOf = (a) => String(a.ID ?? a.id);
+    const known = list.filter(a => pos.has(idOf(a))).sort((a, b) => pos.get(idOf(a)) - pos.get(idOf(b)));
+    const fresh = list.filter(a => !pos.has(idOf(a)));
+    return known.concat(fresh);
+  }
+
+  function renderAchievementsList(list, isHardcoreMode, order, reorderMode){
     if(!list || list.length === 0) return '<div class="achievements-list-loading">No achievement data available.</div>';
     // Match the rest of the app's hardcore/casual convention: hardcore mode
     // only counts an achievement as earned if it was unlocked in hardcore
     // (DateEarnedHardcore); casual mode counts any unlock at all
     // (DateEarned is set on every unlock, hardcore or not).
-    const earned = list.filter(a => isHardcoreMode ? a.DateEarnedHardcore : a.DateEarned);
-    const locked = list.filter(a => isHardcoreMode ? !a.DateEarnedHardcore : !a.DateEarned);
-    return earned.map(a => achRowHtml(a, false, isHardcoreMode)).join('') + locked.map(a => achRowHtml(a, true, isHardcoreMode)).join('');
+    const isEarned = (a) => isHardcoreMode ? a.DateEarnedHardcore : a.DateEarned;
+    // Custom order wins over the default earned-first grouping.
+    if(order){
+      return applyAchOrder(list, order).map(a => achRowHtml(a, !isEarned(a), isHardcoreMode, reorderMode)).join('');
+    }
+    const earned = list.filter(a => isEarned(a));
+    const locked = list.filter(a => !isEarned(a));
+    return earned.map(a => achRowHtml(a, false, isHardcoreMode, reorderMode)).join('') + locked.map(a => achRowHtml(a, true, isHardcoreMode, reorderMode)).join('');
   }
 
   // Wraps renderAchievementsList with the "Missable Only" filter bar RA's own
   // site shows — only rendered when the set actually has any missable
   // achievements, since most sets on RA haven't been typed at all yet.
   let achMissableOnly = false;
-  function renderAchievementsPanel(list, isHardcoreMode, missableOnly){
+  function renderAchievementsPanel(list, isHardcoreMode, missableOnly, order, reorderMode){
     if(!list || list.length === 0) return '<div class="achievements-list-loading">No achievement data available.</div>';
     const missableCount = list.filter(isMissable).length;
-    const filterBar = missableCount > 0
-      ? `<div class="ach-filter-row">
-           <button class="ach-filter-btn ${missableOnly ? 'active' : ''}" id="ach-missable-toggle" type="button">
+    const showMissable = missableCount > 0 && !reorderMode;
+    const leftBtns = reorderMode
+      ? `<button class="ach-filter-btn active" id="ach-reorder-toggle" type="button">✓ Done</button>`
+      : `<button class="ach-filter-btn" id="ach-reorder-toggle" type="button">⇅ Reorder</button>`
+        + (order ? `<button class="ach-filter-btn" id="ach-reorder-reset" type="button">Reset order</button>` : '');
+    const filterBar = `<div class="ach-filter-row">
+        <div class="ach-filter-left">${leftBtns}</div>
+        ${showMissable ? `<button class="ach-filter-btn ${missableOnly ? 'active' : ''}" id="ach-missable-toggle" type="button">
              <span class="ach-missable-badge" aria-hidden="true">!</span> Missable Only (<span class="ach-filter-count">${missableCount}</span>)
-           </button>
-         </div>`
-      : '';
-    const rows = missableOnly ? list.filter(isMissable) : list;
+           </button>` : ''}
+      </div>
+      ${reorderMode ? '<div class="ach-reorder-hint">Drag ⠿ or use ▲▼ to move. Your order saves automatically.</div>' : ''}`;
+    const rows = (missableOnly && !reorderMode) ? list.filter(isMissable) : list;
     const body = rows.length === 0
       ? '<div class="achievements-list-loading">No missable achievements in this set.</div>'
-      : renderAchievementsList(rows, isHardcoreMode);
+      : `<div class="ach-rows" id="ach-rows">${renderAchievementsList(rows, isHardcoreMode, order, reorderMode)}</div>`;
     return filterBar + body;
   }
 
   // Shared by the initial "View Achievements" open and the casual/hardcore
-  // toggle's refresh, so the missable filter and its button survive a mode
+  // toggle's refresh, so the missable filter and reorder state survive a mode
   // switch instead of resetting back to the full list.
   function renderAchWrapContent(achWrap, gameId){
     const list = achievementsListCache[gameId];
     if(!achWrap || !list) return;
-    achWrap.innerHTML = renderAchievementsPanel(list, statsMode === 'hardcore', achMissableOnly);
+    const order = achOrderCache[gameId] || null;
+    achWrap.innerHTML = renderAchievementsPanel(list, statsMode === 'hardcore', achMissableOnly, order, achReorderMode);
     const toggleBtn = achWrap.querySelector('#ach-missable-toggle');
     if(toggleBtn){
       toggleBtn.addEventListener('click', () => {
@@ -565,6 +623,89 @@
         renderAchWrapContent(achWrap, gameId);
       });
     }
+    const reorderBtn = achWrap.querySelector('#ach-reorder-toggle');
+    if(reorderBtn){
+      reorderBtn.addEventListener('click', () => {
+        achReorderMode = !achReorderMode;
+        if(achReorderMode) achMissableOnly = false; // can't reorder a filtered subset
+        renderAchWrapContent(achWrap, gameId);
+      });
+    }
+    const resetBtn = achWrap.querySelector('#ach-reorder-reset');
+    if(resetBtn){
+      resetBtn.addEventListener('click', async () => {
+        await clearAchOrder(gameId);
+        renderAchWrapContent(achWrap, gameId);
+      });
+    }
+    if(achReorderMode) wireAchReorder(achWrap, gameId);
+  }
+
+  // Drag (pointer events — touch + mouse) and ▲▼ buttons. Every change writes
+  // the full ID order straight to storage.
+  function wireAchReorder(achWrap, gameId){
+    const container = achWrap.querySelector('#ach-rows');
+    if(!container) return;
+    const scroller = document.getElementById('modal-backdrop'); // the profile view is the scrolling element
+    const rowsEl = () => Array.from(container.querySelectorAll('.ach-row'));
+    const persist = () => saveAchOrder(gameId, rowsEl().map(r => r.dataset.id));
+
+    container.querySelectorAll('.ach-move-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const row = btn.closest('.ach-row');
+        if(btn.dataset.dir === 'up'){
+          const prev = row.previousElementSibling;
+          if(prev) container.insertBefore(row, prev);
+        }else{
+          const next = row.nextElementSibling;
+          if(next) container.insertBefore(next, row);
+        }
+        persist();
+      });
+    });
+
+    container.querySelectorAll('.ach-drag-handle').forEach(handle => {
+      handle.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        const row = handle.closest('.ach-row');
+        let pointerY = e.clientY;
+        let raf = 0;
+        row.classList.add('dragging');
+        try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+
+        const reposition = () => {
+          const others = rowsEl().filter(r => r !== row);
+          const target = others.find(r => {
+            const b = r.getBoundingClientRect();
+            return pointerY < b.top + b.height / 2;
+          });
+          if(target){ if(row.nextElementSibling !== target) container.insertBefore(row, target); }
+          else if(container.lastElementChild !== row){ container.appendChild(row); }
+        };
+        const tick = () => {
+          // Auto-scroll when the finger nears the top/bottom edge.
+          const edge = 70;
+          if(pointerY < edge) scroller.scrollTop -= 12;
+          else if(pointerY > window.innerHeight - edge) scroller.scrollTop += 12;
+          reposition();
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+
+        const onMove = (ev) => { pointerY = ev.clientY; };
+        const onEnd = () => {
+          cancelAnimationFrame(raf);
+          row.classList.remove('dragging');
+          handle.removeEventListener('pointermove', onMove);
+          handle.removeEventListener('pointerup', onEnd);
+          handle.removeEventListener('pointercancel', onEnd);
+          persist();
+        };
+        handle.addEventListener('pointermove', onMove);
+        handle.addEventListener('pointerup', onEnd);
+        handle.addEventListener('pointercancel', onEnd);
+      });
+    });
   }
 
   // RA marks a game "Beaten" once the player has earned every achievement
@@ -2114,10 +2255,12 @@
       if(nowOpen && !achLoaded){
         achLoaded = true;
         achMissableOnly = false; // fresh game's panel starts unfiltered
+        achReorderMode = false;
         achWrap.innerHTML = '<div class="achievements-list-loading">Loading achievements…</div>';
         try{
           const list = await getAchievementsList(gameId);
           attachAchievementTypes(list, ext);
+          await loadAchOrder(gameId);
           if(card.dataset.gameId !== String(gameId)) return; // user moved on
           renderAchWrapContent(achWrap, gameId);
           openAchievementsGameId = gameId;
