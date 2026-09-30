@@ -792,3 +792,7 @@
   .yt-max-close{background:var(--gold);color:#1a1424;padding:7px 12px;flex-shrink:0;}
   .yt-player-wrap.yt-max .yt-player-box{flex:1;aspect-ratio:auto;border-radius:0;}
   .yt-player-wrap.yt-max .yt-player-tools{display:none !important;}
+
+  /* Status row: badge first, then the date beaten to its right, sitting flush with the other values. */
+  .modal-progress .status-val{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:4px 10px;}
+  .modal-progress .beaten-date{white-space:nowrap;}
