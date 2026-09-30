@@ -508,7 +508,6 @@
     const reorderControls = reorderMode
       ? `<div class="ach-reorder-controls">
            <button class="ach-move-btn" data-dir="up" type="button" aria-label="Move up">▲</button>
-           <button class="ach-drag-handle" type="button" aria-label="Drag to reorder">⠿</button>
            <button class="ach-move-btn" data-dir="down" type="button" aria-label="Move down">▼</button>
          </div>`
       : '';
@@ -600,11 +599,11 @@
              <span class="ach-missable-badge" aria-hidden="true">!</span> Missable Only (<span class="ach-filter-count">${missableCount}</span>)
            </button>` : ''}
       </div>
-      ${reorderMode ? '<div class="ach-reorder-hint">Drag ⠿ or use ▲▼ to move. Your order saves automatically.</div>' : ''}`;
+      ${reorderMode ? '<div class="ach-reorder-hint">Press and hold a row, then drag it. Or use ▲▼. Your order saves automatically.</div>' : ''}`;
     const rows = (missableOnly && !reorderMode) ? list.filter(isMissable) : list;
     const body = rows.length === 0
       ? '<div class="achievements-list-loading">No missable achievements in this set.</div>'
-      : `<div class="ach-rows" id="ach-rows">${renderAchievementsList(rows, isHardcoreMode, order, reorderMode)}</div>`;
+      : `<div class="ach-rows${reorderMode ? ' reordering' : ''}" id="ach-rows">${renderAchievementsList(rows, isHardcoreMode, order, reorderMode)}</div>`;
     return filterBar + body;
   }
 
@@ -664,48 +663,118 @@
       });
     });
 
-    container.querySelectorAll('.ach-drag-handle').forEach(handle => {
-      handle.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        const row = handle.closest('.ach-row');
+    // Press-and-hold anywhere on a row to pick it up, then drag. A quick swipe
+    // (finger moves before the hold completes) is left alone so the page still scrolls.
+    // The held row follows the finger via a CSS transform and the rows it passes
+    // slide out of the way; the DOM is only reordered once, on release (moving the
+    // held element mid-drag makes browsers drop the pointer).
+    const HOLD_MS = 350;
+    const HOLD_SLOP = 10; // px of movement that means "this is a scroll, not a hold"
+    let dragActive = false;
+    // Once a drag is live, stop the browser from also scrolling the page under the finger.
+    container.addEventListener('touchmove', (ev) => { if(dragActive) ev.preventDefault(); }, { passive: false });
+    container.addEventListener('contextmenu', (ev) => ev.preventDefault()); // no long-press menu on badge images
+
+    container.querySelectorAll('.ach-row').forEach(row => {
+      row.addEventListener('pointerdown', (e) => {
+        if(dragActive) return;
+        if(e.target.closest('.ach-move-btn')) return; // arrows do their own thing
+        if(e.pointerType === 'mouse' && e.button !== 0) return;
+        const pointerId = e.pointerId;
         let pointerY = e.clientY;
-        let raf = 0;
-        row.classList.add('dragging');
-        try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+        const downX = e.clientX, downY = e.clientY;
+        let timer = 0;
 
-        const reposition = () => {
-          const others = rowsEl().filter(r => r !== row);
-          const target = others.find(r => {
-            const b = r.getBoundingClientRect();
-            return pointerY < b.top + b.height / 2;
-          });
-          if(target){ if(row.nextElementSibling !== target) container.insertBefore(row, target); }
-          else if(container.lastElementChild !== row){ container.appendChild(row); }
+        const cancelPending = () => {
+          clearTimeout(timer);
+          row.removeEventListener('pointermove', pendingMove);
+          row.removeEventListener('pointerup', cancelPending);
+          row.removeEventListener('pointercancel', cancelPending);
         };
-        const tick = () => {
-          // Auto-scroll when the finger nears the top/bottom edge.
-          const edge = 70;
-          if(pointerY < edge) scroller.scrollTop -= 12;
-          else if(pointerY > window.innerHeight - edge) scroller.scrollTop += 12;
-          reposition();
-          raf = requestAnimationFrame(tick);
+        const pendingMove = (ev) => {
+          pointerY = ev.clientY;
+          if(Math.abs(ev.clientX - downX) > HOLD_SLOP || Math.abs(ev.clientY - downY) > HOLD_SLOP) cancelPending();
         };
-        raf = requestAnimationFrame(tick);
+        row.addEventListener('pointermove', pendingMove);
+        row.addEventListener('pointerup', cancelPending);
+        row.addEventListener('pointercancel', cancelPending);
 
-        const onMove = (ev) => { pointerY = ev.clientY; };
-        const onEnd = () => {
-          cancelAnimationFrame(raf);
-          row.classList.remove('dragging');
-          handle.removeEventListener('pointermove', onMove);
-          handle.removeEventListener('pointerup', onEnd);
-          handle.removeEventListener('pointercancel', onEnd);
-          persist();
-        };
-        handle.addEventListener('pointermove', onMove);
-        handle.addEventListener('pointerup', onEnd);
-        handle.addEventListener('pointercancel', onEnd);
+        // Mouse picks up instantly; touch needs the hold.
+        timer = setTimeout(() => { cancelPending(); startDrag(row, pointerId, pointerY); }, e.pointerType === 'mouse' ? 0 : HOLD_MS);
       });
     });
+
+    function startDrag(row, pointerId, initialY){
+      const rows = rowsEl();
+      const startIdx = rows.indexOf(row);
+      // Layout snapshot (offsetTop is relative to the container, scroll-independent).
+      const tops = rows.map(r => r.offsetTop);
+      const heights = rows.map(r => r.offsetHeight);
+      const dragH = heights[startIdx] + 1; // +1 for the 1px gap between rows
+      const contentY = (clientY) => clientY - container.getBoundingClientRect().top;
+      const startContentY = contentY(initialY);
+      let pointerY = initialY;
+      let newIdx = startIdx;
+      let raf = 0;
+
+      dragActive = true;
+      if(navigator.vibrate){ try{ navigator.vibrate(15); }catch(err){} }
+      row.classList.add('dragging');
+      rows.forEach(r => { if(r !== row) r.classList.add('ach-shifting'); });
+      try{ row.setPointerCapture(pointerId); }catch(err){}
+
+      const tick = () => {
+        // Auto-scroll near the screen edges (faster the closer you get).
+        const edge = 90;
+        if(pointerY < edge) scroller.scrollTop -= Math.ceil((edge - pointerY) / 5);
+        else if(pointerY > window.innerHeight - edge) scroller.scrollTop += Math.ceil((pointerY - (window.innerHeight - edge)) / 5);
+
+        // Held row tracks the finger (contentY is recomputed, so scrolling counts too).
+        let dy = contentY(pointerY) - startContentY;
+        const minDy = tops[0] - tops[startIdx];
+        const maxDy = tops[rows.length - 1] + heights[rows.length - 1] - tops[startIdx] - heights[startIdx];
+        dy = Math.max(minDy, Math.min(maxDy, dy));
+        row.style.transform = `translateY(${dy}px)`;
+
+        // Where would it land? Count the other rows whose midpoint is above its centre.
+        const centre = tops[startIdx] + heights[startIdx] / 2 + dy;
+        let idx = 0;
+        rows.forEach((r, i) => { if(i !== startIdx && tops[i] + heights[i] / 2 < centre) idx++; });
+        newIdx = idx;
+
+        // Slide the passed rows out of the way.
+        rows.forEach((r, i) => {
+          if(i === startIdx) return;
+          let shift = 0;
+          if(startIdx < newIdx && i > startIdx && i <= newIdx) shift = -dragH;
+          else if(startIdx > newIdx && i >= newIdx && i < startIdx) shift = dragH;
+          r.style.transform = shift ? `translateY(${shift}px)` : '';
+        });
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+
+      const onMove = (ev) => { pointerY = ev.clientY; };
+      const onEnd = () => {
+        cancelAnimationFrame(raf);
+        row.removeEventListener('pointermove', onMove);
+        row.removeEventListener('pointerup', onEnd);
+        row.removeEventListener('pointercancel', onEnd);
+        dragActive = false;
+        // Commit once: clear transforms, then move the row to its final slot.
+        rows.forEach(r => { r.style.transform = ''; r.classList.remove('ach-shifting'); });
+        row.classList.remove('dragging');
+        if(newIdx !== startIdx){
+          const others = rows.filter(r => r !== row);
+          if(newIdx >= others.length) container.appendChild(row);
+          else container.insertBefore(row, others[newIdx]);
+          persist();
+        }
+      };
+      row.addEventListener('pointermove', onMove);
+      row.addEventListener('pointerup', onEnd);
+      row.addEventListener('pointercancel', onEnd);
+    }
   }
 
   // RA marks a game "Beaten" once the player has earned every achievement
