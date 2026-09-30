@@ -13,7 +13,7 @@
 // ==============================================================================
 
 const CACHE_PREFIX = 'gl-tracker-';
-const CACHE_NAME = CACHE_PREFIX + 'v87';
+const CACHE_NAME = CACHE_PREFIX + 'v88';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
