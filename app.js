@@ -233,6 +233,29 @@
     return isNaN(d.getTime()) ? null : d;
   }
 
+  // "Sep 02, 2026" — 3-letter month, 2-digit day, 4-digit year (locale-independent).
+  const BEATEN_DATE_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function formatBeatenDate(d){
+    if(!d || isNaN(d.getTime())) return '';
+    return `${BEATEN_DATE_MONTHS[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}, ${d.getFullYear()}`;
+  }
+  // Manual games store a plain "YYYY-MM-DD"; read it field-by-field so the
+  // timezone can't shift it to the day before.
+  function formatManualBeatenDate(str){
+    const m = String(str || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(!m) return '';
+    return formatBeatenDate(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  }
+  function beatenDateHtml(text){
+    return text ? `<span class="beaten-date">${text}</span>` : '';
+  }
+  function manualStatusHtml(local){
+    if(local.manualBeaten){
+      return '<span class="pill pill-teal">Beaten</span>' + beatenDateHtml(formatManualBeatenDate(local.manualBeatenDate));
+    }
+    return local.manualStarted ? '<span class="pill pill-muted">In progress</span>' : '<span class="pill pill-muted">Not started</span>';
+  }
+
   function timeAgo(dateStr){
     const d = parseRADate(dateStr);
     if(!d) return '—';
@@ -2229,7 +2252,7 @@
       <div class="modal-progress">
         <div class="row"><span>Progress</span><span style="color:var(--muted)">—</span></div>
         <div class="row"><span>Playtime</span><span style="color:var(--muted)">—</span></div>
-        <div class="row"><span>Status</span><span>${local.manualBeaten ? '<span class="pill pill-teal">Beaten</span>' : (local.manualStarted ? '<span class="pill pill-muted">In progress</span>' : '<span class="pill pill-muted">Not started</span>')}</span></div>
+        <div class="row"><span>Status</span><span class="status-val" id="manual-status-val">${manualStatusHtml(local)}</span></div>
       </div>
 
       <div class="field" style="text-align:left;margin-bottom:14px;">
@@ -2280,6 +2303,11 @@
 
     // A game can't be "not playing" and "beaten" at once — unchecking Now
     // Playing clears a beaten mark too, moving the game back to the Backlog.
+    const refreshManualStatus = () => {
+      const el = card.querySelector('#manual-status-val');
+      if(el) el.innerHTML = manualStatusHtml(local);
+    };
+
     startedCheckbox.addEventListener('change', async () => {
       const nowStarted = startedCheckbox.checked;
       if(!nowStarted && checkbox.checked){
@@ -2290,6 +2318,7 @@
       }
       await updateManualStartedStatus(gameId, nowStarted);
       local.manualStarted = nowStarted;
+      refreshManualStatus();
     });
 
     checkbox.addEventListener('change', async () => {
@@ -2305,11 +2334,13 @@
       }
       await updateManualBeatenStatus(gameId, checkbox.checked, dateInput.value || null);
       local.manualBeaten = checkbox.checked; local.manualBeatenDate = dateInput.value || null;
+      refreshManualStatus();
     });
     dateInput.addEventListener('change', async () => {
       if(checkbox.checked){
         await updateManualBeatenStatus(gameId, true, dateInput.value || null);
         local.manualBeatenDate = dateInput.value || null;
+        refreshManualStatus();
       }
     });
 
@@ -2469,6 +2500,11 @@
     const pct = totalAch ? Math.round((earned/totalAch)*100) : 0;
     const est = estHoursCache[gameId];
     const awardKind = local ? local.HighestAwardKind : null;
+    // Show the award date beside the badge, but only when the badge itself says "done" for the current mode
+    // (hardcore mode only counts Mastered / Beaten (HC)).
+    const doneKinds = isHardcoreMode ? ['mastered', 'beaten-hardcore'] : ['mastered', 'completed', 'beaten-hardcore', 'beaten-softcore'];
+    const raBeatenDateLabel = (local && local.HighestAwardDate && doneKinds.includes(awardKind))
+      ? formatBeatenDate(parseRADate(local.HighestAwardDate)) : '';
 
     const raUrl = `https://retroachievements.org/game/${gameId}`;
     const hltbUrl = `https://howlongtobeat.com/?q=${encodeURIComponent(title)}`;
@@ -2488,7 +2524,7 @@
 
       <div class="modal-progress">
         <div class="row"><span>Your progress</span><span>${earned}/${totalAch || '?'} · ${pct}%</span></div>
-        <div class="row"><span>Status</span><span>${awardPill(awardKind)}</span></div>
+        <div class="row"><span>Status</span><span class="status-val">${awardPill(awardKind)}${beatenDateHtml(raBeatenDateLabel)}</span></div>
         <div class="row">
           <span id="modal-playtime-label">${est && est.real ? 'Playtime' : (est && est.beaten ? 'Time to beat' : 'Est. playtime')}</span>
           <span style="display:flex;align-items:center;gap:8px;">
