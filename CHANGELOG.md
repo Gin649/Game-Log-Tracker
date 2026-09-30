@@ -2,6 +2,14 @@
 
 All notable changes to Game Log — Tracker are documented here. Newest first. 
 
+## v2.0.5
+ 
+### Added
+- Missable achievements now show a gold "!" badge in a game's achievement list, matching RetroAchievements' own site, plus a "Missable Only" filter toggle to narrow the list down to just those
+
+### Fixed
+- App sync could feel sluggish right after this update if several backlog games turned out to already have real progress — they now move to the Library in one batched update instead of triggering a separate full re-render for each one
+
 ## v2.0.4
  
 ### Added and Changed
