@@ -1035,6 +1035,239 @@
     });
   }
 
+  // --- Walkthrough videos (YouTube) ---
+  // "Find a walkthrough" opens a YouTube search in the browser; the user pastes
+  // links back here, which are saved per game (so they're part of Data backups)
+  // and played in a built-in embedded player that can be maximised.
+  function walkthroughKey(gameId){
+    return `walkthroughs:${creds.username.trim().toLowerCase()}:${gameId}`;
+  }
+  async function loadWalkthroughs(gameId){
+    try{
+      const r = await window.storage.get(walkthroughKey(gameId), false);
+      if(r && r.value){ const a = JSON.parse(r.value); if(Array.isArray(a)) return a; }
+    }catch(e){ /* none saved yet */ }
+    return [];
+  }
+  async function saveWalkthroughs(gameId, list){
+    try{
+      if(list.length) await window.storage.set(walkthroughKey(gameId), JSON.stringify(list), false);
+      else await window.storage.delete(walkthroughKey(gameId), false);
+    }catch(e){ /* non-fatal */ }
+  }
+  function ytEsc(str){
+    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  // Accepts watch / youtu.be / shorts / embed / live / playlist links (with or without a timestamp).
+  // Returns { vid, list, start } or null if it isn't a YouTube link we can play.
+  function parseYouTubeLink(raw){
+    let text = String(raw || '').trim();
+    if(!text) return null;
+    if(!/^https?:\/\//i.test(text)) text = 'https://' + text;
+    let u; try{ u = new URL(text); }catch(e){ return null; }
+    const host = u.hostname.toLowerCase().replace(/^(www\.|m\.|music\.)/, '');
+    let vid = null;
+    if(host === 'youtu.be'){
+      vid = u.pathname.slice(1).split('/')[0];
+    }else if(host === 'youtube.com' || host === 'youtube-nocookie.com'){
+      if(u.pathname === '/watch') vid = u.searchParams.get('v');
+      else{
+        const m = u.pathname.match(/^\/(?:shorts|embed|live|v)\/([\w-]{11})/);
+        if(m) vid = m[1];
+      }
+    }else return null;
+    if(vid && !/^[\w-]{11}$/.test(vid)) vid = null;
+    let list = u.searchParams.get('list');
+    if(list && !/^[\w-]+$/.test(list)) list = null;
+    if(!vid && !list) return null;
+    let start = 0;
+    const t = u.searchParams.get('t') || u.searchParams.get('start');
+    if(t){
+      if(/^\d+$/.test(t)) start = Number(t);
+      else{
+        const m = t.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+        if(m) start = (Number(m[1]||0) * 3600) + (Number(m[2]||0) * 60) + Number(m[3]||0);
+      }
+    }
+    return { vid, list, start };
+  }
+  function ytEmbedUrl(e){
+    const p = new URLSearchParams({ rel:'0', playsinline:'1', autoplay:'1' });
+    if(e.start) p.set('start', String(e.start));
+    if(e.list) p.set('list', e.list);
+    return `https://www.youtube-nocookie.com/embed/${e.vid || 'videoseries'}?${p.toString()}`;
+  }
+  function ytWatchUrl(e){
+    if(e.vid) return `https://www.youtube.com/watch?v=${e.vid}${e.list ? '&list=' + e.list : ''}${e.start ? '&t=' + e.start + 's' : ''}`;
+    return `https://www.youtube.com/playlist?list=${e.list}`;
+  }
+  async function fetchYouTubeTitle(e){
+    try{
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 5000);
+      const res = await fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(ytWatchUrl(e)), { signal: ctl.signal });
+      clearTimeout(timer);
+      if(!res.ok) return null;
+      const j = await res.json();
+      return j && j.title ? String(j.title) : null;
+    }catch(err){ return null; }
+  }
+  // Clears every walkthrough player (called when the game profile closes) so audio never
+  // keeps playing behind a closed screen, and leaves full screen if it was on.
+  function stopWalkthroughPlayers(){
+    document.querySelectorAll('.yt-player-wrap').forEach(w => {
+      w.classList.remove('yt-max');
+      const b = w.querySelector('.yt-player-box');
+      if(b) b.innerHTML = '';
+    });
+    const fs = document.fullscreenElement || document.webkitFullscreenElement;
+    if(fs && fs.classList && fs.classList.contains('yt-player-wrap')){
+      try{ (document.exitFullscreen || document.webkitExitFullscreen).call(document); }catch(e){}
+    }
+  }
+
+  function setupWalkthroughUI(gameId, title, card, consoleName){
+    const btn = card.querySelector('#modal-yt-btn');
+    const panel = card.querySelector('#modal-yt-panel');
+    if(!btn || !panel) return;
+    const searchQuery = `${title} ${consoleName || ''} walkthrough`.replace(/\s+/g, ' ').trim();
+    const searchUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(searchQuery);
+    let items = [];
+    let built = false;
+    let playingId = null;
+    let els = {};
+
+    function renderList(){
+      if(!items.length){
+        els.list.innerHTML = '<div class="yt-empty">No saved links yet.</div>';
+        return;
+      }
+      els.list.innerHTML = items.map(it => `
+        <div class="yt-item ${it.id === playingId ? 'playing' : ''}" data-id="${ytEsc(it.id)}">
+          <button class="yt-item-main" type="button">
+            ${it.vid ? `<img class="yt-thumb" src="https://i.ytimg.com/vi/${it.vid}/mqdefault.jpg" alt="" loading="lazy">` : '<span class="yt-thumb yt-thumb-list">☰</span>'}
+            <span class="yt-item-title">${ytEsc(it.title)}</span>
+          </button>
+          <button class="yt-item-del" type="button" aria-label="Remove link">✕</button>
+        </div>`).join('');
+    }
+
+    function setMax(on){
+      els.wrap.classList.toggle('yt-max', on);
+      const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      if(on){
+        const req = els.wrap.requestFullscreen || els.wrap.webkitRequestFullscreen;
+        if(req && !fsEl){ try{ const p = req.call(els.wrap); if(p && p.catch) p.catch(() => {}); }catch(e){} }
+      }else if(fsEl === els.wrap){
+        try{ (document.exitFullscreen || document.webkitExitFullscreen).call(document); }catch(e){}
+      }
+    }
+
+    function play(it){
+      playingId = it.id;
+      els.box.innerHTML = `<iframe src="${ytEmbedUrl(it)}" title="Walkthrough video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+      els.maxTitle.textContent = it.title;
+      els.tools.style.display = '';
+      els.ytLink.href = ytWatchUrl(it);
+      renderList();
+      els.wrap.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }
+
+    function stopPlayer(){
+      playingId = null;
+      setMax(false);
+      els.box.innerHTML = '';
+      els.tools.style.display = 'none';
+    }
+
+    function msg(text, isError){
+      els.msg.textContent = text || '';
+      els.msg.className = 'yt-msg' + (isError ? ' err' : '');
+    }
+
+    async function addLink(){
+      const parsed = parseYouTubeLink(els.input.value);
+      if(!parsed){ msg('That doesn\'t look like a YouTube link. Copy the link from the video\'s Share button (or the address bar) and paste it here.', true); return; }
+      const id = parsed.vid || ('pl-' + parsed.list);
+      const dup = items.find(it => it.id === id);
+      if(dup){ msg('That link is already saved.', true); els.input.value = ''; play(dup); return; }
+      els.saveBtn.disabled = true;
+      msg('Saving…');
+      const entry = { id, vid: parsed.vid, list: parsed.list, start: parsed.start, title: '', added: Date.now() };
+      entry.title = (await fetchYouTubeTitle(entry)) || (parsed.vid ? `Walkthrough video ${items.length + 1}` : `Walkthrough playlist ${items.length + 1}`);
+      items.push(entry);
+      await saveWalkthroughs(gameId, items);
+      els.input.value = '';
+      els.saveBtn.disabled = false;
+      msg('');
+      renderList();
+    }
+
+    function build(){
+      built = true;
+      panel.innerHTML = `
+        <a class="guide-btn guide-btn-primary yt-find" href="${ytEsc(searchUrl)}" target="_blank" rel="noopener">Find a walkthrough ↗</a>
+        <p class="yt-hint">Opens a YouTube search for “${ytEsc(searchQuery)}”. Copy a video link, come back, and paste it below.</p>
+        <div class="yt-add-row">
+          <input type="url" class="yt-input" placeholder="Paste a YouTube link" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+          <button class="yt-save-btn" type="button">Save</button>
+        </div>
+        <div class="yt-msg"></div>
+        <div class="yt-list"><div class="yt-empty">Loading…</div></div>
+        <div class="yt-player-wrap">
+          <div class="yt-max-bar"><span class="yt-max-title"></span><button class="yt-max-close" type="button">✕ Close</button></div>
+          <div class="yt-player-box"></div>
+          <div class="yt-player-tools" style="display:none;">
+            <button class="yt-max-btn" type="button">⛶ Full screen</button>
+            <a class="yt-open-link" href="#" target="_blank" rel="noopener">Open on YouTube ↗</a>
+          </div>
+        </div>`;
+      els = {
+        input: panel.querySelector('.yt-input'), saveBtn: panel.querySelector('.yt-save-btn'), msg: panel.querySelector('.yt-msg'),
+        list: panel.querySelector('.yt-list'), wrap: panel.querySelector('.yt-player-wrap'), box: panel.querySelector('.yt-player-box'),
+        tools: panel.querySelector('.yt-player-tools'), ytLink: panel.querySelector('.yt-open-link'), maxTitle: panel.querySelector('.yt-max-title')
+      };
+      els.saveBtn.addEventListener('click', addLink);
+      els.input.addEventListener('keydown', (ev) => { if(ev.key === 'Enter'){ ev.preventDefault(); addLink(); } });
+      els.list.addEventListener('click', async (ev) => {
+        const row = ev.target.closest('.yt-item');
+        if(!row) return;
+        const it = items.find(x => x.id === row.dataset.id);
+        if(!it) return;
+        if(ev.target.closest('.yt-item-del')){
+          if(!confirm('Remove this saved link?')) return;
+          items = items.filter(x => x.id !== it.id);
+          if(playingId === it.id) stopPlayer();
+          await saveWalkthroughs(gameId, items);
+          renderList();
+          return;
+        }
+        play(it);
+      });
+      panel.querySelector('.yt-max-btn').addEventListener('click', () => setMax(true));
+      panel.querySelector('.yt-max-close').addEventListener('click', () => setMax(false));
+      // Leaving native full screen with the system gesture/Esc should also drop the maximised layout.
+      const onFsChange = () => {
+        const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+        if(!fsEl && els.wrap.classList.contains('yt-max')) els.wrap.classList.remove('yt-max');
+      };
+      els.wrap.addEventListener('fullscreenchange', onFsChange);
+      els.wrap.addEventListener('webkitfullscreenchange', onFsChange);
+      document.addEventListener('keydown', (ev) => {
+        if(ev.key === 'Escape' && els.wrap.isConnected && els.wrap.classList.contains('yt-max')) setMax(false);
+      });
+      loadWalkthroughs(gameId).then(list => { items = list; renderList(); });
+    }
+
+    btn.addEventListener('click', () => {
+      const opening = panel.style.display === 'none';
+      panel.style.display = opening ? 'block' : 'none';
+      btn.classList.toggle('open', opening);
+      if(opening){ if(!built) build(); }
+      else if(built){ stopPlayer(); renderList(); } // collapsing the panel stops playback
+    });
+  }
+
   // --- Game guides (manually imported — never fetched automatically; see
   // the "Game Guide" panel in the game profile for why) ---
   function guideKey(gameId){
@@ -2027,6 +2260,9 @@
       <div class="guide-panel" id="modal-patch-panel" style="display:none;"></div>
       ` : ''}
 
+      <button class="btn-view-achievements" id="modal-yt-btn"><span class="arrow">▸</span> Search YouTube</button>
+      <div class="guide-panel" id="modal-yt-panel" style="display:none;"></div>
+
       <div class="modal-links">
         <a href="https://howlongtobeat.com/?q=${encodeURIComponent(local.Title)}" target="_blank" rel="noopener">Search HowLongToBeat ↗</a>
       </div>
@@ -2077,6 +2313,7 @@
     attachRawgLookup(gameId, local.Title, card);
     setupGameGuideUI(gameId, local.Title, card, local.ConsoleID);
     setupCheatsUI(gameId, local.Title, card, local.ConsoleName);
+    setupWalkthroughUI(gameId, local.Title, card, local.ConsoleName);
     setupLinkRaUI(gameId, local, card);
     if(isCartridgeConsole(local.ConsoleName)) setupRomPatchUI(gameId, local.Title, card, local.ConsoleName);
   }
@@ -2274,6 +2511,9 @@
       <div class="guide-panel" id="modal-patch-panel" style="display:none;"></div>
       ` : ''}
 
+      <button class="btn-view-achievements" id="modal-yt-btn"><span class="arrow">▸</span> Search YouTube</button>
+      <div class="guide-panel" id="modal-yt-panel" style="display:none;"></div>
+
       <div class="modal-links">
         <a href="${raUrl}" target="_blank" rel="noopener">RetroAchievements page ↗</a>
         <a href="${hltbUrl}" target="_blank" rel="noopener">Search HowLongToBeat ↗</a>
@@ -2311,6 +2551,7 @@
     attachRawgLookup(gameId, title, card);
     setupGameGuideUI(gameId, title, card, ext.ConsoleID || (local && local.ConsoleID));
     setupCheatsUI(gameId, title, card, console_);
+    setupWalkthroughUI(gameId, title, card, console_);
     if(isCartridgeConsole(console_)) setupRomPatchUI(gameId, title, card, console_);
 
     const achBtn = card.querySelector('#modal-view-ach-btn');
@@ -2371,6 +2612,7 @@
     $('#modal-backdrop').classList.remove('open');
     openAchievementsGameId = null;
     openBeatenAchievementsGameId = null;
+    stopWalkthroughPlayers();
     closeGuideReader();
   }
 
