@@ -985,6 +985,37 @@
   // game, backlog included, during background loading) tends to reflect a
   // session sooner, so promote the game out of the Backlog the moment this
   // sees real progress on it instead of waiting for a bulk fetch to agree.
+  // Batches promoteManualGameToReal's storage write + re-render across a
+  // burst of promotions (e.g. the first sync after this feature shipped, or
+  // after a multi-add of already-played games) instead of doing a full
+  // storage round-trip and a full Library/Backlog/Year re-render per game —
+  // that per-game cost was the actual cause of a sync feeling sluggish when
+  // several games got promoted in the same load.
+  const pendingPromotions = new Map(); // GameID -> entry, collected until the flush fires
+  let promotionFlushTimer = null;
+  function schedulePromotionFlush(){
+    if(promotionFlushTimer) return;
+    promotionFlushTimer = setTimeout(async () => {
+      promotionFlushTimer = null;
+      const batch = [...pendingPromotions.values()];
+      pendingPromotions.clear();
+      if(batch.length === 0) return;
+
+      await enqueueTask(async () => {
+        const idsToRemove = new Set(batch.map(e => e.GameID));
+        const manual = await loadManualGames();
+        await saveManualGames(manual.filter(g => !idsToRemove.has(g.GameID)));
+        const pending = await loadPendingRealGames();
+        await savePendingRealGames([...pending.filter(g => !idsToRemove.has(g.GameID)), ...batch]);
+      });
+
+      renderSystemChips();
+      renderBacklog();
+      renderLibrary();
+      renderByYear();
+    }, 250);
+  }
+
   async function promoteManualGameToReal(gameId, data){
     const idx = libraryData.findIndex(g => g.GameID === gameId);
     if(idx === -1 || !libraryData[idx].manual || libraryData[idx].customConsole) return;
@@ -1010,21 +1041,12 @@
       pct: maxPossible ? Math.round((numAwarded / maxPossible) * 100) : 0,
     };
     libraryData[idx] = entry;
-
-    await enqueueTask(async () => {
-      const manual = await loadManualGames();
-      await saveManualGames(manual.filter(g => g.GameID !== gameId));
-      const pending = await loadPendingRealGames();
-      await savePendingRealGames([...pending.filter(g => g.GameID !== gameId), entry]);
-    });
-
-    renderSystemChips();
-    renderBacklog();
-    renderLibrary();
-    renderByYear();
+    pendingPromotions.set(gameId, entry);
+    schedulePromotionFlush();
   }
 
-  async function removeManualGame(gameId){    return enqueueTask(async () => {
+  async function removeManualGame(gameId){
+    return enqueueTask(async () => {
       libraryData = libraryData.filter(g => g.GameID !== gameId);
       const manual = await loadManualGames();
       await saveManualGames(manual.filter(g => g.GameID !== gameId));
