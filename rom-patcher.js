@@ -1103,11 +1103,24 @@
       patchWrap.innerHTML = '<div class="achievements-list-loading">Checking RetroAchievements…</div>';
       try{
         const romCrc = crc32(romBytes);
-        const official = await fetchOfficialPatches();
+        let official = await fetchOfficialPatches();
 
         patchWrap.innerHTML = '<div class="achievements-list-loading">Reading the RAPatches file list…</div>';
         const tree = await getRAPatchesTree();
         branch = tree.branch;
+
+        // RA often links its patches through github.com (".../raw/main/..."), which redirects to
+        // raw.githubusercontent.com but sends no CORS headers, so the browser refuses to fetch it
+        // ("NetworkError"). When the linked file is one we can see in the RAPatches repo, point the
+        // official entry at the raw.githubusercontent.com copy of that exact same file instead.
+        official = official.map(o => {
+          let decoded = o.url;
+          try{ decoded = decodeURIComponent(o.url); }catch(e){}
+          const hit = tree.files
+            .filter(f => decoded.endsWith('/' + f.path) || decoded.endsWith(f.path))
+            .sort((a, b) => b.path.length - a.path.length)[0];
+          return hit ? { ...o, url: fetchRAPatchUrl(tree.branch, hit.path), path: hit.path } : o;
+        });
 
         let pool = consoleFolderCandidates(tree.files, consoleName);
         let usedFallback = false;
@@ -1170,7 +1183,7 @@
         // console. inFolder stands on its own: RAPatches' own folder-per-game layout is
         // a reliable signal even when the file itself is named just "<RA ID>-Abbrev.ext".
         const noPreCheck = ipsAll.concat(zipAll).filter(c => c.inFolder || c.score === 1);
-        const unverifiedPicks = noPreCheck.filter(c => !idPaths.has(c.path));
+        const unverifiedPicks = noPreCheck.filter(c => !idPaths.has(c.path) && !officialPaths.has(fetchRAPatchUrl(branch, c.path)) && !isOfficialDup(c.path));
 
         const byLabel = (a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true });
 
@@ -1198,6 +1211,9 @@
           .map(r => {
             let url = r.PatchUrl || r.patchUrl;
             if(url.startsWith('http://')) url = 'https://' + url.slice(7); // avoid a silent https-page-fetching-http block
+            // github.com/<owner>/<repo>/(raw|blob)/<ref>/<path> -> raw.githubusercontent.com (which allows cross-origin fetches)
+            const gh = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:raw|blob)\/(?:refs\/heads\/)?(.+)$/);
+            if(gh) url = `https://raw.githubusercontent.com/${gh[1]}/${gh[2]}/${gh[3].split('?')[0]}`;
             return { label: url.split('/').pop(), url };
           });
       }catch(e){
