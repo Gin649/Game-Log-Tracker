@@ -2,6 +2,14 @@
 
 All notable changes to Game Log — Tracker are documented here. Newest first. 
 
+## v2.0.7
+
+- New: Search YouTube walkthroughs. Every game profile now has a Search YouTube button.
+- The game profile now shows the date beaten beside the Beaten badge, in the format Sep 02, 2026.
+- Fixed: Some hacks listed the same patch twice, and the "Official — linked by RetroAchievements" copy failed with a NetworkError. Each patch now appears once, and official patches download correctly.
+- The app now remembers the folder your ROM came from, even when the ROM is loaded from "Remember this ROM". The Save Patched ROM… dialog opens in that folder. This works in Chrome and Edge. Firefox and Safari save to their default Downloads folder.
+- The What does it do? link now finds more hacks on romhack.ing. It removes "-Hack" from the name, splits run-together names into separate words (KirbysHalloweenAdventure becomes "Kirby's Halloween Adventure"), and restores the apostrophe in possessive names.
+
 ## v2.0.6
  
 ### Added
