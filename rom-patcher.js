@@ -921,7 +921,22 @@
       .replace(/([a-z0-9])([A-Z])/g, '$1 $2')              // KirbysHalloween -> Kirbys Halloween
       .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')           // SMWHack... / ABCDef -> ABC Def (keeps acronyms together)
       .replace(/[_.]+/g, ' ').replace(/\s+/g, ' ').trim();
-    const title = spaceOut(baseName.replace(/\s*[(\[][^)\]]*[)\]]?/g, '')) || spaceOut(baseName);
+    // File names can't hold apostrophes, so "Kirby's Halloween Adventure" arrives as "KirbysHalloweenAdventure".
+    // Put it back for a possessive-looking first word: a capitalised word ending in "s" followed by another
+    // capitalised word. Common plural-style words (and -ss / -us endings) are skipped so titles like
+    // "Dragons Lair" or "Days of Thunder" aren't mangled.
+    const NOT_POSSESSIVE = /^(Days|Hours|Years|Lands|Worlds|Tales|Heroes|Games|Dreams|Legends|Kingdoms|Wars|Nights|Ways|Things|Times|Lives|Lords|Souls|Stars|Bros|Quests|Adventures|Genesis|Plus|Chaos|Pirates|Dragons|Knights|Monsters|Ghosts|Sisters|Brothers|Friends|Wings|Colors|Rules|Fantasies|Kids|Boys|Girls|Guys)$/;
+    const addPossessive = (str) => {
+      const words = str.split(' ');
+      if(words.length < 2) return str;
+      const first = words[0], next = words[1];
+      if(/^[A-Z][a-z]{2,}s$/.test(first) && !/(ss|us)$/.test(first) && !NOT_POSSESSIVE.test(first)
+         && /^[A-Z]/.test(next) && !/^(Of|The|And|In|On|To|For|Vs|A|An)$/.test(next)){
+        words[0] = first.slice(0, -1) + "'s";
+      }
+      return words.join(' ');
+    };
+    const title = addPossessive(spaceOut(baseName.replace(/\s*[(\[][^)\]]*[)\]]?/g, '')) || spaceOut(baseName));
     const filters = [null, null, null, null, null, null, null, null,
       { field: 'title', operator: 'must', value: title },
       { field: 'categories', operator: 'must', value: 'Hack' }
