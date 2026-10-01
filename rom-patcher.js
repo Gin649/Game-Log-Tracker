@@ -914,8 +914,14 @@
     // Only the hack's name goes in the Title field: anything in brackets after it (a version number,
     // "(v2.2)", "[Beta]", even one cut off before its closing bracket) is dropped.
     const baseName = String(label || '').replace(/\.(bps|ips|ups|ppf|aps|xdelta3?|vcdiff|vcd|zip|7z|rar)$/i, '').replace(/^\d+[-_]/, '');
-    const title = baseName.replace(/\s*[(\[][^)\]]*[)\]]?/g, '').replace(/[_.]+/g, ' ').replace(/\s+/g, ' ').trim()
-      || baseName.replace(/[_.]+/g, ' ').trim();
+    // File names often squash the hack's title into one word ("KirbysHalloweenAdventure-Hack"),
+    // which romhack.ing can't match. So: drop a "-Hack" tag, then put a space before each capital letter.
+    const spaceOut = (str) => str
+      .replace(/[-_\s]+hack(?=$|[-_\s(\[])/gi, ' ')       // "-Hack" / "_hack" / " Hack" as its own word
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')              // KirbysHalloween -> Kirbys Halloween
+      .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')           // SMWHack... / ABCDef -> ABC Def (keeps acronyms together)
+      .replace(/[_.]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const title = spaceOut(baseName.replace(/\s*[(\[][^)\]]*[)\]]?/g, '')) || spaceOut(baseName);
     const filters = [null, null, null, null, null, null, null, null,
       { field: 'title', operator: 'must', value: title },
       { field: 'categories', operator: 'must', value: 'Hack' }
@@ -975,6 +981,7 @@
     async function init(){
       const saved = await loadRom(gameId);
       if(saved){ await setRom(saved.bytes, saved.filename); romFromStorage = !!romBytes; }
+      if(saved && romBytes && supportsFSAccess) romFileHandle = await loadRomHandle(gameId); // folder the ROM came from, remembered earlier
       renderRomStage();
     }
 
@@ -1046,7 +1053,7 @@
         if(rememberRom && !romFromStorage){
           rememberStatus.textContent = 'Saving…';
           try{
-            await saveRom(gameId, romFilename, romBytes);
+            await saveRom(gameId, romFilename, romBytes); await saveRomHandle(gameId, romFileHandle);
             romFromStorage = true;
             rememberStatus.textContent = 'Saved on this device.';
           }catch(e){
@@ -1061,7 +1068,7 @@
       patchWrap.querySelector('#patch-search-btn').addEventListener('click', async () => {
         rememberRom = !!(rememberCheckbox && rememberCheckbox.checked);
         if(rememberRom && !romFromStorage){
-          try{ await saveRom(gameId, romFilename, romBytes); romFromStorage = true; }catch(e){ /* non-fatal */ }
+          try{ await saveRom(gameId, romFilename, romBytes); await saveRomHandle(gameId, romFileHandle); romFromStorage = true; }catch(e){ /* non-fatal */ }
         }
         runSearch();
       });
@@ -1427,7 +1434,7 @@
         const outName = (label.replace(PATCH_FILE_RE, '') || 'patched-rom') + romExt;
 
         if(rememberRom && !romFromStorage){
-          try{ await saveRom(gameId, romFilename, romBytes); romFromStorage = true; }catch(e){ /* non-fatal */ }
+          try{ await saveRom(gameId, romFilename, romBytes); await saveRomHandle(gameId, romFileHandle); romFromStorage = true; }catch(e){ /* non-fatal */ }
         }
 
         const saveHint = supportsFSAccess && romFileHandle
@@ -1450,10 +1457,26 @@
                 pickerOpts.types = [{ description: 'ROM file', accept: { 'application/octet-stream': [romExt] } }];
               }
               if(romFileHandle) pickerOpts.startIn = romFileHandle; // opens the picker in the same folder as the loaded ROM
-              const handle = await window.showSaveFilePicker(pickerOpts);
+              let handle;
+              try{
+                handle = await window.showSaveFilePicker(pickerOpts);
+              }catch(err){
+                // The remembered folder may have been moved/deleted — retry once without it
+                // rather than falling through to a plain download.
+                if(err && err.name !== 'AbortError' && pickerOpts.startIn){
+                  delete pickerOpts.startIn;
+                  handle = await window.showSaveFilePicker(pickerOpts);
+                }else throw err;
+              }
               const writable = await handle.createWritable();
               await writable.write(target);
               await writable.close();
+              // No ROM folder known yet (e.g. a ROM remembered before folders were stored)? Use the
+              // folder just saved to from now on, and keep it for next time.
+              if(!romFileHandle){
+                romFileHandle = handle;
+                if(romFromStorage) await saveRomHandle(gameId, handle);
+              }
               return;
             }catch(e){
               if(e && e.name === 'AbortError') return; // user cancelled the save dialog — not an error
