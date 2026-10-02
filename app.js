@@ -273,9 +273,11 @@
 
     async function validate(label, res){
       if(res.status === 401 || res.status === 403){
-        if(label === 'direct'){
-          // Only the direct call is guaranteed to have actually reached RetroAchievements —
-          // a proxy returning 401/403 is often the proxy's own auth wall, not RA's.
+        if(label === 'direct' || label === 'worker'){
+          // Direct and our own Worker both reach RetroAchievements server-to-server
+          // with nothing in between to misattribute a 401/403 to — a public proxy
+          // returning 401/403 is often the proxy's own auth wall, not RA's, so only
+          // these two are trusted as a real signal from RetroAchievements itself.
           const err = new Error('RetroAchievements rejected the username or API key (HTTP ' + res.status + ').');
           err.authFailure = true;
           throw err;
@@ -323,7 +325,19 @@
       return await attempt('direct', () => fetch(targetUrl));
     }catch(directErr){
       if(directErr.authFailure) throw directErr;
-      // Otherwise fall through and race the proxies below.
+      // Otherwise fall through to our own Worker, then the public proxy race below.
+    }
+
+    // Our own Cloudflare Worker — one reliable hop we control, instead of going
+    // straight to racing five shared public proxies. Falls through to those only
+    // if the Worker itself is unreachable or erroring (e.g. its free daily
+    // request quota is exhausted) — so the public proxies stay as a genuine
+    // safety net rather than being replaced outright.
+    try{
+      return await attempt('worker', () => fetch(`https://ra-proxy.gin649.workers.dev/${endpoint}?${qs.toString()}`));
+    }catch(workerErr){
+      if(workerErr.authFailure) throw workerErr;
+      // Otherwise fall through and race the public proxies below.
     }
 
     const proxyAttempts = [
