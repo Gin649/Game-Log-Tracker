@@ -460,6 +460,31 @@
   .ach-filter-btn.active .ach-missable-badge{border-color:var(--bg);color:var(--bg);}
   .ach-filter-count{font-family:'Space Mono',monospace;font-size:0.6875rem;opacity:0.85;}
 
+  /* Share/import a saved achievement order — tucked below the achievement
+     list itself and visually quiet, since it's a niche feature most people
+     browsing their achievements will never need. */
+  .ach-share-footer-row{
+    display:flex;gap:8px;justify-content:center;flex-wrap:wrap;
+    padding:12px;border-top:1px solid var(--border);
+  }
+  .ach-share-footer-btn{
+    background:transparent;border:none;color:var(--muted);
+    font-family:'Inter',sans-serif;font-size:0.6875rem;font-weight:600;
+    cursor:pointer;padding:4px 8px;opacity:0.75;
+  }
+  .ach-share-footer-btn:hover,.ach-share-footer-btn.active{color:var(--gold);opacity:1;}
+  .ach-import-panel{padding:12px;background:var(--panel);border-bottom:1px solid var(--border);}
+  .ach-import-panel .field{margin-bottom:10px;}
+  .ach-import-panel input{font-family:'Space Mono',monospace;font-size:0.75rem;}
+  .ach-share-actions{display:flex;gap:8px;flex-wrap:wrap;}
+  .ach-share-actions .btn-primary{width:auto;padding:8px 16px;}
+  .ach-share-actions button:not(.btn-primary){
+    background:transparent;border:1px solid var(--border);border-radius:var(--radius);
+    color:var(--text);font-family:'Inter',sans-serif;font-size:0.75rem;font-weight:600;
+    padding:8px 16px;cursor:pointer;
+  }
+  .ach-share-actions button:not(.btn-primary):hover{border-color:var(--gold);color:var(--gold);}
+
   .achievements-list-loading{padding:14px;text-align:center;color:var(--muted);font-size:0.8625rem;}
 
   .guide-panel{
@@ -795,4 +820,4 @@
 
   /* Status row: badge first, then the date beaten to its right, sitting flush with the other values. */
   .modal-progress .status-val{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:4px 10px;}
-  .modal-progress .beaten-date{white-space:nowrap;}
+  .modal-progress .beaten-date{white-space:nowrap;color:var(--teal);}
