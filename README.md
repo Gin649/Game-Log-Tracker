@@ -1,10 +1,10 @@
-# Game Log — Tracker v2.0.7  Latest Updates Deployed on Oct 1/26
+# Game Log — Tracker v2.0.8  Latest Updates Deployed on Oct 3/26
 
 A lightweight, installable Progressive Web App for tracking your [RetroAchievements](https://retroachievements.org) library — recent activity, in-progress games, completions by year, and playtime — with **no account, no login, and no cloud sync**. You can also log games that aren't on RetroAchievements or that you haven't played yet, including modern titles, right alongside your RA library. Everything stays on your device.
 
 **Live app:** <https://gin649.github.io/Game-Log-Tracker>
 
-For any questions and/or an invite to the new public discord where were discussing this.
+For any questions and/or an invite to the new public discord where we're discussing this.
 
 Email me: ginsretrogamehub@gmail.com
 
@@ -18,6 +18,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full additions, fixes and changes.
 - **Backlog** — everything you've added but haven't actually played yet lives here, separate from your Game Library, with the **+ Add game** button. A RetroAchievements game moves itself to the Library automatically the first time RA sees you've played it; a manually-tracked (non-RA) game moves over once you check **Now Playing** on its profile
 - **Casual / Hardcore toggle** — every stat, list, and progress bar switches between casual and hardcore-only numbers
 - **Manually-tracked games** — add any game you haven't played yet, or that isn't on RetroAchievements (including modern titles), via [RAWG](https://rawg.io) for box art and details. Check off several search results at once to add a batch of RA games in one go. For a non-RA game, pick its platform from a dropdown pulled straight from RAWG's own data — no typing required. Mark a non-RA game **Now Playing** once you start it, and mark it beaten to log the date to Beaten by Year. If a manually-tracked game is on, or later gets added to, RetroAchievements, it merges with real RA data automatically once you play it — or use **Link to RetroAchievements** on its profile to match a non-RA entry up yourself — so tracking just continues, with nothing to redo
+- **Reorder achievements** — drag a game's achievement list into whatever order makes sense to you (or use the ▲▼ buttons), saved automatically per game. Achievements RA has tagged **Missable** show a badge, with a filter to view just those. Made your own order you're proud of? **Share** it as a short code or a file, and anyone else can **import** it straight into the same game — handy for a forum or Discord
 - **Optional RAWG ratings** — show a review-score badge (Metacritic where available) on each game's detail view
 - **ROM Hack Patching** — load a ROM you own and search [RetroAchievements' RAPatches repository](https://github.com/RetroAchievements/RAPatches) for hacks and translations for that exact game, verified against your ROM's checksum where the patch format supports it. Results are searchable by name, sorted alphabetically, and scroll rather than cut off. On browsers that support it, saving a patched ROM opens a save dialog defaulting to the same folder as the ROM you loaded
 - **Game Guides** — pull in GameFAQs text guides for a game (via an archive.org mirror) right inside the app, with in-guide search, bookmarks, an adjustable reading font size, and your reading position saved automatically. Don't like the default guide? Copy and paste in any guide you find on GameFAQs yourself — pasted guides get the exact same reader features
@@ -26,7 +27,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full additions, fixes and changes.
 
 ## How your data works
 
-There's no backend and no account system. Everything — your RetroAchievements credentials, optional RAWG key, manually-added games, saved ROMs, guides, and cached playtime data — is stored locally in your browser via **IndexedDB**, using the [Persistent Storage API](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist) to ask the browser not to evict it under storage pressure.
+There's no backend and no account system. Everything — your RetroAchievements credentials, optional RAWG key, manually-added games, custom achievement orders, saved ROMs, guides, and cached playtime data — is stored locally in your browser via **IndexedDB**, using the [Persistent Storage API](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist) to ask the browser not to evict it under storage pressure.
 
 That means:
 
@@ -68,7 +69,7 @@ The app is a static site — no build step, no dependencies to install. Everythi
 
 ## Privacy
 
-No analytics, no tracking, no accounts, no server. The app talks directly to the RetroAchievements, RAWG, and archive.org APIs from your browser and nowhere else.
+No analytics, no tracking, no accounts. The app talks to the RetroAchievements, RAWG, and archive.org APIs directly from your browser wherever possible. Since RetroAchievements' API doesn't allow direct browser requests, those calls are routed through a small proxy — first a self-hosted one, falling back to public CORS proxies only if that's unavailable — that simply forwards the request and response without logging or storing anything.
 
 ## License
 
