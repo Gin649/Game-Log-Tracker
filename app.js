@@ -593,6 +593,89 @@
     achOrderCache[gameId] = null;
     try{ await window.storage.delete(achOrderKey(gameId), false); }catch(e){}
   }
+  // Share codes for a custom order. Achievement IDs themselves (6+ digits
+  // each) are most of a naive code's length, but both the sharer and the
+  // importer already have the same canonical achievement list for this game
+  // (sorted by DisplayOrder, exactly what's cached in achievementsListCache)
+  // — so the code only needs each achievement's *position* in that list
+  // (0-99 for a 100-achievement set) instead of its full ID, typically
+  // cutting the code to well under half its naive length. The achievement
+  // count is embedded so an importer can tell if the set has since changed
+  // (achievements added/removed) and refuse rather than silently misapply.
+  // GLT1 (plain IDs) is still decoded for backward compatibility with any
+  // codes already shared before this format existed.
+  function encodeAchOrderShareCode(gameId, ids, canonicalList){
+    const idToIndex = new Map(canonicalList.map((a, i) => [String(a.ID ?? a.id), i]));
+    const indices = ids.map(id => idToIndex.get(String(id))).filter(i => i !== undefined);
+    return `GLT2:${gameId}:${canonicalList.length}:${indices.join(',')}`;
+  }
+  function decodeAchOrderShareCode(code, canonicalList){
+    const s = String(code || '').trim();
+    let m = s.match(/^GLT2:(\d+):(\d+):([\d,]+)$/);
+    if(m){
+      const gameId = Number(m[1]);
+      const expectedCount = Number(m[2]);
+      const indices = m[3].split(',').filter(x => x !== '').map(Number);
+      if(indices.length === 0) return null;
+      if(!canonicalList || canonicalList.length !== expectedCount){
+        return { gameId, error: "This code was made for a different version of this game's achievement set." };
+      }
+      const ids = indices.map(i => canonicalList[i] && String(canonicalList[i].ID ?? canonicalList[i].id)).filter(Boolean);
+      if(ids.length === 0) return null;
+      return { gameId, ids };
+    }
+    m = s.match(/^GLT1:(\d+):([\d,]+)$/);
+    if(m){
+      const ids = m[2].split(',').filter(Boolean);
+      if(ids.length === 0) return null;
+      return { gameId: Number(m[1]), ids };
+    }
+    return null;
+  }
+
+  // File export/import — same data as the text code (game + ordered IDs),
+  // but as a downloadable .json. No character-count concerns for a file, so
+  // it stores full IDs rather than indices: more robust (works even if the
+  // achievement set has changed since), at the cost of a larger file than
+  // the text code would be. Built like the existing Data export/import, but
+  // with a throwaway file input instead of one living in the page markup.
+  function downloadAchOrderFile(gameId, gameTitle, ids){
+    const payload = { type: 'glt-achievement-order', version: 1, gameId, gameTitle: gameTitle || '', order: ids };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const safeName = String(gameTitle || 'achievement').replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/^-+|-+$/g, '').slice(0, 60);
+    a.download = `${safeName || 'achievement'}-order.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  async function readAchOrderFile(file){
+    const text = await file.text();
+    let payload;
+    try{ payload = JSON.parse(text); }
+    catch(e){ throw new Error("That file isn't valid JSON."); }
+    if(!payload || payload.type !== 'glt-achievement-order' || !Array.isArray(payload.order)){
+      throw new Error("This doesn't look like an achievement-order file.");
+    }
+    return { gameId: Number(payload.gameId), ids: payload.order.map(String) };
+  }
+  function pickAchOrderFile(onFile){
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.style.display = 'none';
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      document.body.removeChild(input);
+      if(file) onFile(file);
+    });
+    document.body.appendChild(input);
+    input.click();
+  }
+
   function applyAchOrder(list, order){
     if(!order) return list;
     const pos = new Map(order.map((id, i) => [String(id), i]));
@@ -622,7 +705,10 @@
   // site shows — only rendered when the set actually has any missable
   // achievements, since most sets on RA haven't been typed at all yet.
   let achMissableOnly = false;
-  function renderAchievementsPanel(list, isHardcoreMode, missableOnly, order, reorderMode){
+  let achSharePanelOpen = false;
+  let achImportPanelOpen = false;
+  let achImportError = '';
+  function renderAchievementsPanel(list, isHardcoreMode, missableOnly, order, reorderMode, gameId, gameTitle){
     if(!list || list.length === 0) return '<div class="achievements-list-loading">No achievement data available.</div>';
     const missableCount = list.filter(isMissable).length;
     const showMissable = missableCount > 0 && !reorderMode;
@@ -641,7 +727,39 @@
     const body = rows.length === 0
       ? '<div class="achievements-list-loading">No missable achievements in this set.</div>'
       : `<div class="ach-rows${reorderMode ? ' reordering' : ''}" id="ach-rows">${renderAchievementsList(rows, isHardcoreMode, order, reorderMode)}</div>`;
-    return filterBar + body;
+
+    // Tucked below the achievement list itself, not up with the main
+    // controls — sharing a custom order is a niche feature most people
+    // browsing their achievements will never touch, so it shouldn't compete
+    // for attention with Reorder/Missable Only up top.
+    const shareFooterBtns = (order ? `<button class="ach-share-footer-btn ${achSharePanelOpen ? 'active' : ''}" id="ach-share-toggle" type="button">⇪ Share order</button>` : '')
+      + `<button class="ach-share-footer-btn ${achImportPanelOpen ? 'active' : ''}" id="ach-reorder-import" type="button">⇩ Import order</button>`;
+    const shareFooter = `<div class="ach-share-footer-row">${shareFooterBtns}</div>
+      ${achSharePanelOpen && order ? `<div class="ach-import-panel">
+          <div class="field">
+            <label>Order code — copy and paste to share</label>
+            <input id="ach-share-code" type="text" readonly value="${encodeAchOrderShareCode(gameId, order, list)}">
+            <div class="hint">Tap the code to select it, or use a button below.</div>
+          </div>
+          <div class="ach-share-actions">
+            <button class="btn-primary" id="ach-share-copy" type="button">Copy code</button>
+            <button id="ach-share-download" type="button">Download as file</button>
+          </div>
+        </div>` : ''}
+      ${achImportPanelOpen ? `<div class="ach-import-panel">
+          <div class="field">
+            <label>Paste an order code a friend sent you</label>
+            <input id="ach-import-input" type="text" placeholder="GLT2:12345:100:0,5,3,..." autocomplete="off">
+            <div class="hint">Only works for this same game — codes from a different game or a changed achievement set are rejected.</div>
+            ${achImportError ? `<div class="hint" style="color:var(--danger);">${achImportError}</div>` : ''}
+          </div>
+          <div class="ach-share-actions">
+            <button class="btn-primary" id="ach-import-apply" type="button">Apply code</button>
+            <button id="ach-import-file-btn" type="button">Import from file instead</button>
+          </div>
+        </div>` : ''}`;
+
+    return filterBar + body + shareFooter;
   }
 
   // Shared by the initial "View Achievements" open and the casual/hardcore
@@ -651,7 +769,9 @@
     const list = achievementsListCache[gameId];
     if(!achWrap || !list) return;
     const order = achOrderCache[gameId] || null;
-    achWrap.innerHTML = renderAchievementsPanel(list, statsMode === 'hardcore', achMissableOnly, order, achReorderMode);
+    const local = findGameLocal(gameId);
+    const gameTitle = local ? local.Title : '';
+    achWrap.innerHTML = renderAchievementsPanel(list, statsMode === 'hardcore', achMissableOnly, order, achReorderMode, gameId, gameTitle);
     const toggleBtn = achWrap.querySelector('#ach-missable-toggle');
     if(toggleBtn){
       toggleBtn.addEventListener('click', () => {
@@ -672,6 +792,97 @@
       resetBtn.addEventListener('click', async () => {
         await clearAchOrder(gameId);
         renderAchWrapContent(achWrap, gameId);
+      });
+    }
+    const shareBtn = achWrap.querySelector('#ach-share-toggle');
+    if(shareBtn){
+      shareBtn.addEventListener('click', () => {
+        achSharePanelOpen = !achSharePanelOpen;
+        if(achSharePanelOpen) achImportPanelOpen = false; // one panel open at a time
+        renderAchWrapContent(achWrap, gameId);
+      });
+    }
+    const shareCodeInput = achWrap.querySelector('#ach-share-code');
+    if(shareCodeInput){
+      shareCodeInput.addEventListener('click', () => shareCodeInput.select());
+    }
+    const shareCopyBtn = achWrap.querySelector('#ach-share-copy');
+    if(shareCopyBtn){
+      shareCopyBtn.addEventListener('click', async () => {
+        const code = shareCodeInput ? shareCodeInput.value : '';
+        try{
+          await navigator.clipboard.writeText(code);
+          const original = shareCopyBtn.textContent;
+          shareCopyBtn.textContent = 'Copied!';
+          setTimeout(() => { shareCopyBtn.textContent = original; }, 1500);
+        }catch(e){
+          if(shareCodeInput) shareCodeInput.select();
+        }
+      });
+    }
+    const shareDownloadBtn = achWrap.querySelector('#ach-share-download');
+    if(shareDownloadBtn){
+      shareDownloadBtn.addEventListener('click', () => {
+        const order = achOrderCache[gameId];
+        if(!order) return;
+        const local = findGameLocal(gameId);
+        downloadAchOrderFile(gameId, local ? local.Title : '', order);
+      });
+    }
+
+    const importBtn = achWrap.querySelector('#ach-reorder-import');
+    if(importBtn){
+      importBtn.addEventListener('click', () => {
+        achImportPanelOpen = !achImportPanelOpen;
+        achImportError = '';
+        if(achImportPanelOpen) achSharePanelOpen = false; // one panel open at a time
+        renderAchWrapContent(achWrap, gameId);
+        if(achImportPanelOpen){
+          const input = achWrap.querySelector('#ach-import-input');
+          if(input) input.focus();
+        }
+      });
+    }
+    const applyDecodedOrder = async (decoded) => {
+      if(!decoded){
+        achImportError = "That doesn't look like a valid order code.";
+      }else if(decoded.error){
+        achImportError = decoded.error;
+      }else if(decoded.gameId !== Number(gameId)){
+        achImportError = 'This order is for a different game.';
+      }else{
+        await saveAchOrder(gameId, decoded.ids);
+        achImportPanelOpen = false;
+        achImportError = '';
+        achReorderMode = false; // show the imported order applied, not mid-edit
+      }
+      renderAchWrapContent(achWrap, gameId);
+    };
+    const importApplyBtn = achWrap.querySelector('#ach-import-apply');
+    if(importApplyBtn){
+      const applyImport = () => {
+        const input = achWrap.querySelector('#ach-import-input');
+        const list = achievementsListCache[gameId];
+        applyDecodedOrder(decodeAchOrderShareCode(input ? input.value : '', list));
+      };
+      importApplyBtn.addEventListener('click', applyImport);
+      const importInput = achWrap.querySelector('#ach-import-input');
+      if(importInput){
+        importInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') applyImport(); });
+      }
+    }
+    const importFileBtn = achWrap.querySelector('#ach-import-file-btn');
+    if(importFileBtn){
+      importFileBtn.addEventListener('click', () => {
+        pickAchOrderFile(async (file) => {
+          try{
+            const parsed = await readAchOrderFile(file);
+            await applyDecodedOrder(parsed);
+          }catch(e){
+            achImportError = e.message;
+            renderAchWrapContent(achWrap, gameId);
+          }
+        });
       });
     }
     if(achReorderMode) wireAchReorder(achWrap, gameId);
@@ -2537,7 +2748,7 @@
       </div>
 
       <div class="modal-progress">
-        <div class="row"><span>Your progress</span><span>${earned}/${totalAch || '?'} · ${pct}%</span></div>
+        <div class="row"><span>Your progress</span><span style="color:var(--gold)">${earned}/${totalAch || '?'} · ${pct}%</span></div>
         <div class="row"><span>Status</span><span class="status-val">${awardPill(awardKind)}${beatenDateHtml(raBeatenDateLabel)}</span></div>
         <div class="row">
           <span id="modal-playtime-label">${est && est.real ? 'Playtime' : (est && est.beaten ? 'Time to beat' : 'Est. playtime')}</span>
@@ -2618,6 +2829,9 @@
       if(nowOpen && !achLoaded){
         achLoaded = true;
         achMissableOnly = false; // fresh game's panel starts unfiltered
+        achSharePanelOpen = false;
+        achImportPanelOpen = false;
+        achImportError = '';
         achReorderMode = false;
         achWrap.innerHTML = '<div class="achievements-list-loading">Loading achievements…</div>';
         try{
