@@ -2,6 +2,15 @@
 
 All notable changes to Game Log — Tracker are documented here. Newest first. 
 
+## v2.0.8
+ 
+### Added
+- RetroAchievements API calls now route through a self-hosted Cloudflare Worker proxy first, falling back to the public proxy pool only if it's unavailable — more reliable than relying on public proxies alone.
+- Custom achievement order can now be shared: export a short code or a file from one game's achievement list, send it to a friend or post in on a forum and they can import it into the same game profile on their own device
+  
+### Changed
+- Game profile: the completion date next to Beaten/Mastered is now teal, and the "Your progress" value is now gold, matching the rest of the profile's color conventions
+
 ## v2.0.7
 
 - The game profile now shows the date beaten beside the Beaten badge, in the format Sep 02, 2026.
