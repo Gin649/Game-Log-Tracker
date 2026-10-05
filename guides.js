@@ -170,7 +170,7 @@
           catch(e){ lastErr = e; continue; }
           if(!text) continue;
           const guide = { filename: `${title}.txt`, kind: 'text', content: text, scrollFrac: 0, savedAt: Date.now() };
-          await saveGuide(gameId, guide);
+          await addGuide(gameId, guide);
           return guide;
         }
       }
@@ -207,14 +207,14 @@
       <a href="https://gamefaqs.gamespot.com/search?game=${encodeURIComponent(title)}" id="guide-gf-link" target="_blank" rel="noopener" style="font-size:0.7063rem;color:var(--teal);text-decoration:none;align-self:flex-start;">Search GameFAQs for "${title}" ↗</a>
     `;
   }
-  function renderGuideNoGuidePanel(gameId, title, consoleId, isReplacing){
+  function renderGuideNoGuidePanel(gameId, title, consoleId, isAdding){
     const archiveSection = ARCHIVE_PLATFORMS[consoleId] ? `
         <button class="guide-btn guide-btn-primary" id="guide-archive-btn">Download from GameFAQs Archive</button>
         <p class="guide-status-text" id="guide-archive-status">Use the guide saved on the GameFAQs Archive. To use a different guide, see below.</p>
         <div class="guide-divider">or</div>` : '';
     return `
       <div style="display:flex;flex-direction:column;gap:10px;" id="guide-empty-wrap">
-        ${isReplacing ? '<button class="guide-btn guide-btn-ghost" id="guide-cancel-btn" style="flex:none;">‹ Keep current guide</button>' : ''}
+        ${isAdding ? '<button class="guide-btn guide-btn-ghost" id="guide-cancel-btn" style="flex:none;">‹ Back to saved guides</button>' : ''}
         ${archiveSection}
         ${renderGuideSearchStep(title)}
         <button class="guide-btn guide-btn-outline" id="guide-paste-btn">Paste Guide Text</button>
@@ -231,21 +231,35 @@
     `;
   }
 
-  function renderGuidePanelInner(gameId, title, guide, consoleId){
-    if(!guide){
+  // One row per saved guide — filename, kind, and (for anything with a
+  // trackable reading position) how far into it the saved scroll position
+  // is, as a percentage. A PDF uses the browser's own viewer and has no
+  // position this app can read, so it gets no percentage.
+  function renderGuideListItem(guide){
+    const pct = Math.round((guide.scrollFrac || 0) * 100);
+    const pctLabel = guide.kind === 'pdf' ? '' : `${pct}% read`;
+    return `
+      <div class="guide-list-item" data-guide-id="${guide.id}">
+        <div class="guide-list-item-info">
+          <span class="guide-list-item-name">${guide.filename}</span>
+          <span class="guide-list-item-meta">${guide.kind.toUpperCase()}${pctLabel ? ' · ' + pctLabel : ''}</span>
+        </div>
+        <div class="guide-list-item-actions">
+          <button class="guide-list-item-btn" data-action="read" type="button">Read</button>
+          <button class="guide-list-item-btn danger" data-action="remove" type="button">Remove</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderGuidePanelInner(gameId, title, guides, consoleId){
+    if(!guides || guides.length === 0){
       return renderGuideNoGuidePanel(gameId, title, consoleId);
     }
     return `
       <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-          <span style="font-size:0.7688rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${guide.filename}</span>
-          <span style="font-size:0.675rem;color:var(--muted);flex-shrink:0;letter-spacing:0.04em;">${guide.kind.toUpperCase()}</span>
-        </div>
-        <button class="guide-btn guide-btn-primary" id="guide-read-btn">Read Guide</button>
-        <div style="display:flex;gap:8px;">
-          <button class="guide-btn guide-btn-ghost" id="guide-replace-btn">Replace</button>
-          <button class="guide-btn guide-btn-danger" id="guide-remove-btn">Remove</button>
-        </div>
+        <div class="guide-list">${guides.map(renderGuideListItem).join('')}</div>
+        <button class="guide-btn guide-btn-outline" id="guide-add-another-btn">+ Add another guide</button>
         <div id="guide-import-error"></div>
       </div>
     `;
@@ -259,15 +273,19 @@
     const guideWrap = card.querySelector('#modal-guide-panel');
     if(!guideBtn || !guideWrap) return;
 
-    let guide = null;
+    let guides = []; // every guide saved for this game
     let guideLoaded = false;
+
+    const refreshList = async () => {
+      guides = await loadGuides(gameId);
+      guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guides, consoleId);
+      wireGuidePanelButtons();
+    };
 
     function wireGuidePanelButtons(){
       const fileInput = guideWrap.querySelector('#guide-file-input');
       const importBtn = guideWrap.querySelector('#guide-import-btn');
-      const replaceBtn = guideWrap.querySelector('#guide-replace-btn');
-      const readBtn = guideWrap.querySelector('#guide-read-btn');
-      const removeBtn = guideWrap.querySelector('#guide-remove-btn');
+      const addAnotherBtn = guideWrap.querySelector('#guide-add-another-btn');
       const errorEl = guideWrap.querySelector('#guide-import-error');
       const triggerBtn = importBtn;
       const cancelBtn = guideWrap.querySelector('#guide-cancel-btn');
@@ -279,9 +297,8 @@
         archiveStatus.className = 'guide-status-text';
         archiveStatus.textContent = 'Looking in the archive…';
         try{
-          guide = await downloadGuideFromArchive(gameId, title, consoleId, msg => { archiveStatus.textContent = msg; });
-          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
-          wireGuidePanelButtons();
+          await downloadGuideFromArchive(gameId, title, consoleId, msg => { archiveStatus.textContent = msg; });
+          await refreshList();
         }catch(e){
           archiveBtn.disabled = false;
           archiveStatus.className = 'guide-status-text err';
@@ -310,10 +327,9 @@
         }
         pasteSave.disabled = true;
         try{
-          guide = { filename: `${title}.txt`, kind: 'text', content: text, scrollFrac: 0, savedAt: Date.now() };
-          await saveGuide(gameId, guide);
-          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
-          wireGuidePanelButtons();
+          const guide = { filename: `${title}.txt`, kind: 'text', content: text, scrollFrac: 0, savedAt: Date.now() };
+          await addGuide(gameId, guide);
+          await refreshList();
         }catch(e){
           pasteSave.disabled = false;
           pasteErr.textContent = 'Could not save: ' + e.message;
@@ -322,14 +338,14 @@
       });
 
       if(triggerBtn && fileInput) triggerBtn.addEventListener('click', () => fileInput.click());
-      // Replace goes back to the find-a-guide view (archive download, paste, import)
-      // rather than straight to the file picker. The current guide stays until a new one is saved.
-      if(replaceBtn) replaceBtn.addEventListener('click', () => {
+      // Add-another goes to the find-a-guide view (archive download, paste, import);
+      // every guide already saved stays untouched either way.
+      if(addAnotherBtn) addAnotherBtn.addEventListener('click', () => {
         guideWrap.innerHTML = renderGuideNoGuidePanel(gameId, title, consoleId, true);
         wireGuidePanelButtons();
       });
       if(cancelBtn) cancelBtn.addEventListener('click', () => {
-        guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
+        guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guides, consoleId);
         wireGuidePanelButtons();
       });
       if(fileInput) fileInput.addEventListener('change', async () => {
@@ -340,21 +356,33 @@
         triggerBtn.textContent = 'Importing…';
         triggerBtn.disabled = true;
         try{
-          guide = await importGuideFile(gameId, file);
-          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
-          wireGuidePanelButtons();
+          await importGuideFile(gameId, file);
+          await refreshList();
         }catch(e){
           triggerBtn.textContent = prevLabel;
           triggerBtn.disabled = false;
           if(errorEl) errorEl.innerHTML = `<p style="font-size:0.725rem;color:var(--danger);margin:6px 0 0;">Could not import that file: ${e.message}</p>`;
         }
       });
-      if(readBtn) readBtn.addEventListener('click', () => openGuideReader(gameId, title, guide));
-      if(removeBtn) removeBtn.addEventListener('click', async () => {
-        await deleteGuide(gameId);
-        guide = null;
-        guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
-        wireGuidePanelButtons();
+
+      // One listener for every list item's Read/Remove, rather than one per
+      // row — works the same no matter how many guides are saved.
+      const listEl = guideWrap.querySelector('.guide-list');
+      if(listEl) listEl.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-action]');
+        if(!btn) return;
+        const row = btn.closest('[data-guide-id]');
+        const guideId = row && row.getAttribute('data-guide-id');
+        const guide = guides.find(g => g.id === guideId);
+        if(!guide) return;
+        if(btn.dataset.action === 'read'){
+          openGuideReader(gameId, title, guide);
+        }else if(btn.dataset.action === 'remove'){
+          btn.disabled = true;
+          guides = await deleteGuide(gameId, guideId);
+          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guides, consoleId);
+          wireGuidePanelButtons();
+        }
       });
     }
 
@@ -365,9 +393,9 @@
       if(nowOpen && !guideLoaded){
         guideLoaded = true;
         guideWrap.innerHTML = '<div class="achievements-list-loading">Loading…</div>';
-        guide = await loadGuide(gameId);
+        guides = await loadGuides(gameId);
         if(card.dataset.gameId !== String(gameId)) return; // user moved on
-        guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guide, consoleId);
+        guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guides, consoleId);
         wireGuidePanelButtons();
       }
     });
@@ -383,7 +411,7 @@
         if(guideReaderScrollGameId !== gameId) return; // reader moved on since this fired
         const max = body.scrollHeight - body.clientHeight;
         guide.scrollFrac = max > 0 ? body.scrollTop / max : 0;
-        await saveGuide(gameId, guide);
+        await updateGuide(gameId, guide);
       }, 600);
     };
   }
@@ -613,7 +641,7 @@
         readerGuide.bookmarks = readerGuide.bookmarks.filter(x => x !== m);
         renderBookmarkMarks();
         renderMarksList();
-        await saveGuide(readerGameId, readerGuide);
+        await updateGuide(readerGameId, readerGuide);
       });
       row.appendChild(go);
       row.appendChild(del);
@@ -635,7 +663,7 @@
     marks.sort((a, b) => a.o - b.o);
     renderBookmarkMarks();
     renderMarksList();
-    await saveGuide(readerGameId, readerGuide);
+    await updateGuide(readerGameId, readerGuide);
   }
 
   // ---- panels
