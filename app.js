@@ -558,6 +558,7 @@
           ${!isLocked ? `<p class="when">Unlocked ${timeAgo(earnedDate)}</p>` : ''}
         </div>
         ${isMissable(a) ? '<span class="ach-missable-badge" title="Missable — can be permanently missed during a playthrough">!</span>' : ''}
+        ${(!reorderMode && (a.ID ?? a.id)) ? `<a class="ach-ra-link" href="https://retroachievements.org/achievement/${encodeURIComponent(a.ID ?? a.id)}" target="_blank" rel="noopener" title="Open this achievement on RetroAchievements (comments &amp; discussion)" aria-label="Open ${String(a.Title || 'achievement').replace(/"/g,'&quot;')} on RetroAchievements">RA</a>` : ''}
         <div class="pts">${a.Points ?? ''}</div>
       </div>
     `;
@@ -3257,7 +3258,7 @@
 
   // --- About ---
   // Bump this every release, together with CACHE_NAME in sw.js.
-  const APP_VERSION = '2.0.9';
+  const APP_VERSION = '2.1.0';
   function openAboutModal(){
     $('#about-version').textContent = APP_VERSION;
     $('#about-backdrop').classList.add('open');
