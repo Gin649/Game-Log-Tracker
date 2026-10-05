@@ -1409,8 +1409,16 @@
       const r = await window.storage.get(guideKey(gameId), false);
       if(r && r.value){
         const parsed = JSON.parse(r.value);
-        if(Array.isArray(parsed)) return parsed;
-        if(parsed && typeof parsed === 'object') return [parsed]; // pre-multi-guide format
+        let list = null;
+        if(Array.isArray(parsed)) list = parsed;
+        else if(parsed && typeof parsed === 'object') list = [parsed]; // pre-multi-guide format
+        if(list){
+          // Guides saved before the multi-guide change have no id, which made
+          // Read/Remove silently do nothing. Give each one a stable id on load
+          // (it gets written back the next time the list is saved).
+          list.forEach((g, i) => { if(g && !g.id) g.id = 'legacy-' + i; });
+          return list.filter(g => g && typeof g === 'object');
+        }
       }
     }catch(e){ /* none imported yet */ }
     return [];
@@ -1435,6 +1443,12 @@
     const idx = guides.findIndex(g => g.id === guide.id);
     if(idx === -1) guides.push(guide); else guides[idx] = guide;
     await saveGuides(gameId, guides);
+  }
+  async function renameGuide(gameId, guideId, newName){
+    const guides = await loadGuides(gameId);
+    const g = guides.find(x => x.id === guideId);
+    if(g){ g.filename = newName; await saveGuides(gameId, guides); }
+    return guides;
   }
   async function deleteGuide(gameId, guideId){
     const guides = (await loadGuides(gameId)).filter(g => g.id !== guideId);
