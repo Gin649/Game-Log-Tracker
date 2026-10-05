@@ -5,7 +5,14 @@ All notable changes to Game Log — Tracker are documented here. Newest first.
 ## v2.1.0
  
 ### Added
-- Achievement links: every achievement in a game's list now has a small teal **RA** button that opens that achievement's page on RetroAchievements, where you can read its comments and discussion. The button is hidden while reordering.
+- New **Social** entry in the hamburger menu, above Data. It lists the people you follow on RetroAchievements, with their avatar, what they're playing, their live rich-presence status, and when they were last active ("Playing now", "3h ago"). People playing right now are listed first, then everyone else by most recent activity.
+- Tap anyone in the Social list to see their recent unlocks from the last 14 days (tap an unlock for its description) and a link to their profile on RetroAchievements.
+- Social has a Refresh button, plus a link at the bottom to find and follow more friends on RetroAchievements.
+- Achievement links: every achievement in a game's list now has a small teal **RA** button, sized to match the achievement description text, that opens that achievement's page on RetroAchievements, where you can read its comments and discussion. The button is hidden while reordering.
+  
+### Fixed
+- The points column in a game's achievement list is now a fixed width, so one-, two- and three-digit values line up and the RA button sits in the same spot on every row.
+
 
 ## v2.0.9
 
