@@ -430,6 +430,7 @@
   .ach-row .info .when{font-size:0.725rem;color:var(--teal);margin:3px 0 0;}
   .ach-row .pts{
     font-family:'Space Mono',monospace;color:var(--gold);font-size:0.825rem;font-weight:700;flex-shrink:0;
+    min-width:3ch;text-align:right;
   }
   .ach-row.locked .pts{color:var(--muted);}
 
@@ -859,7 +860,40 @@
   /* Small teal "RA" link on each achievement row -> that achievement's page on retroachievements.org */
   .ach-ra-link{
     flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
-    min-width:30px;padding:3px 7px;border:1px solid var(--teal);border-radius:999px;
-    color:var(--teal);font-size:0.6875rem;font-weight:700;letter-spacing:0.04em;text-decoration:none;line-height:1.2;
+    width:26px;padding:1px 0;border:1px solid var(--teal);border-radius:999px;box-sizing:border-box;
+    color:var(--teal);font-size:0.7937rem;font-weight:700;letter-spacing:0;text-decoration:none;line-height:1.3;
   }
   .ach-ra-link:hover,.ach-ra-link:focus-visible{background:var(--teal);color:var(--bg);}
+
+  /* ---- Social ---- */
+  .dropdown-gold{color:var(--gold);font-weight:700;}
+  .soc-list{border-top:1px solid var(--border);}
+  .soc-row{
+    display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:none;
+    border-bottom:1px solid var(--border);padding:10px 2px;color:var(--text);cursor:pointer;font-family:inherit;
+  }
+  .soc-row:hover{background:var(--bg-alt);}
+  .soc-av-wrap{position:relative;width:36px;height:36px;flex-shrink:0;display:inline-block;}
+  .soc-av-wrap.lg{width:52px;height:52px;}
+  .soc-av,.soc-av-fallback{
+    width:100%;height:100%;border-radius:50%;border:1px solid var(--border);background:var(--panel-2);object-fit:cover;
+  }
+  .soc-av-fallback{display:none;align-items:center;justify-content:center;color:var(--gold);font-size:0.75rem;font-weight:700;font-family:'Space Mono',monospace;}
+  .soc-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .soc-name{font-family:'Space Mono',monospace;font-size:0.8125rem;font-weight:700;color:var(--text);}
+  .soc-game{font-size:0.75rem;color:var(--text);margin:0;}
+  .soc-console{color:var(--muted);}
+  .soc-rp{font-size:0.6875rem;color:var(--muted);margin:2px 0 0;line-height:1.4;}
+  .soc-main .soc-game,.soc-main .soc-rp{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .soc-status{font-size:0.6875rem;white-space:nowrap;color:var(--muted);flex-shrink:0;}
+  .soc-status.playing{color:var(--teal);}
+  .soc-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;}
+  .soc-note{font-size:0.6875rem;color:var(--muted);margin:10px 0 0;}
+  .soc-refresh{width:100%;margin-top:14px;}
+  .soc-find{font-size:0.75rem;color:var(--muted);line-height:1.5;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--border);}
+  .soc-find a,.soc-back{color:var(--teal);text-decoration:none;}
+  .soc-back{background:transparent;border:none;font-family:'Space Mono',monospace;font-size:0.8125rem;padding:0;margin:0 0 12px;cursor:pointer;}
+  .soc-head{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+  .soc-now{background:var(--bg-alt);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:12px;}
+  .soc-now .soc-game{font-size:0.8125rem;font-weight:600;}
+  .soc-profile-link{display:block;text-align:center;text-decoration:none;box-sizing:border-box;}
