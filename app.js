@@ -593,47 +593,8 @@
     achOrderCache[gameId] = null;
     try{ await window.storage.delete(achOrderKey(gameId), false); }catch(e){}
   }
-  // Share codes for a custom order. Achievement IDs themselves (6+ digits
-  // each) are most of a naive code's length, but both the sharer and the
-  // importer already have the same canonical achievement list for this game
-  // (sorted by DisplayOrder, exactly what's cached in achievementsListCache)
-  // — so the code only needs each achievement's *position* in that list
-  // (0-99 for a 100-achievement set) instead of its full ID, typically
-  // cutting the code to well under half its naive length. The achievement
-  // count is embedded so an importer can tell if the set has since changed
-  // (achievements added/removed) and refuse rather than silently misapply.
-  // GLT1 (plain IDs) is still decoded for backward compatibility with any
-  // codes already shared before this format existed.
-  function encodeAchOrderShareCode(gameId, ids, canonicalList){
-    const idToIndex = new Map(canonicalList.map((a, i) => [String(a.ID ?? a.id), i]));
-    const indices = ids.map(id => idToIndex.get(String(id))).filter(i => i !== undefined);
-    return `GLT2:${gameId}:${canonicalList.length}:${indices.join(',')}`;
-  }
-  function decodeAchOrderShareCode(code, canonicalList){
-    const s = String(code || '').trim();
-    let m = s.match(/^GLT2:(\d+):(\d+):([\d,]+)$/);
-    if(m){
-      const gameId = Number(m[1]);
-      const expectedCount = Number(m[2]);
-      const indices = m[3].split(',').filter(x => x !== '').map(Number);
-      if(indices.length === 0) return null;
-      if(!canonicalList || canonicalList.length !== expectedCount){
-        return { gameId, error: "This code was made for a different version of this game's achievement set." };
-      }
-      const ids = indices.map(i => canonicalList[i] && String(canonicalList[i].ID ?? canonicalList[i].id)).filter(Boolean);
-      if(ids.length === 0) return null;
-      return { gameId, ids };
-    }
-    m = s.match(/^GLT1:(\d+):([\d,]+)$/);
-    if(m){
-      const ids = m[2].split(',').filter(Boolean);
-      if(ids.length === 0) return null;
-      return { gameId: Number(m[1]), ids };
-    }
-    return null;
-  }
-
-  // File export/import — same data as the text code (game + ordered IDs),
+  // File export/import — the only way to share a custom order (a text-code
+  // option was tried and dropped: too jumbled for most people to deal with).
   // but as a downloadable .json. No character-count concerns for a file, so
   // it stores full IDs rather than indices: more robust (works even if the
   // achievement set has changed since), at the cost of a larger file than
@@ -705,8 +666,6 @@
   // site shows — only rendered when the set actually has any missable
   // achievements, since most sets on RA haven't been typed at all yet.
   let achMissableOnly = false;
-  let achSharePanelOpen = false;
-  let achImportPanelOpen = false;
   let achImportError = '';
   function renderAchievementsPanel(list, isHardcoreMode, missableOnly, order, reorderMode, gameId, gameTitle){
     if(!list || list.length === 0) return '<div class="achievements-list-loading">No achievement data available.</div>';
@@ -731,33 +690,12 @@
     // Tucked below the achievement list itself, not up with the main
     // controls — sharing a custom order is a niche feature most people
     // browsing their achievements will never touch, so it shouldn't compete
-    // for attention with Reorder/Missable Only up top.
-    const shareFooterBtns = (order ? `<button class="ach-share-footer-btn ${achSharePanelOpen ? 'active' : ''}" id="ach-share-toggle" type="button">⇪ Share order</button>` : '')
-      + `<button class="ach-share-footer-btn ${achImportPanelOpen ? 'active' : ''}" id="ach-reorder-import" type="button">⇩ Import order</button>`;
+    // for attention with Reorder/Missable Only up top. File-only: a text
+    // code was tried and dropped as too jumbled for most people to deal with.
+    const shareFooterBtns = (order ? `<button class="ach-share-footer-btn" id="ach-share-download" type="button">⇪ Export order (file)</button>` : '')
+      + `<button class="ach-share-footer-btn" id="ach-import-file-btn" type="button">⇩ Import order (file)</button>`;
     const shareFooter = `<div class="ach-share-footer-row">${shareFooterBtns}</div>
-      ${achSharePanelOpen && order ? `<div class="ach-import-panel">
-          <div class="field">
-            <label>Order code — copy and paste to share</label>
-            <input id="ach-share-code" type="text" readonly value="${encodeAchOrderShareCode(gameId, order, list)}">
-            <div class="hint">Tap the code to select it, or use a button below.</div>
-          </div>
-          <div class="ach-share-actions">
-            <button class="btn-primary" id="ach-share-copy" type="button">Copy code</button>
-            <button id="ach-share-download" type="button">Download as file</button>
-          </div>
-        </div>` : ''}
-      ${achImportPanelOpen ? `<div class="ach-import-panel">
-          <div class="field">
-            <label>Paste an order code a friend sent you</label>
-            <input id="ach-import-input" type="text" placeholder="GLT2:12345:100:0,5,3,..." autocomplete="off">
-            <div class="hint">Only works for this same game — codes from a different game or a changed achievement set are rejected.</div>
-            ${achImportError ? `<div class="hint" style="color:var(--danger);">${achImportError}</div>` : ''}
-          </div>
-          <div class="ach-share-actions">
-            <button class="btn-primary" id="ach-import-apply" type="button">Apply code</button>
-            <button id="ach-import-file-btn" type="button">Import from file instead</button>
-          </div>
-        </div>` : ''}`;
+      ${achImportError ? `<div class="ach-share-footer-error">${achImportError}</div>` : ''}`;
 
     return filterBar + body + shareFooter;
   }
@@ -794,32 +732,6 @@
         renderAchWrapContent(achWrap, gameId);
       });
     }
-    const shareBtn = achWrap.querySelector('#ach-share-toggle');
-    if(shareBtn){
-      shareBtn.addEventListener('click', () => {
-        achSharePanelOpen = !achSharePanelOpen;
-        if(achSharePanelOpen) achImportPanelOpen = false; // one panel open at a time
-        renderAchWrapContent(achWrap, gameId);
-      });
-    }
-    const shareCodeInput = achWrap.querySelector('#ach-share-code');
-    if(shareCodeInput){
-      shareCodeInput.addEventListener('click', () => shareCodeInput.select());
-    }
-    const shareCopyBtn = achWrap.querySelector('#ach-share-copy');
-    if(shareCopyBtn){
-      shareCopyBtn.addEventListener('click', async () => {
-        const code = shareCodeInput ? shareCodeInput.value : '';
-        try{
-          await navigator.clipboard.writeText(code);
-          const original = shareCopyBtn.textContent;
-          shareCopyBtn.textContent = 'Copied!';
-          setTimeout(() => { shareCopyBtn.textContent = original; }, 1500);
-        }catch(e){
-          if(shareCodeInput) shareCodeInput.select();
-        }
-      });
-    }
     const shareDownloadBtn = achWrap.querySelector('#ach-share-download');
     if(shareDownloadBtn){
       shareDownloadBtn.addEventListener('click', () => {
@@ -829,59 +741,23 @@
         downloadAchOrderFile(gameId, local ? local.Title : '', order);
       });
     }
-
-    const importBtn = achWrap.querySelector('#ach-reorder-import');
-    if(importBtn){
-      importBtn.addEventListener('click', () => {
-        achImportPanelOpen = !achImportPanelOpen;
-        achImportError = '';
-        if(achImportPanelOpen) achSharePanelOpen = false; // one panel open at a time
-        renderAchWrapContent(achWrap, gameId);
-        if(achImportPanelOpen){
-          const input = achWrap.querySelector('#ach-import-input');
-          if(input) input.focus();
-        }
-      });
-    }
-    const applyDecodedOrder = async (decoded) => {
-      if(!decoded){
-        achImportError = "That doesn't look like a valid order code.";
-      }else if(decoded.error){
-        achImportError = decoded.error;
-      }else if(decoded.gameId !== Number(gameId)){
-        achImportError = 'This order is for a different game.';
-      }else{
-        await saveAchOrder(gameId, decoded.ids);
-        achImportPanelOpen = false;
-        achImportError = '';
-        achReorderMode = false; // show the imported order applied, not mid-edit
-      }
-      renderAchWrapContent(achWrap, gameId);
-    };
-    const importApplyBtn = achWrap.querySelector('#ach-import-apply');
-    if(importApplyBtn){
-      const applyImport = () => {
-        const input = achWrap.querySelector('#ach-import-input');
-        const list = achievementsListCache[gameId];
-        applyDecodedOrder(decodeAchOrderShareCode(input ? input.value : '', list));
-      };
-      importApplyBtn.addEventListener('click', applyImport);
-      const importInput = achWrap.querySelector('#ach-import-input');
-      if(importInput){
-        importInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') applyImport(); });
-      }
-    }
     const importFileBtn = achWrap.querySelector('#ach-import-file-btn');
     if(importFileBtn){
       importFileBtn.addEventListener('click', () => {
         pickAchOrderFile(async (file) => {
           try{
             const parsed = await readAchOrderFile(file);
-            await applyDecodedOrder(parsed);
+            if(parsed.gameId !== Number(gameId)){
+              achImportError = 'This order file is for a different game.';
+            }else{
+              await saveAchOrder(gameId, parsed.ids);
+              achImportError = '';
+              achReorderMode = false; // show the imported order applied, not mid-edit
+            }
           }catch(e){
             achImportError = e.message;
-            renderAchWrapContent(achWrap, gameId);
           }
+          renderAchWrapContent(achWrap, gameId);
         });
       });
     }
@@ -1521,22 +1397,49 @@
 
   // --- Game guides (manually imported — never fetched automatically; see
   // the "Game Guide" panel in the game profile for why) ---
+  // One key per game holds an ARRAY of guides, so several can be kept side
+  // by side instead of a new one always replacing the last. A key written
+  // before this version holds a single guide object directly — read back as
+  // a one-item list automatically, no migration step needed.
   function guideKey(gameId){
     return `guide:${creds.username.trim().toLowerCase()}:${gameId}`;
   }
-  async function loadGuide(gameId){
+  async function loadGuides(gameId){
     try{
       const r = await window.storage.get(guideKey(gameId), false);
-      if(r && r.value) return JSON.parse(r.value);
+      if(r && r.value){
+        const parsed = JSON.parse(r.value);
+        if(Array.isArray(parsed)) return parsed;
+        if(parsed && typeof parsed === 'object') return [parsed]; // pre-multi-guide format
+      }
     }catch(e){ /* none imported yet */ }
-    return null;
+    return [];
   }
-  async function saveGuide(gameId, guide){
-    try{ await window.storage.set(guideKey(gameId), JSON.stringify(guide), false); }
+  async function saveGuides(gameId, guides){
+    try{ await window.storage.set(guideKey(gameId), JSON.stringify(guides), false); }
     catch(e){ /* non-fatal */ }
   }
-  async function deleteGuide(gameId){
-    try{ await window.storage.delete(guideKey(gameId), false); }catch(e){}
+  // Adds a newly downloaded/pasted/imported guide, giving it a stable id so
+  // a specific guide — not just "whichever one is saved" — can later be
+  // read, updated (scroll position, bookmarks), or removed on its own.
+  async function addGuide(gameId, guide){
+    guide.id = guide.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const guides = await loadGuides(gameId);
+    guides.push(guide);
+    await saveGuides(gameId, guides);
+    return guide;
+  }
+  // Re-saves one guide's own fields (scroll position, bookmarks) in place, without touching the others.
+  async function updateGuide(gameId, guide){
+    const guides = await loadGuides(gameId);
+    const idx = guides.findIndex(g => g.id === guide.id);
+    if(idx === -1) guides.push(guide); else guides[idx] = guide;
+    await saveGuides(gameId, guides);
+  }
+  async function deleteGuide(gameId, guideId){
+    const guides = (await loadGuides(gameId)).filter(g => g.id !== guideId);
+    await saveGuides(gameId, guides);
+    return guides;
   }
   function readFileAsText(file){
     return new Promise((resolve, reject) => {
@@ -1590,7 +1493,7 @@
       content = await readFileAsText(file);
     }
     const guide = { filename: name, kind, content, scrollFrac: 0, savedAt: Date.now() };
-    await saveGuide(gameId, guide);
+    await addGuide(gameId, guide);
     return guide;
   }
 
@@ -2829,8 +2732,6 @@
       if(nowOpen && !achLoaded){
         achLoaded = true;
         achMissableOnly = false; // fresh game's panel starts unfiltered
-        achSharePanelOpen = false;
-        achImportPanelOpen = false;
         achImportError = '';
         achReorderMode = false;
         achWrap.innerHTML = '<div class="achievements-list-loading">Loading achievements…</div>';
