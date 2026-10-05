@@ -843,3 +843,15 @@
   /* Status row: badge first, then the date beaten to its right, sitting flush with the other values. */
   .modal-progress .status-val{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:4px 10px;}
   .modal-progress .beaten-date{white-space:nowrap;color:var(--teal);}
+
+  /* ---- About dialog ---- */
+  .about-links{display:flex;flex-direction:column;gap:1px;background:var(--border);border-radius:6px;overflow:hidden;}
+  .about-link{
+    background:var(--bg-alt);padding:11px 12px;display:flex;flex-direction:column;gap:2px;
+    color:var(--text);text-decoration:none;font-size:0.8125rem;font-weight:700;
+  }
+  .about-link span{font-size:0.7rem;font-weight:400;color:var(--teal);word-break:break-all;}
+  .about-credits{margin-top:18px;padding-top:14px;border-top:1px solid var(--border);}
+  .about-credits-title{font-size:0.75rem;font-weight:700;color:var(--gold);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:8px;}
+  .about-credits p{font-size:0.75rem;color:var(--muted);line-height:1.6;margin:0 0 8px;}
+  .about-credits a{color:var(--teal);text-decoration:none;}
