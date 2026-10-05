@@ -1,6 +1,11 @@
 # Changelog
 
-All notable changes to Game Log — Tracker are documented here. Newest first. 
+All notable changes to Game Log — Tracker are documented here. Newest first.
+
+## v2.1.0
+ 
+### Added
+- Achievement links: every achievement in a game's list now has a small teal **RA** button that opens that achievement's page on RetroAchievements, where you can read its comments and discussion. The button is hidden while reordering.
 
 ## v2.0.9
 
