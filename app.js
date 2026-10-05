@@ -2914,7 +2914,7 @@
     if(e.target.id === 'modal-backdrop') closeGameModal();
   });
   document.addEventListener('keydown', (e) => {
-    if(e.key === 'Escape'){ closeGameModal(); closeAddGameModal(); closeRawgModal(); closeRaConnectModal(); closeDataModal(); closeDropdownMenu(); }
+    if(e.key === 'Escape'){ closeGameModal(); closeAddGameModal(); closeRawgModal(); closeRaConnectModal(); closeDataModal(); closeAboutModal(); closeDropdownMenu(); }
   });
 
   // ============================================================================
@@ -3255,6 +3255,17 @@
     $('#data-backdrop').classList.remove('open');
   }
 
+  // --- About ---
+  // Bump this every release, together with CACHE_NAME in sw.js.
+  const APP_VERSION = '2.0.8';
+  function openAboutModal(){
+    $('#about-version').textContent = APP_VERSION;
+    $('#about-backdrop').classList.add('open');
+  }
+  function closeAboutModal(){
+    $('#about-backdrop').classList.remove('open');
+  }
+
   async function exportLocalData(){
     const entries = await window.storage._getAllRaw(); // [{key, value}, ...] — includes RA creds, RAWG key, manual games, caches
     const payload = {
@@ -3289,6 +3300,12 @@
   $('#rawg-close-btn').addEventListener('click', closeRawgModal);
   $('#rawg-backdrop').addEventListener('click', (e) => {
     if(e.target.id === 'rawg-backdrop') closeRawgModal();
+  });
+
+  $('#btn-about-open').addEventListener('click', openAboutModal);
+  $('#about-close-btn').addEventListener('click', closeAboutModal);
+  $('#about-backdrop').addEventListener('click', (e) => {
+    if(e.target.id === 'about-backdrop') closeAboutModal();
   });
 
   $('#btn-data-settings-open').addEventListener('click', openDataModal);
