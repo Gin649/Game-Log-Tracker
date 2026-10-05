@@ -511,6 +511,15 @@
   }
   .guide-list-item-meta{font-size:0.675rem;color:var(--muted);letter-spacing:0.02em;}
   .guide-list-item-actions{display:flex;gap:6px;flex-shrink:0;}
+  /* Three buttons per row now (Read / Rename / Remove): let the row wrap on narrow phones. */
+  .guide-list-item{flex-wrap:wrap;}
+  .guide-list-item-info{flex:1 1 120px;}
+  .guide-list-item-name{max-width:100%;}
+  .guide-list-item.renaming .guide-list-item-info{flex:1 1 100%;}
+  .guide-rename-input{
+    width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--teal);color:var(--text);
+    border-radius:4px;padding:7px 8px;font-family:'Space Mono',monospace;font-size:0.75rem;
+  }
   .guide-list-item-btn{
     background:transparent;border:1px solid var(--teal);color:var(--teal);border-radius:4px;
     padding:6px 10px;font-family:'Space Mono',monospace;font-size:0.6875rem;font-weight:700;
