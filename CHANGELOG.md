@@ -2,6 +2,18 @@
 
 All notable changes to Game Log — Tracker are documented here. Newest first. 
 
+## v2.0.9
+
+### Added
+- Multiple guides per game: the Game Guide panel now keeps every guide you save for a game, instead of a new one replacing the last. Use **+ Add another guide** to download, paste or import more.
+- Each saved guide shows how far through it you are (for example "42% read") under its name. PDF guides have no percentage because the browser's own viewer handles them.
+- Rename guides: every guide row has a **Rename** button, so several guides for the same game no longer all show up as the game's name.txt. Press Enter to save or Escape to cancel.
+- New **About** section at the bottom of the hamburger menu with the app version, links to the GitHub and the Discord, a contact email for questions, and credits.
+
+### Fixed
+- Guides saved before multiple guides were supported could no longer be opened or removed. They now open, rename and delete like any other guide, with nothing to re-import.
+- Guide names containing quotes or angle brackets could break the guide list. Names are now escaped properly.
+
 ## v2.0.8
  
 ### Added
