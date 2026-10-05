@@ -1,12 +1,15 @@
-# Game Log — Tracker v2.0.8  Latest Updates Deployed on Oct 3/26
+# Game Log — Tracker v2.0.9  Latest Updates Deployed on Oct 5/26
 
 A lightweight, installable Progressive Web App for tracking your [RetroAchievements](https://retroachievements.org) library — recent activity, in-progress games, completions by year, and playtime — with **no account, no login, and no cloud sync**. You can also log games that aren't on RetroAchievements or that you haven't played yet, including modern titles, right alongside your RA library. Everything stays on your device.
 
 **Live app:** <https://gin649.github.io/Game-Log-Tracker>
 
-For any questions and/or an invite to the new public discord where we're discussing this.
+For any questions and/or an invite to the new public discord where we're discussing this:
 
-Email me: ginsretrogamehub@gmail.com
+- Discord: <https://discord.gg/dJtAy4pvA>
+- Email me: ginsretrogamehub@gmail.com
+
+The same links, the app version and credits are in the app under **Menu → About**.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full additions, fixes and changes.
 
@@ -21,8 +24,9 @@ See [CHANGELOG.md](CHANGELOG.md) for the full additions, fixes and changes.
 - **Reorder achievements** — drag a game's achievement list into whatever order makes sense to you (or use the ▲▼ buttons), saved automatically per game. Achievements RA has tagged **Missable** show a badge, with a filter to view just those. Made your own order you're proud of? **Share** it as a short code or a file, and anyone else can **import** it straight into the same game — handy for a forum or Discord
 - **Optional RAWG ratings** — show a review-score badge (Metacritic where available) on each game's detail view
 - **ROM Hack Patching** — load a ROM you own and search [RetroAchievements' RAPatches repository](https://github.com/RetroAchievements/RAPatches) for hacks and translations for that exact game, verified against your ROM's checksum where the patch format supports it. Results are searchable by name, sorted alphabetically, and scroll rather than cut off. On browsers that support it, saving a patched ROM opens a save dialog defaulting to the same folder as the ROM you loaded
-- **Game Guides** — pull in GameFAQs text guides for a game (via an archive.org mirror) right inside the app, with in-guide search, bookmarks, an adjustable reading font size, and your reading position saved automatically. Don't like the default guide? Copy and paste in any guide you find on GameFAQs yourself — pasted guides get the exact same reader features
+- **Game Guides** — pull in GameFAQs text guides for a game (via an archive.org mirror) right inside the app, with in-guide search, bookmarks, an adjustable reading font size, and your reading position saved automatically. Save **as many guides as you like per game**, each with its own "% read" progress, and **rename** them so they're easy to tell apart. Don't like the default guide? Copy and paste in any guide you find on GameFAQs yourself, or import your own text, HTML or PDF file — pasted and imported guides get the same reader features
 - **Adjustable app text size** — scale all of the app's text from 80%–160% from the hamburger menu, independent of box art, which stays at its normal size
+- **About** — the hamburger menu's About section shows the app version, links to the GitHub and Discord, a contact email, and credits
 - **Installable PWA** — works offline once loaded, with a home-screen install prompt on supported browsers (manual "Add to Home Screen" instructions on iOS)
 
 ## How your data works
