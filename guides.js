@@ -235,17 +235,22 @@
   // trackable reading position) how far into it the saved scroll position
   // is, as a percentage. A PDF uses the browser's own viewer and has no
   // position this app can read, so it gets no percentage.
+  function guideEsc(str){
+    return String(str == null ? '' : str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
   function renderGuideListItem(guide){
     const pct = Math.round((guide.scrollFrac || 0) * 100);
     const pctLabel = guide.kind === 'pdf' ? '' : `${pct}% read`;
+    const kind = String(guide.kind || 'text').toUpperCase();
     return `
-      <div class="guide-list-item" data-guide-id="${guide.id}">
+      <div class="guide-list-item" data-guide-id="${guideEsc(guide.id)}">
         <div class="guide-list-item-info">
-          <span class="guide-list-item-name">${guide.filename}</span>
-          <span class="guide-list-item-meta">${guide.kind.toUpperCase()}${pctLabel ? ' · ' + pctLabel : ''}</span>
+          <span class="guide-list-item-name">${guideEsc(guide.filename || 'Untitled guide')}</span>
+          <span class="guide-list-item-meta">${kind}${pctLabel ? ' · ' + pctLabel : ''}</span>
         </div>
         <div class="guide-list-item-actions">
           <button class="guide-list-item-btn" data-action="read" type="button">Read</button>
+          <button class="guide-list-item-btn" data-action="rename" type="button">Rename</button>
           <button class="guide-list-item-btn danger" data-action="remove" type="button">Remove</button>
         </div>
       </div>
@@ -377,6 +382,32 @@
         if(!guide) return;
         if(btn.dataset.action === 'read'){
           openGuideReader(gameId, title, guide);
+        }else if(btn.dataset.action === 'rename'){
+          // Swap the row's name for an editable box with Save / Cancel.
+          const info = row.querySelector('.guide-list-item-info');
+          const actions = row.querySelector('.guide-list-item-actions');
+          row.classList.add('renaming');
+          info.innerHTML = `<input type="text" class="guide-rename-input" maxlength="120" value="${guideEsc(guide.filename || '')}" aria-label="Guide name">`;
+          actions.innerHTML = `
+            <button class="guide-list-item-btn" data-action="rename-save" type="button">Save</button>
+            <button class="guide-list-item-btn danger" data-action="rename-cancel" type="button">Cancel</button>`;
+          const input = info.querySelector('input');
+          input.focus(); input.select();
+          input.addEventListener('keydown', (ev) => {
+            if(ev.key === 'Enter'){ ev.preventDefault(); actions.querySelector('[data-action="rename-save"]').click(); }
+            else if(ev.key === 'Escape'){ ev.preventDefault(); actions.querySelector('[data-action="rename-cancel"]').click(); }
+          });
+        }else if(btn.dataset.action === 'rename-save'){
+          const input = row.querySelector('.guide-rename-input');
+          const name = (input && input.value || '').trim();
+          if(!name){ if(input) input.focus(); return; }
+          btn.disabled = true;
+          guides = await renameGuide(gameId, guideId, name);
+          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guides, consoleId);
+          wireGuidePanelButtons();
+        }else if(btn.dataset.action === 'rename-cancel'){
+          guideWrap.innerHTML = renderGuidePanelInner(gameId, title, guides, consoleId);
+          wireGuidePanelButtons();
         }else if(btn.dataset.action === 'remove'){
           btn.disabled = true;
           guides = await deleteGuide(gameId, guideId);
@@ -886,7 +917,7 @@
     }else if(guide.kind === 'pdf'){
       // Renders in the browser's own PDF viewer — position there isn't
       // something this app can read or restore, unlike the text/html modes.
-      body.innerHTML = `<iframe src="${guide.content}" title="${guide.filename}"></iframe>`;
+      body.innerHTML = `<iframe src="${guide.content}" title="${guideEsc(guide.filename)}"></iframe>`;
     }else if(guide.kind === 'html'){
       body.classList.add('html-guide');
       try{
