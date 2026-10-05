@@ -472,18 +472,8 @@
     font-family:'Inter',sans-serif;font-size:0.6875rem;font-weight:600;
     cursor:pointer;padding:4px 8px;opacity:0.75;
   }
-  .ach-share-footer-btn:hover,.ach-share-footer-btn.active{color:var(--gold);opacity:1;}
-  .ach-import-panel{padding:12px;background:var(--panel);border-bottom:1px solid var(--border);}
-  .ach-import-panel .field{margin-bottom:10px;}
-  .ach-import-panel input{font-family:'Space Mono',monospace;font-size:0.75rem;}
-  .ach-share-actions{display:flex;gap:8px;flex-wrap:wrap;}
-  .ach-share-actions .btn-primary{width:auto;padding:8px 16px;}
-  .ach-share-actions button:not(.btn-primary){
-    background:transparent;border:1px solid var(--border);border-radius:var(--radius);
-    color:var(--text);font-family:'Inter',sans-serif;font-size:0.75rem;font-weight:600;
-    padding:8px 16px;cursor:pointer;
-  }
-  .ach-share-actions button:not(.btn-primary):hover{border-color:var(--gold);color:var(--gold);}
+  .ach-share-footer-btn:hover{color:var(--gold);opacity:1;}
+  .ach-share-footer-error{padding:0 12px 12px;text-align:center;font-size:0.75rem;color:var(--danger);}
 
   .achievements-list-loading{padding:14px;text-align:center;color:var(--muted);font-size:0.8625rem;}
 
@@ -505,6 +495,29 @@
   .guide-divider::before,.guide-divider::after{content:'';flex:1;height:1px;background:var(--border);}
   .guide-status-text{font-size:0.725rem;color:var(--muted);margin:0;line-height:1.5;}
   .guide-status-text.err{color:var(--danger);}
+
+  /* Several guides saved per game, each its own row with its own saved
+     reading position shown as a percentage (set under the guide's name,
+     per guideVisibleTextLength/scrollFrac tracking in guides.js). */
+  .guide-list{display:flex;flex-direction:column;gap:1px;background:var(--border);border-radius:6px;overflow:hidden;}
+  .guide-list-item{
+    background:var(--bg-alt);padding:9px 10px;display:flex;align-items:center;
+    justify-content:space-between;gap:10px;
+  }
+  .guide-list-item-info{min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .guide-list-item-name{
+    font-size:0.75rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;max-width:34vw;
+  }
+  .guide-list-item-meta{font-size:0.675rem;color:var(--muted);letter-spacing:0.02em;}
+  .guide-list-item-actions{display:flex;gap:6px;flex-shrink:0;}
+  .guide-list-item-btn{
+    background:transparent;border:1px solid var(--teal);color:var(--teal);border-radius:4px;
+    padding:6px 10px;font-family:'Space Mono',monospace;font-size:0.6875rem;font-weight:700;
+    cursor:pointer;
+  }
+  .guide-list-item-btn.danger{border-color:var(--danger);color:var(--danger);}
+  .guide-list-item-btn:disabled{opacity:0.6;cursor:default;}
 
   .patch-result-list{display:flex;flex-direction:column;gap:1px;background:var(--border);border-radius:6px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);margin-top:4px;max-height:340px;overscroll-behavior:contain;}
   .patch-result-row{background:var(--panel);padding:9px 11px;display:flex;align-items:center;gap:10px;}
