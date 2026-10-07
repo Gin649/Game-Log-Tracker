@@ -162,6 +162,8 @@
     color:var(--gold);font-family:'Space Mono',monospace;font-size:0.7188rem;
     background:var(--bg);z-index:60;transition:height 0.15s ease-out;
   }
+  /* While pulling inside the full-screen game profile (z-index 100), show the indicator above it. */
+  .pull-refresh-indicator.over-profile{z-index:150;}
 
   .error-box{
     background:rgba(226,104,92,0.1);border:1px solid var(--danger);
@@ -368,6 +370,7 @@
   .game-profile-view{
     background:var(--bg);padding:0;overflow-x:hidden;overflow-y:auto;
     -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain; /* keep the browser's own pull-to-reload out of the profile; the app handles it */
   }
   .game-profile-card{
     max-width:none;margin:0;border:none;border-radius:0;
