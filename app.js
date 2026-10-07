@@ -266,7 +266,15 @@
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   }
 
-  // --- Networking: try a direct call, fall back to CORS proxies ---
+  // --- Networking: our Worker first, then public CORS proxies, direct call as a last resort ---
+  // (RetroAchievements normally blocks direct browser requests, so trying it first only wasted a
+  // round trip on every call.)
+  const WORKER_TIMEOUT_MS = 12000; // a hung Worker must fall through to the proxies, not stall the load
+  function fetchWithTimeout(url, ms){
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms);
+    return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
+  }
   async function raFetch(endpoint, params){
     const qs = new URLSearchParams({ u: creds.username, ...params, y: creds.apiKey }); // params.u lets Social look up another user
     const targetUrl = `https://retroachievements.org/API/${endpoint}?${qs.toString()}`;
@@ -319,22 +327,13 @@
       });
     }
 
-    // Try direct first — fast when it works, and its status is the only one we
-    // can trust as a real signal from RetroAchievements itself (not a proxy).
-    try{
-      return await attempt('direct', () => fetch(targetUrl));
-    }catch(directErr){
-      if(directErr.authFailure) throw directErr;
-      // Otherwise fall through to our own Worker, then the public proxy race below.
-    }
-
     // Our own Cloudflare Worker — one reliable hop we control, instead of going
     // straight to racing five shared public proxies. Falls through to those only
     // if the Worker itself is unreachable or erroring (e.g. its free daily
     // request quota is exhausted) — so the public proxies stay as a genuine
     // safety net rather than being replaced outright.
     try{
-      return await attempt('worker', () => fetch(`https://ra-proxy.gin649.workers.dev/${endpoint}?${qs.toString()}`));
+      return await attempt('worker', () => fetchWithTimeout(`https://ra-proxy.gin649.workers.dev/${endpoint}?${qs.toString()}`, WORKER_TIMEOUT_MS));
     }catch(workerErr){
       if(workerErr.authFailure) throw workerErr;
       // Otherwise fall through and race the public proxies below.
@@ -348,10 +347,20 @@
       attempt('corseu',     () => fetch('https://cors.eu.org/' + targetUrl)),
     ];
 
+    let proxyErrMsg = '';
     try{
       return await raceFirstSuccess(proxyAttempts);
     }catch(aggregateErr){
-      throw new Error('Every connection route failed — ' + aggregateErr.message);
+      proxyErrMsg = aggregateErr.message;
+    }
+
+    // Last resort: ask RetroAchievements directly. Usually blocked in browsers, but costs nothing
+    // to try once everything else has failed — and its status is a trustworthy signal from RA itself.
+    try{
+      return await attempt('direct', () => fetch(targetUrl));
+    }catch(directErr){
+      if(directErr.authFailure) throw directErr;
+      throw new Error('Every connection route failed — ' + proxyErrMsg + '; ' + directErr.message);
     }
   }
 
@@ -3934,7 +3943,7 @@
     // pulling down should scroll that list rather than refresh.
     const insideScrolledChild = (node) => {
       for(let el = node; el && el !== profileEl(); el = el.parentElement){
-        if(el.scrollTop > 0) return true;
+        if(el.scrollTop > 1) return true;
       }
       return false;
     };
@@ -3946,7 +3955,7 @@
         pulling = !!creds && !!card.dataset.gameId
           && e.touches.length === 1
           && profileEl().contains(e.target)
-          && profileEl().scrollTop === 0
+          && profileEl().scrollTop <= 1 // <=1: scroll offsets can be fractional on scaled screens
           && !insideScrolledChild(e.target);
         profileMode = pulling;
       }else{
@@ -3959,7 +3968,7 @@
       if(!pulling) return;
       // An achievement being dragged to a new position (reorder) has already claimed this gesture.
       if(e.defaultPrevented){ pulling = false; currentPull = 0; indicator.style.height = '0px'; return; }
-      const atTop = profileMode ? profileEl().scrollTop === 0 : window.scrollY === 0;
+      const atTop = profileMode ? profileEl().scrollTop <= 1 : window.scrollY === 0;
       const delta = e.touches[0].clientY - touchStartY;
       if(delta > 0 && atTop){
         currentPull = Math.min(delta, MAX_PULL);
