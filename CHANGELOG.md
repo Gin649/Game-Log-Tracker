@@ -2,6 +2,12 @@
 
 All notable changes to Game Log — Tracker are documented here. Newest first.
 
+## v2.1.0.1
+ 
+### Changed
+- Pull down to refresh now works on a game's profile page as well as the main screens. It reloads that game's profile and refreshes the data behind it.
+
+
 ## v2.1.0
  
 ### Added
