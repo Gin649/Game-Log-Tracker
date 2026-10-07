@@ -3509,7 +3509,7 @@
 
   // --- About ---
   // Bump this every release, together with CACHE_NAME in sw.js.
-  const APP_VERSION = '2.1.0';
+  const APP_VERSION = '2.1.0.1';
   function openAboutModal(){
     $('#about-version').textContent = APP_VERSION;
     $('#about-backdrop').classList.add('open');
@@ -3925,16 +3925,45 @@
     indicator.textContent = 'Pull to refresh';
     document.body.insertBefore(indicator, document.body.firstChild);
 
+    // The game profile is a full-screen overlay that scrolls itself (#modal-backdrop),
+    // so pulling down there is measured against its own scrollTop instead of the window's.
+    let profileMode = false;
+    const profileEl = () => $('#modal-backdrop');
+    const profileOpen = () => profileEl().classList.contains('open');
+    // True if the touch began inside something that is itself scrolled down (a nested list), so
+    // pulling down should scroll that list rather than refresh.
+    const insideScrolledChild = (node) => {
+      for(let el = node; el && el !== profileEl(); el = el.parentElement){
+        if(el.scrollTop > 0) return true;
+      }
+      return false;
+    };
+
     document.addEventListener('touchstart', (e) => {
-      pulling = window.scrollY === 0 && !!creds && $('#dashboard').style.display === 'block';
+      profileMode = false;
+      if(profileOpen()){
+        const card = $('#modal-card');
+        pulling = !!creds && !!card.dataset.gameId
+          && e.touches.length === 1
+          && profileEl().contains(e.target)
+          && profileEl().scrollTop === 0
+          && !insideScrolledChild(e.target);
+        profileMode = pulling;
+      }else{
+        pulling = window.scrollY === 0 && !!creds && $('#dashboard').style.display === 'block';
+      }
       if(pulling) touchStartY = e.touches[0].clientY;
     }, { passive: true });
 
     document.addEventListener('touchmove', (e) => {
       if(!pulling) return;
+      // An achievement being dragged to a new position (reorder) has already claimed this gesture.
+      if(e.defaultPrevented){ pulling = false; currentPull = 0; indicator.style.height = '0px'; return; }
+      const atTop = profileMode ? profileEl().scrollTop === 0 : window.scrollY === 0;
       const delta = e.touches[0].clientY - touchStartY;
-      if(delta > 0 && window.scrollY === 0){
+      if(delta > 0 && atTop){
         currentPull = Math.min(delta, MAX_PULL);
+        indicator.classList.toggle('over-profile', profileMode);
         indicator.style.height = currentPull + 'px';
         indicator.textContent = currentPull > PULL_THRESHOLD ? 'Release to refresh' : 'Pull to refresh';
       }
@@ -3943,11 +3972,29 @@
     document.addEventListener('touchend', () => {
       if(!pulling) return;
       pulling = false;
+      const wasProfile = profileMode;
+      profileMode = false;
       if(currentPull > PULL_THRESHOLD){
         indicator.textContent = 'Refreshing…';
-        Promise.resolve(loadAll({ forceRecentPlaytime: true })).finally(() => { indicator.style.height = '0px'; });
+        let job;
+        if(wasProfile && profileOpen()){
+          // Reload this game's profile (progress, achievements, details), and refresh the
+          // dashboard data behind it so the Library and Overview are current when you close it.
+          const gameId = $('#modal-card').dataset.gameId;
+          job = Promise.all([
+            openGameModal(gameId),
+            loadAll({ forceRecentPlaytime: true })
+          ]);
+        }else{
+          job = loadAll({ forceRecentPlaytime: true });
+        }
+        Promise.resolve(job).catch(() => {}).finally(() => {
+          indicator.style.height = '0px';
+          indicator.classList.remove('over-profile');
+        });
       } else {
         indicator.style.height = '0px';
+        indicator.classList.remove('over-profile');
       }
       currentPull = 0;
     }, { passive: true });
