@@ -3934,6 +3934,75 @@
     indicator.textContent = 'Pull to refresh';
     document.body.insertBefore(indicator, document.body.firstChild);
 
+    // dataset.gameId is always text ("123") but the app's own game data keys on the real value
+    // (123), so find the game's real id first or the profile can't match it to its progress and awards.
+    const resolveGameId = (idText) => {
+      const hit = libraryData.find(g => String(g.GameID) === idText)
+        || recentGamesData.find(g => String(g.GameID) === idText);
+      if(hit) return hit.GameID;
+      return /^\d+$/.test(idText) ? Number(idText) : idText;
+    };
+    async function refreshOpenGameProfile(idText){
+      const gameId = resolveGameId(idText);
+      let fresh;
+      try{
+        // One call for just this game: current progress, award status, achievement list and playtime.
+        fresh = await raFetch('API_GetGameInfoAndUserProgress.php', { g: gameId, a: 1 });
+      }catch(e){
+        console.error('Game refresh failed:', e);
+        return; // offline / proxy trouble: leave the profile exactly as it was
+      }
+      if(!fresh || fresh.ID === undefined && fresh.Title === undefined) return;
+
+      // Update this game's entry in place (same fields the full library load fills in).
+      const maxPossible = Number(fresh.NumAchievements ?? 0);
+      const numAwarded = Number(fresh.NumAwardedToUser ?? 0);
+      const numAwardedHC = Number(fresh.NumAwardedToUserHardcore ?? 0);
+      const idx = libraryData.findIndex(g => g.GameID === gameId);
+      if(idx !== -1){
+        const old = libraryData[idx];
+        libraryData[idx] = {
+          ...old,
+          MaxPossible: maxPossible || old.MaxPossible,
+          NumAwarded: numAwarded,
+          NumAwardedHardcore: numAwardedHC,
+          HighestAwardKind: fresh.HighestAwardKind ?? null,
+          HighestAwardDate: fresh.HighestAwardDate ?? null,
+          pct: maxPossible ? Math.round((numAwarded / maxPossible) * 100) : 0,
+        };
+      }
+      const rIdx = recentGamesData.findIndex(g => g.GameID === gameId);
+      if(rIdx !== -1){
+        recentGamesData[rIdx] = {
+          ...recentGamesData[rIdx],
+          NumPossibleAchievements: maxPossible || recentGamesData[rIdx].NumPossibleAchievements,
+          NumAchieved: numAwarded,
+          NumAchievedHardcore: numAwardedHC,
+        };
+      }
+
+      // Drop what's cached for this game so the profile draws fresh details, achievements and playtime.
+      delete gameExtendedCache[gameId];
+      try{ await window.storage.delete(`ra-gameinfo:${gameId}`, false); }catch(e){ /* nothing cached */ }
+      if(fresh.Achievements){
+        achievementsListCache[gameId] = Object.values(fresh.Achievements)
+          .sort((a, b) => (a.DisplayOrder ?? 0) - (b.DisplayOrder ?? 0));
+      }else{
+        delete achievementsListCache[gameId];
+      }
+      try{ await getEstimatedHours(gameId, true); }catch(e){ console.error('Playtime refresh failed:', e); }
+
+      // Keep the screens behind the profile in step with the new numbers.
+      try{ renderRecentGames(recentGamesData); }catch(e){ console.error(e); }
+      try{ renderLibrary(); }catch(e){ console.error(e); }
+      try{ renderBacklog(); }catch(e){ console.error(e); }
+      try{ renderByYear(); }catch(e){ console.error(e); }
+
+      const card = $('#modal-card');
+      if(!profileOpen() || card.dataset.gameId !== String(gameId)) return; // closed or moved to another game meanwhile
+      await openGameModal(gameId);
+    }
+
     // The game profile is a full-screen overlay that scrolls itself (#modal-backdrop),
     // so pulling down there is measured against its own scrollTop instead of the window's.
     let profileMode = false;
@@ -3987,13 +4056,8 @@
         indicator.textContent = 'Refreshing…';
         let job;
         if(wasProfile && profileOpen()){
-          // Reload this game's profile (progress, achievements, details), and refresh the
-          // dashboard data behind it so the Library and Overview are current when you close it.
-          const gameId = $('#modal-card').dataset.gameId;
-          job = Promise.all([
-            openGameModal(gameId),
-            loadAll({ forceRecentPlaytime: true })
-          ]);
+          // Refresh just this game (one API call, not the whole library) and redraw its profile.
+          job = refreshOpenGameProfile($('#modal-card').dataset.gameId);
         }else{
           job = loadAll({ forceRecentPlaytime: true });
         }
