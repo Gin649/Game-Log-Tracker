@@ -1246,9 +1246,45 @@
       return j && j.title ? String(j.title) : null;
     }catch(err){ return null; }
   }
+  // --- Remembering where you stopped watching ---
+  // Playback runs through YouTube's IFrame Player API so the app can read the current time.
+  // The position is saved on the video's own entry (it.resume, in seconds — and it.resumeIndex
+  // for playlists), so it is stored per game and included in Data backups with no extra plumbing.
+  // If the API can't load (offline, blocked), the plain embedded player is used instead and the
+  // last saved position is still honoured; only new positions can't be recorded.
+  const ytLive = new Set(); // active playback sessions: { flush(), destroy() }
+  let ytApiPromise = null;
+  function loadYouTubeApi(){
+    if(window.YT && window.YT.Player) return Promise.resolve(window.YT);
+    if(ytApiPromise) return ytApiPromise;
+    ytApiPromise = new Promise((resolve, reject) => {
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => { try{ if(prev) prev(); }catch(e){} resolve(window.YT); };
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      tag.onerror = () => { ytApiPromise = null; reject(new Error('YouTube player API failed to load')); };
+      document.head.appendChild(tag);
+      setTimeout(() => {
+        if(!(window.YT && window.YT.Player)){ ytApiPromise = null; reject(new Error('YouTube player API timed out')); }
+      }, 8000);
+    });
+    return ytApiPromise;
+  }
+  // Where to restart a video: a few seconds before where it was left (for context), or from the
+  // link's own timestamp if nothing has been watched yet. Under 10s watched counts as not started.
+  function ytStartSeconds(it){
+    const r = Number(it.resume) || 0;
+    if(r >= 10) return Math.max(0, r - 3);
+    return Number(it.start) || 0;
+  }
+  function ytFlushAll(){ ytLive.forEach(sess => { try{ sess.flush(); }catch(e){} }); }
+  document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') ytFlushAll(); });
+  window.addEventListener('pagehide', ytFlushAll);
+
   // Clears every walkthrough player (called when the game profile closes) so audio never
   // keeps playing behind a closed screen, and leaves full screen if it was on.
   function stopWalkthroughPlayers(){
+    Array.from(ytLive).forEach(sess => { try{ sess.flush(); sess.destroy(); }catch(e){} }); // save positions before clearing
     document.querySelectorAll('.yt-player-wrap').forEach(w => {
       w.classList.remove('yt-max');
       const b = w.querySelector('.yt-player-box');
@@ -1300,17 +1336,106 @@
       }
     }
 
-    function play(it){
+    let session = null;   // the active API-driven playback session, if any
+    let playToken = 0;    // bumped on every play/stop so a slow API load can't start a stale video
+
+    function endSession(){
+      if(!session) return;
+      try{ session.flush(); }catch(e){}
+      try{ session.destroy(); }catch(e){}
+      session = null;
+    }
+
+    function startSession(YTapi, it, startAt){
+      const target = els.box.querySelector('.yt-api-target');
+      if(!target) return;
+      const vars = { rel: 0, playsinline: 1, autoplay: 1 };
+      const opts = { host: 'https://www.youtube-nocookie.com', width: '100%', height: '100%', playerVars: vars, events: {} };
+      if(it.vid){
+        opts.videoId = it.vid;
+        if(it.list) vars.list = it.list;
+        if(startAt) vars.start = startAt;
+      }else{
+        vars.listType = 'playlist';
+        vars.list = it.list;
+      }
+      let player = null, timer = null, ended = false, lastWrite = 0;
+      const persist = () => { lastWrite = Date.now(); saveWalkthroughs(gameId, items); };
+      const snap = () => {
+        try{
+          const t = player.getCurrentTime();
+          if(isFinite(t)){
+            it.resume = Math.floor(t);
+            if(!it.vid){ const i = player.getPlaylistIndex(); if(i >= 0) it.resumeIndex = i; }
+          }
+        }catch(e){ /* player not ready or already gone */ }
+      };
+      const sess = {
+        flush(){ if(!player || ended) return; snap(); persist(); },
+        destroy(){
+          clearInterval(timer);
+          ytLive.delete(sess);
+          try{ player && player.destroy(); }catch(e){}
+        }
+      };
+      opts.events.onReady = (ev) => {
+        try{
+          if(!it.vid && (startAt || it.resumeIndex)){
+            ev.target.loadPlaylist({ listType: 'playlist', list: it.list, index: it.resumeIndex || 0, startSeconds: startAt || 0 });
+          }else{
+            ev.target.playVideo();
+          }
+        }catch(e){}
+      };
+      opts.events.onStateChange = (ev) => {
+        const st = ev.data;
+        if(st === 1){ // playing
+          ended = false;
+          clearInterval(timer);
+          timer = setInterval(() => {
+            try{ if(!player.getIframe().isConnected){ sess.destroy(); return; } }catch(e){ sess.destroy(); return; }
+            snap();
+            if(Date.now() - lastWrite > 15000) persist();
+          }, 5000);
+        }else if(st === 2){ // paused
+          clearInterval(timer); snap(); persist();
+        }else if(st === 0){ // finished
+          clearInterval(timer);
+          let lastInList = true;
+          try{ if(!it.vid){ const n = (player.getPlaylist() || []).length; lastInList = n === 0 || player.getPlaylistIndex() >= n - 1; } }catch(e){}
+          if(lastInList){ ended = true; delete it.resume; delete it.resumeIndex; persist(); } // watched to the end: next time starts over
+        }
+      };
+      ytLive.add(sess);
+      player = new YTapi.Player(target, opts);
+      sess.player = player;
+      session = sess;
+    }
+
+    async function play(it){
+      const token = ++playToken;
+      endSession();
       playingId = it.id;
-      els.box.innerHTML = `<iframe src="${ytEmbedUrl(it)}" title="Walkthrough video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+      const startAt = ytStartSeconds(it);
+      els.box.innerHTML = '<div class="yt-api-target"></div>';
       els.maxTitle.textContent = it.title;
       els.tools.style.display = '';
       els.ytLink.href = ytWatchUrl(it);
       renderList();
       els.wrap.scrollIntoView({ behavior:'smooth', block:'nearest' });
+      let YTapi = null;
+      try{ YTapi = await loadYouTubeApi(); }catch(e){ console.error(e); }
+      if(token !== playToken || playingId !== it.id) return; // another video or Stop was chosen meanwhile
+      if(YTapi){
+        try{ startSession(YTapi, it, startAt); return; }catch(e){ console.error('YouTube player API failed, using plain player:', e); }
+      }
+      // Fallback: plain embed (no position tracking), still starting from the last saved position.
+      els.box.innerHTML = `<iframe src="${ytEmbedUrl({ ...it, start: startAt })}" title="Walkthrough video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
     }
 
     function stopPlayer(){
+      playToken++;
+      endSession();
       playingId = null;
       setMax(false);
       els.box.innerHTML = '';
@@ -3518,7 +3643,7 @@
 
   // --- About ---
   // Bump this every release, together with CACHE_NAME in sw.js.
-  const APP_VERSION = '2.1.0.1';
+  const APP_VERSION = '2.1.0.2';
   function openAboutModal(){
     $('#about-version').textContent = APP_VERSION;
     $('#about-backdrop').classList.add('open');
@@ -4000,6 +4125,7 @@
 
       const card = $('#modal-card');
       if(!profileOpen() || card.dataset.gameId !== String(gameId)) return; // closed or moved to another game meanwhile
+      stopWalkthroughPlayers(); // saves the watch position before the profile is redrawn
       await openGameModal(gameId);
     }
 
