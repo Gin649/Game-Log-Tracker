@@ -1,4 +1,4 @@
-# Game Log — Tracker v2.1.0.1  Latest Updates Deployed on Oct 7/26
+# Game Log — Tracker v2.1.0.2  Latest Updates Deployed on Oct 8/26
 
 A lightweight, installable Progressive Web App for tracking your [RetroAchievements](https://retroachievements.org) library — recent activity, in-progress games, completions by year, and playtime — with **no account, no login, and no cloud sync**. You can also log games that aren't on RetroAchievements or that you haven't played yet, including modern titles, right alongside your RA library. Everything stays on your device.
 
@@ -26,6 +26,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full additions, fixes and changes.
 - **Optional RAWG ratings** — show a review-score badge (Metacritic where available) on each game's detail view
 - **ROM Hack Patching** — load a ROM you own and search [RetroAchievements' RAPatches repository](https://github.com/RetroAchievements/RAPatches) for hacks and translations for that exact game, verified against your ROM's checksum where the patch format supports it. Results are searchable by name, sorted alphabetically, and scroll rather than cut off. On browsers that support it, saving a patched ROM opens a save dialog defaulting to the same folder as the ROM you loaded
 - **Game Guides** — pull in GameFAQs text guides for a game (via an archive.org mirror) right inside the app, with in-guide search, bookmarks, an adjustable reading font size, and your reading position saved automatically. Save **as many guides as you like per game**, each with its own "% read" progress, and **rename** them so they're easy to tell apart. Don't like the default guide? Copy and paste in any guide you find on GameFAQs yourself, or import your own text, HTML or PDF file — pasted and imported guides get the same reader features
+- **YouTube Integration** - watch a walkthrough in app, with your position saved when you pause to resume later, save all these videos in one convenient place for later
 - **Adjustable app text size** — scale all of the app's text from 80%–160% from the hamburger menu, independent of box art, which stays at its normal size
 - **Social** — see the people you follow on RetroAchievements, what they're playing right now or when they last played, and their recent unlocks with a link to their RA profile
 - **About** — the hamburger menu's About section shows the app version, links to the GitHub and Discord, a contact email, and credits
