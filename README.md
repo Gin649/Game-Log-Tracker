@@ -1,92 +1,97 @@
-# Game Log — Tracker v2.1.0.2  Latest Updates Deployed on Oct 8/26  
+# Game Log Tracker
 
-A lightweight, installable Progressive Web App for tracking your [RetroAchievements](https://retroachievements.org) library — recent activity, in-progress games, completions by year, and playtime — with **no account, no login, and no cloud sync**. You can also log games that aren't on RetroAchievements or that you haven't played yet, including modern titles, right alongside your RA library. Everything stays on your device.
+A web app for keeping track of your RetroAchievements games. It runs in the browser, installs to your home screen like a normal app, and keeps working offline once it has loaded. There's no account to make with me, and everything you add is saved on your own device.
 
-**Live app:** <https://gin649.github.io/Game-Log-Tracker>
+Live app: https://gin649.github.io/Game-Log-Tracker
 
-For any questions and/or an invite to the new public discord where we're discussing this:
+For any questions and/or an invite to the discord where we're discussing this and playing games:
 
-- Discord: <https://discord.gg/dJtAy4pvA>
-- Email me: ginsretrogamehub@gmail.com
+Discord: https://discord.gg/dJtAy4pvA
+Email me: ginsretrogamehub@gmail.com
 
-The same links, the app version and credits are in the app under **Menu → About**.
+## What it does
 
-See [CHANGELOG.md](CHANGELOG.md) for the full additions, fixes and changes.
+**Overview** shows your RetroAchievements profile stats, the games you played recently with playtime and completion, and a feed of your latest unlocks.
 
-## Features
+**Game Library** lists every game you've played on RA. You can search it, sort it, filter by system, and see progress bars, award status and playtime for each game. Playtime comes from RA when it has it. When it doesn't, the app estimates it from your unlock times.
 
-- **Overview** — profile stats, recently played games with live playtime and completion %, and a feed of recent unlocks
-- **Game Library** — every RA game you've actually played, plus any manually-tracked game you've started, searchable, sortable, with progress bars, award status, and estimated/real playtime for each
-- **Beaten by Year** — a yearly breakdown of everything you've completed or mastered, RA and manually-tracked games alike
-- **Backlog** — everything you've added but haven't actually played yet lives here, separate from your Game Library, with the **+ Add game** button. A RetroAchievements game moves itself to the Library automatically the first time RA sees you've played it; a manually-tracked (non-RA) game moves over once you check **Now Playing** on its profile
-- **Pull to refresh** — pull down on the main screens or on a game's profile to refresh your data
-- **Casual / Hardcore toggle** — every stat, list, and progress bar switches between casual and hardcore-only numbers
-- **Manually-tracked games** — add any game you haven't played yet, or that isn't on RetroAchievements (including modern titles), via [RAWG](https://rawg.io) for box art and details. Check off several search results at once to add a batch of RA games in one go. For a non-RA game, pick its platform from a dropdown pulled straight from RAWG's own data — no typing required. Mark a non-RA game **Now Playing** once you start it, and mark it beaten to log the date to Beaten by Year. If a manually-tracked game is on, or later gets added to, RetroAchievements, it merges with real RA data automatically once you play it — or use **Link to RetroAchievements** on its profile to match a non-RA entry up yourself — so tracking just continues, with nothing to redo
-- **Reorder achievements** — drag a game's achievement list into whatever order makes sense to you (or use the ▲▼ buttons), saved automatically per game. Achievements RA has tagged **Missable** show a badge, with a filter to view just those. Every achievement also has a small teal **RA** button that opens its page on RetroAchievements for comments and discussion. Made your own order you're proud of? **Share** it as a short code or a file, and anyone else can **import** it straight into the same game — handy for a forum or Discord
-- **Optional RAWG ratings** — show a review-score badge (Metacritic where available) on each game's detail view
-- **ROM Hack Patching** — load a ROM you own and search [RetroAchievements' RAPatches repository](https://github.com/RetroAchievements/RAPatches) for hacks and translations for that exact game, verified against your ROM's checksum where the patch format supports it. Results are searchable by name, sorted alphabetically, and scroll rather than cut off. On browsers that support it, saving a patched ROM opens a save dialog defaulting to the same folder as the ROM you loaded
-- **Game Guides** — pull in GameFAQs text guides for a game (via an archive.org mirror) right inside the app, with in-guide search, bookmarks, an adjustable reading font size, and your reading position saved automatically. Save **as many guides as you like per game**, each with its own "% read" progress, and **rename** them so they're easy to tell apart. Don't like the default guide? Copy and paste in any guide you find on GameFAQs yourself, or import your own text, HTML or PDF file — pasted and imported guides get the same reader features
-- **YouTube Integration** - watch a walkthrough in app, with your position saved when you pause to resume later, save all these videos in one convenient place for later
-- **Adjustable app text size** — scale all of the app's text from 80%–160% from the hamburger menu, independent of box art, which stays at its normal size
-- **Social** — see the people you follow on RetroAchievements, what they're playing right now or when they last played, and their recent unlocks with a link to their RA profile
-- **About** — the hamburger menu's About section shows the app version, links to the GitHub and Discord, a contact email, and credits
-- **Installable PWA** — works offline once loaded, with a home-screen install prompt on supported browsers (manual "Add to Home Screen" instructions on iOS)
+**Beaten by Year** groups everything you've beaten or mastered by the year you did it.
 
-## How your data works
+**Backlog** is for games you plan to play. You can search RA's game list by system and tick several results to add them in one go. You can also add games from systems RA doesn't track, using RAWG for box art and details. Those games never count toward your RA stats. An RA game moves into the Library once RA shows progress on it. A non-RA game moves when you tick "Now Playing", and marking it complete puts it in Beaten by Year. If a non-RA game shows up on RA later, you can link it to its RA entry.
 
-There's no backend and no account system. Everything — your RetroAchievements credentials, optional RAWG key, manually-added games, custom achievement orders, saved ROMs, guides, and cached playtime data — is stored locally in your browser via **IndexedDB**, using the [Persistent Storage API](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist) to ask the browser not to evict it under storage pressure.
+**Casual / Hardcore** is one switch in the menu that flips every stat, list and progress bar between casual and hardcore numbers.
 
-That means:
+**Social** shows the people you follow on RetroAchievements, who is playing right now, and what they've unlocked lately.
 
-- Your data never leaves your device unless you export it yourself.
-- Switching browsers, devices, or reinstalling the app **will not** bring your data with it automatically.
-- Use **Menu → Data → Export** to download a `.json` backup. Since your data only lives on this device, that export file doubles as your safety net — keep a copy somewhere safe in case anything happens to your device — and it's also how you move everything to a new device or browser: just **Import** it there and you're back up and running.
+### Inside a game
 
-## Connecting your account
+- Achievement list with points and unlock dates, a "!" badge on missable achievements, and a Missable Only filter.
+- Drag achievements (or use the arrow buttons) to put them in your own order. The order is saved per game. You can export it as a .json file and import one someone else made.
+- View Beaten Achievements shows the progression and win condition achievements RA uses to decide whether a game counts as beaten.
+- Walkthrough videos: save YouTube links (single videos or playlists), watch them in the app, and it remembers where you stopped.
+- Game guides: search the GameFAQs text guide archive on archive.org, or import your own .txt, .md, .html or .pdf file. The reader has search, bookmarks, text size, font and theme options, and a button that takes you back to where you were.
+- Need Cheats? opens the game's GameFAQs cheats page.
+- ROM Hacks lets you patch any cartridge based ROM in the browser. It handles BPS, IPS, UPS, PPF, APS and xdelta patches, including ones inside a .zip. Give it your own base ROM and it searches the RetroAchievements RAPatches repo for patches whose checksum matches, applies the one you pick, and checks the result against RA's known hashes when it can. There's also a link to search romhack.ing. Your ROM stays on your device and you download the patched file yourself. I don't host or supply any ROMs.
+- A review score badge from RAWG (optional) and a link to search HowLongToBeat.
+- Tap the box art to zoom in.
 
-You'll need a RetroAchievements **Web API key**, found under your [Control Panel → Keys](https://retroachievements.org/controlpanel.php) on the RA website. Enter your username and that key when prompted — no password is ever needed, and the key is only ever sent directly to RetroAchievements' own API.
+### Other things
 
-### RAWG (ratings + manually-tracked games)
+- Text size controls in the menu.
+- Pull down to refresh.
+- Drag to scroll the system chips with a mouse.
+- Install prompt on browsers that support it, and a short "Add to Home Screen" hint on iOS.
 
-Review-score badges and manually-tracked (non-RA) games both use the [RAWG API](https://rawg.io/apidocs). It's free — get a key from RAWG and add it under **Menu → RAWG Ratings** inside the app. You only need it if you want either of those two things; if you're only using the RetroAchievements side of the app, you can skip it entirely.
+## Getting started
 
-## Project structure
+Open the app, go to the menu and choose Connect RA. Enter your RetroAchievements username and Web API key. You can find the key on RA under Control Panel, then Keys.
 
-The app is a static site — no build step, no dependencies to install. Everything just needs to be served as-is:
+RAWG ratings and adding games from systems RA doesn't track both need a free RAWG key. Get one at https://rawg.io/apidocs and add it under Menu, then RAWG Ratings. The rest of the app works fine without it.
 
-| File | What it does |
-| --- | --- |
-| `index.html` | Page markup only — links out to the CSS/JS files below |
-| `style.css` | All styling |
-| `bootstrap.js` | Runs first: service worker registration, fullscreen handling |
-| `app.js` | Local storage, RetroAchievements API calls, dashboard/library/year views, add game, settings, hamburger menu, app startup |
-| `rom-patcher.js` | ROM Hack Patching feature — the patch engine and its UI panel |
-| `guides.js` | Game Guides feature — the GameFAQs lookup and reader UI |
-| `sw.js` | Service worker — caches the files above for offline use |
-| `manifest.json` | PWA install metadata (icons, name, start URL) |
+## Your data
 
+Everything is stored in your browser using IndexedDB, and the app asks the browser to keep it from being cleared. Your RA login, RAWG key, added games, cached playtime, imported guides and saved videos all live there.
 
-## Tech
+Nothing syncs between devices. If you switch browsers or devices, or clear the site's data, it won't come with you unless you back it up first. Menu, then Data, then Export downloads a .json file, and Import loads it on another device. The backup includes your API keys, so treat the file like a password.
 
-- Vanilla JS, no framework, no bundler
-- IndexedDB for all local storage
-- Service worker for offline caching (`sw.js`)
-- [RetroAchievements Web API](https://api-docs.retroachievements.org/) and [RAWG API](https://rawg.io/apidocs) for data
-- [RAPatches repository](https://github.com/RetroAchievements/RAPatches) for ROM hack patches, and an archive.org mirror of GameFAQs for text guides
+## Privacy and where your requests go
 
-## Privacy
+None of your data is stored by me. Your login, keys and games stay in your browser.
 
-No analytics, no tracking, no accounts. The app talks to the RetroAchievements, RAWG, and archive.org APIs directly from your browser wherever possible. Since RetroAchievements' API doesn't allow direct browser requests, those calls are routed through a small proxy — first a self-hosted one, falling back to public CORS proxies only if that's unavailable — that simply forwards the request and response without logging or storing anything.
+RetroAchievements doesn't let browsers call its API directly, so those requests go through a private proxy I run on Cloudflare Workers. It passes the request along and stores nothing. The only thing it keeps track of is how many different API keys have been used, and that is never shared with me. All I see is a counter. The app itself has no analytics or tracking scripts.
+
+RAWG lets browsers call it directly, so those requests go straight to RAWG.
+
+If a request fails, the app falls back to public proxy services as a last resort (allorigins, codetabs, corsproxy.io, thingproxy and cors.eu.org). That happens for RetroAchievements if my proxy is down or over its free quota, and for RAWG if the direct call fails. I don't run those proxies, and they can see the requests that pass through them, including your API key, because both services want the key in the request URL.
+
+Other sites the app contacts, and why:
+
+- YouTube, for the video player and video titles.
+- archive.org and the Guide Watch index (guides.retromodlab.com), for text guides.
+- Wikidata, to find a game's GameFAQs page.
+- GitHub, to search the RAPatches repo.
+- media.retroachievements.org and RAWG, for images.
+
+GameFAQs, HowLongToBeat and romhack.ing are only opened as links when you tap them.
+
+## Offline and updates
+
+A service worker keeps the app's files cached so it opens without a connection. When a new version is available it downloads in the background and a gold dot appears on the menu button. Nothing reloads on its own. Open the menu and tap Update app when you're ready.
+
+## Thanks
+
+Joey (https://www.joeysretrohandhelds.com) helped make this possible. His JoeyOS app inspired the guide lookup and the ROM patcher, and I used his approach to some features with his permission.
+
+Achievement data comes from RetroAchievements and ratings and box art from RAWG. Text guides come from the GameFAQs archive on archive.org, indexed by the Guide Watch project. Patches come from the RAPatches repo (https://github.com/RetroAchievements/RAPatches). I'm not affiliated with any of them.
+
+## Contact
+
+Questions or bugs: open an issue here, or find me on Discord at https://discord.gg/dJtAy4pvA.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
-## Self-hosting (optional, for advanced users)
+## Disclaimer
 
-Want to run your own copy instead of using the hosted version above? No build step, no dependencies to install — it's a handful of static files (see [Project structure](#project-structure) above).
-
-1. Fork or clone this repo.
-2. In **Settings → Pages**, set the source to your production branch (`main` or `gh-pages`), root folder.
-3. **Important:** `manifest.json`'s `start_url` and `scope`, plus the service worker's registration, are set up for a subpath deployment. If you rename the repository, update `start_url` and `scope` in `manifest.json` to match your new repo name — otherwise the app won't be installable.
-4. Push, wait for the Pages build to finish, and your app will be live at `https://<username>.github.io/<repo-name>/`.
+Claude AI was used to help write the code for this app. The ideas and the approach to each feature are mine, and I have reviewed and tested the code myself.

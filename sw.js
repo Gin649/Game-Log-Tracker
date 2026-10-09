@@ -1,27 +1,36 @@
-// ==============================================================================
-// GAME LOG TRACKER — SERVICE WORKER
-//
-// UPDATE MODEL
-//   • Every release: change CACHE_NAME below (v72 -> v73, ...). That one-line
-//     change makes sw.js differ byte-for-byte, which is how browsers detect a new
-//     version. Nothing else needs to change.
-//   • A new version installs quietly in the background and then WAITS. The page
-//     (bootstrap.js) notices, shows the gold dot on the menu button, and only
-//     when the user taps "Update app" does it send SKIP_WAITING (handled below).
-//   • Until then the old version keeps serving its own matching files, so the
-//     app never runs a mix of old and new code.
-// ==============================================================================
+// Update model: bump CACHE_NAME each release so sw.js changes byte-for-byte and browsers
+// see a new version. The new worker installs in the background and waits; bootstrap.js
+// shows the gold dot, and "Update app" sends SKIP_WAITING. Until then the old version
+// keeps serving its own files, so old and new code never mix.
 
 const CACHE_PREFIX = 'gl-tracker-';
-const CACHE_NAME = CACHE_PREFIX + 'v106';
+const CACHE_NAME = CACHE_PREFIX + 'v107';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './style.css',
-  './bootstrap.js',
-  './app.js',
-  './rom-patcher.js',
-  './guides.js',
+  './css/style.css',
+  './js/bootstrap.js',
+  './js/storage.js',
+  './js/install.js',
+  './js/state.js',
+  './js/ra-api.js',
+  './js/achievements.js',
+  './js/cheats.js',
+  './js/walkthroughs.js',
+  './js/imported-files.js',
+  './js/manual-games.js',
+  './js/rawg.js',
+  './js/views.js',
+  './js/game-modal.js',
+  './js/add-game.js',
+  './js/social.js',
+  './js/settings.js',
+  './js/sync.js',
+  './js/gestures.js',
+  './js/menu.js',
+  './js/startup.js',
+  './js/rom-patcher.js',
+  './js/guides.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -29,12 +38,10 @@ const ASSETS_TO_CACHE = [
   './apple-touch-icon.png'
 ];
 
-// INSTALL: download this version's files into its own versioned cache.
-// {cache:'reload'} skips the browser's HTTP cache, so a fresh deploy can't
-// end up stored under the new version number with stale files (GitHub Pages
-// lets browsers cache files for several minutes).
-// There is deliberately NO skipWaiting() here — the new version waits for the
-// user's go-ahead (see the message handler).
+// Install: cache this version's files in its own cache. cache:'reload' bypasses the HTTP
+// cache so a fresh deploy can't be stored under the new version with stale files (GitHub
+// Pages lets browsers cache for several minutes). No skipWaiting() here on purpose: the
+// new version waits for the user.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
@@ -43,17 +50,16 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// MESSAGE: the page sends this when the user taps "Update app".
+// Sent by the page when the user taps "Update app".
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
 });
 
-// ACTIVATE: delete every OLD version of this app's cache so no stale files
-// remain, then take control of open pages. Only caches starting with
-// "gl-tracker-" are touched — other apps hosted on the same github.io address
-// share this origin's cache storage and must be left alone.
+// Activate: delete older versions of this app's cache and take control of open pages.
+// Only caches with our prefix are touched, since other apps on the same github.io origin
+// share cache storage.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
@@ -66,14 +72,10 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// FETCH:
-// - Anything not from this app's own origin (RetroAchievements, RAWG,
-//   archive.org, etc.) is left entirely alone.
-// - Everything else, INCLUDING the HTML page, is served from THIS version's
-//   cache only. That keeps index.html, app.js and style.css from ever coming
-//   from different versions while an update is waiting. New code arrives only
-//   through the update flow above.
-// - Files that aren't in the cache go to the network as normal.
+// Fetch: cross-origin requests (RA, RAWG, archive.org, ...) are left alone. Everything
+// else, including the HTML, is served from this version's cache so index.html, the scripts and
+// style.css can't come from different versions while an update waits. Anything not
+// cached goes to the network.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (new URL(event.request.url).origin !== self.location.origin) return;

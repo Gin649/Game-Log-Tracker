@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=0.75, minimum-scale=0.3, maximum-scale=5, user-scalable=yes, viewport-fit=cover">
 <title>Game Log — Tracker</title>
 
-<!-- Connects your PWA Settings and Service Worker registration -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#15121f">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
@@ -13,8 +12,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Game Log">
-<script src="bootstrap.js"></script>
-<link rel="stylesheet" href="style.css">
+<script src="js/bootstrap.js"></script>
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div class="wrap">
@@ -58,8 +57,7 @@
     </div>
   </div>
 
-  <!-- RetroAchievements connect modal — moved out of the front screen and
-       into settings, opened from the hamburger menu instead. -->
+  <!-- RetroAchievements connect modal, opened from the hamburger menu -->
   <div id="ra-connect-backdrop" class="modal-backdrop">
     <div class="modal-card" id="ra-connect-card">
       <button class="modal-close" id="ra-connect-close-btn">✕</button>
@@ -300,9 +298,28 @@
   </div>
 </div>
 
-<script src="app.js"></script>
-<script src="rom-patcher.js"></script>
-<script src="guides.js"></script>
+<!-- order matters: each script uses globals from the ones above it -->
+<script src="js/storage.js"></script>
+<script src="js/install.js"></script>
+<script src="js/state.js"></script>
+<script src="js/ra-api.js"></script>
+<script src="js/achievements.js"></script>
+<script src="js/cheats.js"></script>
+<script src="js/walkthroughs.js"></script>
+<script src="js/imported-files.js"></script>
+<script src="js/manual-games.js"></script>
+<script src="js/rawg.js"></script>
+<script src="js/views.js"></script>
+<script src="js/game-modal.js"></script>
+<script src="js/add-game.js"></script>
+<script src="js/social.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/gestures.js"></script>
+<script src="js/menu.js"></script>
+<script src="js/startup.js"></script>
+<script src="js/rom-patcher.js"></script>
+<script src="js/guides.js"></script>
 
 </body>
 </html>
