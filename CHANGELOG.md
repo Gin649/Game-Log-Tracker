@@ -2,6 +2,12 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.1.1
+
+### Added
+- Swipe left or right on a game's profile to go back to wherever you opened it from (Overview, Game Library, Beaten by Year or Backlog). It ignores swipes that start in a text field, the video player, a sideways-scrolling list or while reordering achievements, and when the page is zoomed in.
+- Display, a new item in the menu between Text Size and About. It has an option for a clock and battery readout at the top right of every screen, including the game profile and the guide reader. The battery shows as four pixel hearts that empty as it drops to 75%, 50%, 25% and 5%, with the time next to them. It works in Chrome and Edge on Android and Linux, and it's off by default.
+
 ## v2.1.1.0
 
 ### Changed

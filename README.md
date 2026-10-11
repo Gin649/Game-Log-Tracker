@@ -1,13 +1,8 @@
-# Game Log - Tracker
+# Game Log Tracker
 
-A web app for keeping track of your all your retro games using RetroAchievements and modern games as well. It runs in the browser, installs to your home screen like a normal app, and keeps working offline once it has loaded. There's no account to make with me, and everything you add is saved on your own device.
+A web app for keeping track of your RetroAchievements games. It runs in the browser, installs to your home screen like a normal app, and keeps working offline once it has loaded. There's no account to make with me, and everything you add is saved on your own device.
 
 Live app: https://gin649.github.io/Game-Log-Tracker
-
-For any questions and/or an invite to the discord where we're discussing this and playing games:
-
-Discord: https://discord.gg/dJtAy4pvA
-Email me: ginsretrogamehub@gmail.com
 
 ## What it does
 
@@ -31,14 +26,16 @@ Email me: ginsretrogamehub@gmail.com
 - Walkthrough videos: save YouTube links (single videos or playlists), watch them in the app, and it remembers where you stopped.
 - Game guides: search the GameFAQs text guide archive on archive.org, or import your own .txt, .md, .html or .pdf file. The reader has search, bookmarks, text size, font and theme options, and a button that takes you back to where you were.
 - Need Cheats? opens the game's GameFAQs cheats page.
-- ROM Hacks lets you patch any cartridge based ROM in the browser. It handles BPS, IPS, UPS, PPF, APS and xdelta patches, including ones inside a .zip. Give it your own base ROM and it searches the RetroAchievements RAPatches repo for patches whose checksum matches, applies the one you pick, and checks the result against RA's known hashes when it can. There's also a link to search romhack.ing. Your ROM stays on your device and you download the patched file yourself. I don't host or supply any ROMs.
+- ROM Hacks lets you patch a ROM in the browser. It handles BPS, IPS, UPS, PPF, APS and xdelta patches, including ones inside a .zip. Give it your own base ROM and it searches the RetroAchievements RAPatches repo for patches whose checksum matches, applies the one you pick, and checks the result against RA's known hashes when it can. There's also a link to search romhack.ing. Your ROM stays on your device and you download the patched file yourself. I don't host or supply any ROMs.
 - A review score badge from RAWG (optional) and a link to search HowLongToBeat.
 - Tap the box art to zoom in.
 
 ### Other things
 
 - Text size controls in the menu.
+- An optional clock and battery readout at the top of every screen, turned on under Display in the menu. The battery shows as four pixel hearts that empty as it drops to 75, 50, 25 and 5 percent, with the time next to them. It needs Chrome or Edge on Android or Linux, because other browsers don't let sites read the battery. It's off by default.
 - Pull down to refresh.
+- Swipe left or right on a game's profile to go back to the screen you opened it from.
 - Drag to scroll the system chips with a mouse.
 - Install prompt on browsers that support it, and a short "Add to Home Screen" hint on iOS.
 
@@ -78,9 +75,30 @@ GameFAQs, HowLongToBeat and romhack.ing are only opened as links when you tap th
 
 A service worker keeps the app's files cached so it opens without a connection. When a new version is available it downloads in the background and a gold dot appears on the menu button. Nothing reloads on its own. Open the menu and tap Update app when you're ready.
 
+## Running your own copy
+
+It's a static site with no build step and nothing to install.
+
+```
+index.html
+sw.js            service worker, has to stay in the root
+manifest.json
+icon-*.png, apple-touch-icon.png
+css/style.css
+js/              the scripts, one file per feature
+```
+
+1. Fork or clone the repo.
+2. In Settings, then Pages, set the source to your branch and the root folder.
+3. If you rename the repo, change `start_url` and `scope` in `manifest.json` to match, or the app won't be installable.
+4. The scripts load in the order listed at the bottom of `index.html`, and later ones use globals from earlier ones, so keep that order. If you add or rename a file, update the list in `index.html` and `ASSETS_TO_CACHE` in `sw.js`.
+5. Change `CACHE_NAME` in `sw.js` every time you deploy, or returning visitors will keep their old cached copy.
+
+The RA proxy address in `js/ra-api.js` is mine and is set up for this site. A copy on a different address will fall back to the public proxies. To avoid that, deploy your own Worker that forwards RA API calls and change the URL there.
+
 ## Thanks
 
-Joey (https://www.joeysretrohandhelds.com) helped make this possible. His JoeyOS app inspired the guide lookup and the ROM patcher, and I used his approach to some features with his permission.
+Joey (https://www.joeysretrohandhelds.com) helped make this possible. His JoeyOS app inspired the guide lookup and the ROM patcher, and I used his approach with his permission.
 
 Achievement data comes from RetroAchievements and ratings and box art from RAWG. Text guides come from the GameFAQs archive on archive.org, indexed by the Guide Watch project. Patches come from the RAPatches repo (https://github.com/RetroAchievements/RAPatches). I'm not affiliated with any of them.
 
@@ -91,7 +109,3 @@ Questions or bugs: open an issue here, or find me on Discord at https://discord.
 ## License
 
 MIT. See [LICENSE](LICENSE).
-
-## Disclaimer
-
-Claude AI was used to help write the code for this app. The ideas and the approach to each feature are mine, and I have reviewed and tested the code myself.

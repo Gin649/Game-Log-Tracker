@@ -27,6 +27,7 @@ const ASSETS_TO_CACHE = [
   './js/settings.js',
   './js/sync.js',
   './js/gestures.js',
+  './js/device-status.js',
   './js/menu.js',
   './js/startup.js',
   './js/rom-patcher.js',

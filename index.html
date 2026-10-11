@@ -10,8 +10,8 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Game Log Tracker">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Game Log">
 <script src="js/bootstrap.js"></script>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -52,7 +52,14 @@
             <button class="textsize-reset" id="textsize-reset">Reset</button>
           </div>
         </div>
-        <button class="dropdown-item" id="btn-about-open">About</button>
+        <button class="dropdown-item dropdown-heading dropdown-plain" id="btn-display-heading">Display <span id="display-heading-arrow">▸</span></button>
+        <div id="display-submenu" style="display:none;">
+          <div class="display-row">
+            <span>Clock and battery<span class="display-note" id="display-status-note">Android and Linux only</span></span>
+            <button class="display-switch" id="display-status-switch" role="switch" aria-checked="false" aria-label="Clock and battery"></button>
+          </div>
+        </div>
+        <button class="dropdown-item dropdown-gold" id="btn-about-open">About</button>
       </div>
     </div>
   </div>
@@ -298,6 +305,8 @@
   </div>
 </div>
 
+<div class="device-status" id="device-status" aria-hidden="true"><span class="ds-hearts" id="status-hearts"></span><span id="status-time"></span></div>
+
 <!-- order matters: each script uses globals from the ones above it -->
 <script src="js/storage.js"></script>
 <script src="js/install.js"></script>
@@ -316,6 +325,7 @@
 <script src="js/settings.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/gestures.js"></script>
+<script src="js/device-status.js"></script>
 <script src="js/menu.js"></script>
 <script src="js/startup.js"></script>
 <script src="js/rom-patcher.js"></script>
