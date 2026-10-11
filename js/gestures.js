@@ -1,4 +1,4 @@
-// Click-and-drag scrolling on desktop, and pull-to-refresh.
+// Click-and-drag scrolling on desktop, pull-to-refresh, and swipe to go back from a game profile.
 
 // Click-and-drag horizontal scrolling (desktop mouse only)
 // Touch already pans these regions natively via the browser, so this only
@@ -199,5 +199,47 @@ enableDragToScroll($('#system-chips')); // the console-name chips above the libr
       indicator.classList.remove('over-profile');
     }
     currentPull = 0;
+  }, { passive: true });
+})();
+
+// Swipe left or right on the game profile to go back to where you came from. The profile is a
+// full-screen layer over the page, so closing it drops you back on the tab you opened it from.
+(function(){
+  const MIN_DISTANCE = 80; // px
+  const MAX_TIME = 700;    // ms, so a slow drag isn't mistaken for a swipe
+  const profile = $('#modal-backdrop');
+  let start = null;
+
+  // Leave alone anything that needs sideways movement itself: form fields, the video player,
+  // achievement reordering, and lists that scroll horizontally.
+  function ignoresSwipe(target){
+    if(target.closest('input, textarea, select, iframe, .yt-player-wrap')) return true;
+    const row = target.closest('.ach-row');
+    if(row && row.querySelector('.ach-reorder-controls')) return true;
+    for(let el = target; el && el !== profile; el = el.parentElement){
+      const overflowX = getComputedStyle(el).overflowX;
+      if((overflowX === 'auto' || overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 1) return true;
+    }
+    return false;
+  }
+  const pageIsZoomed = () => window.visualViewport && window.visualViewport.scale > 1.05;
+
+  profile.addEventListener('touchstart', (e) => {
+    start = null;
+    if(e.touches.length !== 1 || pageIsZoomed() || ignoresSwipe(e.target)) return;
+    start = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
+  }, { passive: true });
+  profile.addEventListener('touchmove', (e) => {
+    // A second finger (pinch) or a drag already claimed by reordering cancels the swipe.
+    if(e.touches.length > 1 || e.defaultPrevented) start = null;
+  }, { passive: true });
+  profile.addEventListener('touchend', (e) => {
+    if(!start) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    const quick = Date.now() - start.time < MAX_TIME;
+    start = null;
+    if(quick && Math.abs(dx) >= MIN_DISTANCE && Math.abs(dy) < Math.abs(dx) * 0.5) closeGameModal();
   }, { passive: true });
 })();
