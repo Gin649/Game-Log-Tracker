@@ -2,6 +2,15 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.1.2
+
+### Added
+- Subsets, a new section in a game's profile under View Beaten Achievements. It only appears for games that have RetroAchievements subsets, and it lists all of them, whether you've played them or not. Each subset opens its own achievement list with the same Reorder and Missable Only options, and you can export and import a custom order for it like the main list.
+- Beaten and Mastered games on the Overview now have a small label on the corner of their box art.
+
+### Changed
+- Subsets no longer show up as separate games in Overview and Game Library. They're in their base game's profile instead.
+
 ## v2.1.1.1
 
 ### Added

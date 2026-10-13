@@ -1,14 +1,14 @@
 # Game Log Tracker
 
-A web app for keeping track of all your games by tracking retroachievements and completions. It includes so many other features to make playing and beating games fun and easy. It runs in the browser and installs to your home screen. Everything you add is saved on your own device and can be exported wherever you need it. 
+A web app for keeping track of all your games by tracking retroachievements and completions. It includes so many other features to make playing and beating games fun and easy. It runs in the browser and installs to your home screen. Everything you add is saved on your own device and can be exported wherever you need it.
 
 Live app: https://gin649.github.io/Game-Log-Tracker
 
-Play some games with us. Join the discord, invite link at bottom of the Readme. 
+Play some games with us. Join the discord, invite link at bottom of the Readme.
 
 ## What it does
 
-**Overview** shows your RetroAchievements profile stats, the games you played recently with playtime and completion, and a feed of your latest unlocks.
+**Overview** shows your RetroAchievements profile stats, the games you played recently with playtime and completion, and a feed of your latest unlocks. Games you've beaten or mastered get a small label on the corner of their box art.
 
 **Game Library** lists every game you've played on RA. You can search it, sort it, filter by system, and see progress bars, award status and playtime for each game. Playtime comes from RA when it has it. When it doesn't, the app estimates it from your unlock times.
 
@@ -25,6 +25,7 @@ Play some games with us. Join the discord, invite link at bottom of the Readme.
 - Achievement list with points and unlock dates, a "!" badge on missable achievements, and a Missable Only filter.
 - Drag achievements (or use the arrow buttons) to put them in your own order. The order is saved per game. You can export it as a .json file and import one someone else made.
 - View Beaten Achievements shows the progression and win condition achievements RA uses to decide whether a game counts as beaten.
+- Subsets: if a game has RetroAchievements subsets, a Subsets section lists all of them, whether you've played them or not. Each one opens its own achievement list with the same reordering and order export and import. Subsets don't show up as separate rows in Overview or Game Library.
 - Walkthrough videos: save YouTube links (single videos or playlists), watch them in the app, and it remembers where you stopped.
 - Game guides: search the GameFAQs text guide archive on archive.org, or import your own .txt, .md, .html or .pdf file. The reader has search, bookmarks, text size, font and theme options, and a button that takes you back to where you were.
 - Need Cheats? opens the game's GameFAQs cheats page.
@@ -107,8 +108,6 @@ Achievement data comes from RetroAchievements and ratings and box art from RAWG.
 ## Contact
 
 Questions or bugs: open an issue here, or find me on Discord at https://discord.gg/dJtAy4pvA.
-
-Email me at ginsretrogamehub@gmail.com
 
 ## License
 

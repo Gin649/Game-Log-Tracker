@@ -15,6 +15,7 @@ const ASSETS_TO_CACHE = [
   './js/state.js',
   './js/ra-api.js',
   './js/achievements.js',
+  './js/subsets.js',
   './js/cheats.js',
   './js/walkthroughs.js',
   './js/imported-files.js',
