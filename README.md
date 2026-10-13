@@ -108,6 +108,8 @@ Achievement data comes from RetroAchievements and ratings and box art from RAWG.
 
 Questions or bugs: open an issue here, or find me on Discord at https://discord.gg/dJtAy4pvA.
 
+Email me at ginsretrogamehub@gmail.com
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
