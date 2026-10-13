@@ -17,7 +17,7 @@
     --radius:3px;
     --status-h:0px;
   }
-  body.show-status{--status-h:26.4px;}
+  body.show-status{--status-h:22px;}
 
   *{box-sizing:border-box;}
   html{font-size:16px;} /* base for all the rem font sizes below, changed at runtime to scale app-wide text size */
@@ -60,7 +60,7 @@
   }
   .brand .menu-wrap{margin-left:auto;}
   .brand .mark{
-    width:108px;height:108px;border-radius:8px;flex-shrink:0;display:block;
+    width:90px;height:90px;border-radius:8px;flex-shrink:0;display:block;
   }
   .brand .name{font-family:'Space Mono',monospace;font-size:1.0625rem;color:var(--muted);}
 
@@ -179,12 +179,12 @@
      those layers leave room for it through --status-h, which is 0 unless the readout is on. */
   .device-status{
     display:none;position:fixed;top:env(safe-area-inset-top, 0px);right:calc(8px + env(safe-area-inset-right, 0px));
-    height:26.4px;z-index:1000;align-items:center;gap:8.4px;pointer-events:none;
-    font-family:'Space Mono',monospace;font-size:13.2px;font-weight:700;color:var(--text);
+    height:22px;z-index:1000;align-items:center;gap:7px;pointer-events:none;
+    font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:var(--text);
     text-shadow:0 1px 2px rgba(0,0,0,0.85);
   }
   body.show-status .device-status{display:flex;}
-  .device-status .ds-hearts{display:flex;align-items:center;gap:2.4px;}
+  .device-status .ds-hearts{display:flex;align-items:center;gap:2px;}
 
   .pull-refresh-indicator{
     position:fixed;top:0;left:0;right:0;height:0;overflow:hidden;
@@ -251,6 +251,7 @@
     transition:border-color 0.15s;
   }
   .cart:hover{border-color:var(--gold-dim);}
+  .cart .art-wrap{position:relative;line-height:0;}
   .cart .art{
     width:100%;aspect-ratio:1/1;object-fit:cover;background:var(--bg-alt);
     display:block;
@@ -344,6 +345,11 @@
   .pill-teal{background:rgba(89,201,165,0.15);color:var(--teal);}
   .pill-gold{background:rgba(228,169,63,0.15);color:var(--gold);}
   .pill-muted{background:rgba(148,141,179,0.12);color:var(--muted);}
+  /* Beaten / Mastered label on the corner of an Overview card's box art. */
+  .pill.pill-corner{
+    position:absolute;top:4px;right:4px;font-size:0.4rem;line-height:1.3;padding:0.24em 0.7em;
+    background:rgba(21,18,31,0.85);border:1px solid currentColor;
+  }
 
   /* Tabs */
   .tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px;}
@@ -509,6 +515,20 @@
   .ach-share-footer-btn:hover{color:var(--gold);opacity:1;}
   .ach-share-footer-error{padding:0 12px 12px;text-align:center;font-size:0.75rem;color:var(--danger);}
 
+  .subsets-list{margin-top:12px;display:none;flex-direction:column;gap:8px;}
+  .subset-head{
+    width:100%;display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-alt);
+    border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Space Mono',monospace;
+    text-align:left;cursor:pointer;
+  }
+  .subset-head:hover{border-color:var(--gold);}
+  .subset-head .arrow{transition:transform 0.15s;font-size:0.8625rem;}
+  .subset-head.open .arrow{transform:rotate(90deg);}
+  .subset-icon{width:36px;height:36px;border-radius:3px;object-fit:cover;background:var(--panel);flex-shrink:0;}
+  .subset-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .subset-name{font-size:0.8125rem;font-weight:700;}
+  .subset-meta{font-size:0.6562rem;color:var(--muted);}
+  .subset-item .achievements-list{margin-top:8px;}
   .achievements-list-loading{padding:14px;text-align:center;color:var(--muted);font-size:0.8625rem;}
 
   .guide-panel{
