@@ -99,6 +99,10 @@ async function loadAll(opts){
     $('#lib-table-wrap').innerHTML = `<div class="error-box">Couldn't display your library: ${e.message}</div>`;
   }
 
+  // Redraw Overview now that the library is known, so award labels and hidden subsets apply right away.
+  try{ if(recentGamesData.length) renderRecentGames(recentGamesData); }
+  catch(e){ console.error('renderRecentGames failed:', e); }
+
   try{ renderByYear(); }
   catch(e){
     console.error('renderByYear failed:', e);
@@ -220,6 +224,7 @@ $('#btn-hardcore-toggle').addEventListener('click', () => {
     const beatenAchWrap = document.getElementById('modal-beaten-achievements');
     if(beatenAchWrap && list) beatenAchWrap.innerHTML = renderBeatenAchievementsList(list, statsMode === 'hardcore');
   }
+  refreshOpenSubsetPanels();
 });
 $('#lib-search').addEventListener('input', renderLibrary);
 $('#backlog-search').addEventListener('input', renderBacklog);

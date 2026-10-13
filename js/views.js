@@ -63,13 +63,14 @@ function renderProfile(p){
     `;
 }
 
-function awardPill(kind){
+// Label and color class for a game's award in the current mode, or null when it has none.
+function awardInfo(kind){
   if(statsMode === 'hardcore'){
     // From a hardcore-only lens, softcore-earned completions don't count,
     // only games actually beaten/mastered in hardcore mode show as done.
-    if(kind === 'mastered') return '<span class="pill pill-gold">Mastered</span>';
-    if(kind === 'beaten-hardcore') return '<span class="pill pill-gold">Beaten (HC)</span>';
-    return '<span class="pill pill-muted">In progress</span>';
+    if(kind === 'mastered') return { label: 'Mastered', cls: 'pill-gold' };
+    if(kind === 'beaten-hardcore') return { label: 'Beaten (HC)', cls: 'pill-gold' };
+    return null;
   }
   const map = {
     'mastered':        { label: 'Mastered',    cls: 'pill-teal' },
@@ -77,15 +78,21 @@ function awardPill(kind){
     'beaten-hardcore': { label: 'Beaten (HC)',  cls: 'pill-gold' },
     'beaten-softcore': { label: 'Beaten',       cls: 'pill-teal' },
   };
-  const m = map[kind];
-  if(!m) return '<span class="pill pill-muted">In progress</span>';
-  return `<span class="pill ${m.cls}">${m.label}</span>`;
+  return map[kind] || null;
+}
+
+function awardPill(kind){
+  const info = awardInfo(kind);
+  if(!info) return '<span class="pill pill-muted">In progress</span>';
+  return `<span class="pill ${info.cls}">${info.label}</span>`;
 }
 
 function renderRecentGames(games){
   const el = $('#recent-games');
-  if(!games || games.length === 0){ el.innerHTML = '<div class="empty">No recently played games found.</div>'; return; }
-  el.innerHTML = games.slice(0, 12).map(g => {
+  const shown = (games || []).filter(g => !isSubsetGame(g)); // subsets live in their base game's profile
+  if(shown.length === 0){ el.innerHTML = '<div class="empty">No recently played games found.</div>'; return; }
+  const libById = new Map(libraryData.map(x => [x.GameID, x]));
+  el.innerHTML = shown.slice(0, 12).map(g => {
     const total = Number(g.NumPossibleAchievements || g.AchievementsTotal || 0);
     const earned = statsMode === 'hardcore' ? Number(g.NumAchievedHardcore || 0) : Number(g.NumAchieved || 0);
     const pct = total ? Math.round((earned/total)*100) : 0;
@@ -93,9 +100,13 @@ function renderRecentGames(games){
     const hoursHtml = est
       ? `<span class="val" style="color:var(--gold)">${est.real ? '' : '≈ '}${formatDuration(est)}</span>`
       : '<span class="pt-pending" title="Loading playtime…"></span>';
+    // Beaten / Mastered label on the corner of the box art
+    const lib = libById.get(g.GameID);
+    const award = lib && isGameAwarded(lib) ? awardInfo(lib.HighestAwardKind) : null;
+    const badge = award ? `<span class="pill pill-corner ${award.cls}">${award.label.replace(' (HC)', '')}</span>` : '';
     return `
         <div class="cart" data-game-id="${g.GameID}">
-          <img class="art" src="${imgUrl(g.ImageIcon)}" alt="${g.Title}">
+          <div class="art-wrap"><img class="art" src="${imgUrl(g.ImageIcon)}" alt="${g.Title}">${badge}</div>
           <div class="body">
             <p class="title">${g.Title}</p>
             <p class="console">${g.ConsoleName}</p>
@@ -216,6 +227,7 @@ function renderLibrary(){
   const searchVal = foldText($('#lib-search').value || '');
   let rows = libraryData.filter(g =>
     !isBacklogGame(g) &&
+    !isSubsetGame(g) &&
     foldText(g.Title).includes(searchVal) &&
     (systemFilter === 'All' || g.ConsoleName === systemFilter)
   );

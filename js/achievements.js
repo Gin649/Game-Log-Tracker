@@ -64,7 +64,17 @@ function achRowHtml(a, isLocked, isHardcoreMode, reorderMode){
 // set later (not in the saved array) are appended at the end; IDs that no
 // longer exist are ignored.
 const achOrderCache = {}; // gameId -> array of IDs, or null when no custom order
-let achReorderMode = false;
+
+// Filter and reorder state for each achievements list, keyed by game ID. A game's own list
+// and its subset lists can be open at the same time, so they can't share one set of flags.
+const achPanelStates = {};
+function achState(gameId){
+  if(!achPanelStates[gameId]) achPanelStates[gameId] = { missableOnly: false, reorderMode: false, importError: '' };
+  return achPanelStates[gameId];
+}
+function resetAchState(gameId){
+  delete achPanelStates[gameId];
+}
 function achOrderKey(gameId){
   return `ach-order:${creds.username.trim().toLowerCase()}:${gameId}`;
 }
@@ -156,9 +166,7 @@ function renderAchievementsList(list, isHardcoreMode, order, reorderMode){
 // Wraps renderAchievementsList with the "Missable Only" filter bar RA's own
 // site shows, only rendered when the set actually has any missable
 // achievements, since most sets on RA haven't been typed at all yet.
-let achMissableOnly = false;
-let achImportError = '';
-function renderAchievementsPanel(list, isHardcoreMode, missableOnly, order, reorderMode, gameId, gameTitle){
+function renderAchievementsPanel(list, isHardcoreMode, missableOnly, order, reorderMode, gameId, gameTitle, importError){
   if(!list || list.length === 0) return '<div class="achievements-list-loading">No achievement data available.</div>';
   const missableCount = list.filter(isMissable).length;
   const showMissable = missableCount > 0 && !reorderMode;
@@ -183,7 +191,7 @@ function renderAchievementsPanel(list, isHardcoreMode, missableOnly, order, reor
   const shareFooterBtns = (order ? `<button class="ach-share-footer-btn" id="ach-share-download" type="button">⇪ Export order (file)</button>` : '')
     + `<button class="ach-share-footer-btn" id="ach-import-file-btn" type="button">⇩ Import order (file)</button>`;
   const shareFooter = `<div class="ach-share-footer-row">${shareFooterBtns}</div>
-      ${achImportError ? `<div class="ach-share-footer-error">${achImportError}</div>` : ''}`;
+      ${importError ? `<div class="ach-share-footer-error">${importError}</div>` : ''}`;
 
   return filterBar + body + shareFooter;
 }
@@ -191,42 +199,42 @@ function renderAchievementsPanel(list, isHardcoreMode, missableOnly, order, reor
 // Shared by the initial "View Achievements" open and the casual/hardcore
 // toggle's refresh, so the missable filter and reorder state survive a mode
 // switch instead of resetting back to the full list.
-function renderAchWrapContent(achWrap, gameId){
+function renderAchWrapContent(achWrap, gameId, gameTitle){
   const list = achievementsListCache[gameId];
   if(!achWrap || !list) return;
+  const state = achState(gameId);
   const order = achOrderCache[gameId] || null;
   const local = findGameLocal(gameId);
-  const gameTitle = local ? local.Title : '';
-  achWrap.innerHTML = renderAchievementsPanel(list, statsMode === 'hardcore', achMissableOnly, order, achReorderMode, gameId, gameTitle);
+  const title = gameTitle || (local ? local.Title : '');
+  achWrap.innerHTML = renderAchievementsPanel(list, statsMode === 'hardcore', state.missableOnly, order, state.reorderMode, gameId, title, state.importError);
   const toggleBtn = achWrap.querySelector('#ach-missable-toggle');
   if(toggleBtn){
     toggleBtn.addEventListener('click', () => {
-      achMissableOnly = !achMissableOnly;
-      renderAchWrapContent(achWrap, gameId);
+      state.missableOnly = !state.missableOnly;
+      renderAchWrapContent(achWrap, gameId, title);
     });
   }
   const reorderBtn = achWrap.querySelector('#ach-reorder-toggle');
   if(reorderBtn){
     reorderBtn.addEventListener('click', () => {
-      achReorderMode = !achReorderMode;
-      if(achReorderMode) achMissableOnly = false; // can't reorder a filtered subset
-      renderAchWrapContent(achWrap, gameId);
+      state.reorderMode = !state.reorderMode;
+      if(state.reorderMode) state.missableOnly = false; // can't reorder a filtered subset
+      renderAchWrapContent(achWrap, gameId, title);
     });
   }
   const resetBtn = achWrap.querySelector('#ach-reorder-reset');
   if(resetBtn){
     resetBtn.addEventListener('click', async () => {
       await clearAchOrder(gameId);
-      renderAchWrapContent(achWrap, gameId);
+      renderAchWrapContent(achWrap, gameId, title);
     });
   }
   const shareDownloadBtn = achWrap.querySelector('#ach-share-download');
   if(shareDownloadBtn){
     shareDownloadBtn.addEventListener('click', () => {
-      const order = achOrderCache[gameId];
-      if(!order) return;
-      const local = findGameLocal(gameId);
-      downloadAchOrderFile(gameId, local ? local.Title : '', order);
+      const saved = achOrderCache[gameId];
+      if(!saved) return;
+      downloadAchOrderFile(gameId, title, saved);
     });
   }
   const importFileBtn = achWrap.querySelector('#ach-import-file-btn');
@@ -236,20 +244,20 @@ function renderAchWrapContent(achWrap, gameId){
         try{
           const parsed = await readAchOrderFile(file);
           if(parsed.gameId !== Number(gameId)){
-            achImportError = 'This order file is for a different game.';
+            state.importError = 'This order file is for a different game.';
           }else{
             await saveAchOrder(gameId, parsed.ids);
-            achImportError = '';
-            achReorderMode = false; // show the imported order applied, not mid-edit
+            state.importError = '';
+            state.reorderMode = false; // show the imported order applied, not mid-edit
           }
         }catch(e){
-          achImportError = e.message;
+          state.importError = e.message;
         }
-        renderAchWrapContent(achWrap, gameId);
+        renderAchWrapContent(achWrap, gameId, title);
       });
     });
   }
-  if(achReorderMode) wireAchReorder(achWrap, gameId);
+  if(state.reorderMode) wireAchReorder(achWrap, gameId);
 }
 
 // Drag (pointer events, touch + mouse) and ▲▼ buttons. Every change writes

@@ -329,6 +329,7 @@ async function openGameModal(gameId){
   card.dataset.gameId = gameId;
   openAchievementsGameId = null;
   openBeatenAchievementsGameId = null;
+  clearSubsetPanels();
   $('#modal-backdrop').classList.add('open');
   card.innerHTML = `
       <button class="modal-close" id="modal-close-btn">✕</button>
@@ -411,6 +412,9 @@ async function openGameModal(gameId){
       <button class="btn-view-achievements" id="modal-view-beaten-ach-btn"><span class="arrow">▸</span> View Beaten Achievements</button>
       <div class="achievements-list" id="modal-beaten-achievements" style="display:none;"></div>
 
+      <button class="btn-view-achievements" id="modal-subsets-btn" style="display:none;"><span class="arrow">▸</span> Subsets</button>
+      <div class="subsets-list" id="modal-subsets"></div>
+
       <button class="btn-view-achievements" id="modal-guide-btn"><span class="arrow">▸</span> Game Guide</button>
       <div class="guide-panel" id="modal-guide-panel" style="display:none;"></div>
 
@@ -474,9 +478,7 @@ async function openGameModal(gameId){
     achBtn.classList.toggle('open', nowOpen);
     if(nowOpen && !achLoaded){
       achLoaded = true;
-      achMissableOnly = false; // fresh game's panel starts unfiltered
-      achImportError = '';
-      achReorderMode = false;
+      resetAchState(gameId); // a fresh game's list starts unfiltered and not in reorder mode
       achWrap.innerHTML = '<div class="achievements-list-loading">Loading achievements…</div>';
       try{
         const list = await getAchievementsList(gameId);
@@ -517,12 +519,15 @@ async function openGameModal(gameId){
       }
     }
   });
+
+  setupSubsetsUI(card, gameId, ext);
 }
 
 function closeGameModal(){
   $('#modal-backdrop').classList.remove('open');
   openAchievementsGameId = null;
   openBeatenAchievementsGameId = null;
+  clearSubsetPanels();
   stopWalkthroughPlayers();
   closeGuideReader();
 }
