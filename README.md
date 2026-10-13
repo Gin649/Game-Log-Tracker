@@ -1,8 +1,10 @@
 # Game Log Tracker
 
-A web app for keeping track of your RetroAchievements games. It runs in the browser, installs to your home screen like a normal app, and keeps working offline once it has loaded. There's no account to make with me, and everything you add is saved on your own device.
+A web app for keeping track of all your games by tracking retroachievements and completions. It includes so many other features to make playing and beating games fun and easy. It runs in the browser and installs to your home screen. Everything you add is saved on your own device and can be exported wherever you need it. 
 
 Live app: https://gin649.github.io/Game-Log-Tracker
+
+Play some games with us. Join the discord, invite link at bottom of the Readme. 
 
 ## What it does
 
