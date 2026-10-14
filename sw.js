@@ -4,7 +4,7 @@
 // keeps serving its own files, so old and new code never mix.
 
 const CACHE_PREFIX = 'gl-tracker-';
-const CACHE_NAME = CACHE_PREFIX + 'v111';
+const CACHE_NAME = CACHE_PREFIX + 'v113';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -41,14 +41,17 @@ const ASSETS_TO_CACHE = [
   './apple-touch-icon.png'
 ];
 
-// Install: cache this version's files in its own cache. cache:'reload' bypasses the HTTP
-// cache so a fresh deploy can't be stored under the new version with stale files (GitHub
-// Pages lets browsers cache for several minutes). No skipWaiting() here on purpose: the
-// new version waits for the user.
+// Install: cache this version's files in its own cache. cache:'no-cache' makes the browser
+// ask the server whether each file changed: it always gets the current file (so a fresh
+// deploy can't be stored with stale ones, which GitHub Pages' several-minute browser caching
+// would otherwise allow), but an unchanged file comes back as a tiny "304 Not Modified"
+// instead of being downloaded again. A release that touches a few files now downloads just
+// those, not the whole ~700 KB app. (cache:'reload' re-downloaded everything every time.)
+// No skipWaiting() here on purpose: the new version waits for the user.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll(ASSETS_TO_CACHE.map((url) => new Request(url, { cache: 'reload' })))
+      cache.addAll(ASSETS_TO_CACHE.map((url) => new Request(url, { cache: 'no-cache' })))
     )
   );
 });

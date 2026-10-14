@@ -10,6 +10,7 @@ Notable changes to Game Log Tracker, newest first.
 - `tools/build-ra-guides-index.mjs` builds `ra-guides-index.json`, the list of guide pages in the wiki. The scheduled GitHub Action (now "Build RA indexes") refreshes it every day next to the RAPatches index.
 
 ### Fixed
+- Social opens much faster. The list is saved on your device, so it shows straight away with everyone's last known status and updates behind it, instead of starting from a blank list every time. A refresh now only re-checks people who were active in the last day, plus anyone whose saved status has gone stale (15 minutes for people active this month, 2 hours for everyone else), instead of every person. The Refresh button still re-checks everyone. Statuses also load six at a time instead of four, and a failed refresh keeps the old status instead of blanking it.
 - Game Library's "Last played" now matches Overview. It used to show only the date of your last achievement unlock, so playing a game without unlocking anything never moved it up. It now uses whichever is newer, the unlock or the actual last play.
 
 ### Changed
