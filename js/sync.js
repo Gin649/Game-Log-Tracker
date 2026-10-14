@@ -47,6 +47,18 @@ async function loadAll(opts){
       lastPlayed: g.LastPlayed || g.MostRecentAwardedDate || null,
     }));
 
+    // The completion-progress list only knows when a game last earned an achievement, not when
+    // it was last played, so a session with no unlocks never moved a game up the Library. The
+    // recently-played list (the one Overview uses) has the real play time, so take whichever
+    // date is newer. Dates are stored in one format so the column sorts correctly.
+    const recentPlayed = new Map(recentGamesData.map(r => [String(r.GameID), r.LastPlayed]));
+    libraryData.forEach(g => {
+      const a = parseRADate(g.lastPlayed);
+      const b = parseRADate(recentPlayed.get(String(g.GameID)));
+      const best = (a && b) ? (b.getTime() > a.getTime() ? b : a) : (a || b);
+      g.lastPlayed = best ? best.toISOString() : null;
+    });
+
     // Merge in manually-added games not yet actually played; drop any that
     // now show up for real (the user has since earned progress on them).
     const realIds = new Set(libraryData.map(g => g.GameID));
