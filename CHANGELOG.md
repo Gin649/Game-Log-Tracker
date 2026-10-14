@@ -2,6 +2,17 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.1.3
+
+### Added
+- RetroAchievements Guides, in a game's Game Guide panel directly below the GameFAQs Archive download. "Find on RetroAchievements Guides" looks the game up in the guides wiki that RA set developers write (github.com/RetroAchievements/guides), lists the pages that match its title and console, and saves the one you pick to your device. There is also a search box over every guide in the wiki, for games whose guide uses a different name, and a "GitHub ↗" link on each result to open the page itself.
+- Saved RA guides open in the same reader as the others, with search, bookmarks and text options. Their table of contents links jump within the guide, and the list shows them as "RA GUIDE".
+- `tools/build-ra-guides-index.mjs` builds `ra-guides-index.json`, the list of guide pages in the wiki. The scheduled GitHub Action (now "Build RA indexes") refreshes it every day next to the RAPatches index.
+
+### Changed
+- Links inside HTML guides no longer navigate the app away. `#section` links scroll the reader, and web links open in the browser. This applies to imported HTML guides too.
+- Importing an HTML guide now also removes iframes, objects, embeds, forms, and `data:` links, on top of the scripts and event handlers it already removed.
+
 ## v2.1.1.2
 
 ### Added

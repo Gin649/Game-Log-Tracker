@@ -27,7 +27,7 @@ Play some games with us. Join the discord, invite link at bottom of the Readme.
 - View Beaten Achievements shows the progression and win condition achievements RA uses to decide whether a game counts as beaten.
 - Subsets: if a game has RetroAchievements subsets, a Subsets section lists all of them, whether you've played them or not. Each one opens its own achievement list with the same reordering and order export and import. Subsets don't show up as separate rows in Overview or Game Library.
 - Walkthrough videos: save YouTube links (single videos or playlists), watch them in the app, and it remembers where you stopped.
-- Game guides: search the GameFAQs text guide archive on archive.org, or import your own .txt, .md, .html or .pdf file. The reader has search, bookmarks, text size, font and theme options, and a button that takes you back to where you were.
+- Game guides: search the GameFAQs text guide archive on archive.org, download an achievement guide from the RetroAchievements guides wiki, or import your own .txt, .md, .html or .pdf file. The reader has search, bookmarks, text size, font and theme options, and a button that takes you back to where you were.
 - Need Cheats? opens the game's GameFAQs cheats page.
 - ROM Hacks lets you patch a ROM in the browser. It handles BPS, IPS, UPS, PPF, APS and xdelta patches, including ones inside a .zip. Give it your own base ROM and it searches the RetroAchievements RAPatches repo for patches whose checksum matches, applies the one you pick, and checks the result against RA's known hashes when it can. There's also a link to search romhack.ing. Your ROM stays on your device and you download the patched file yourself. I don't host or supply any ROMs.
 - A review score badge from RAWG (optional) and a link to search HowLongToBeat.
@@ -69,7 +69,7 @@ Other sites the app contacts, and why:
 - YouTube, for the video player and video titles.
 - archive.org and the Guide Watch index (guides.retromodlab.com), for text guides.
 - Wikidata, to find a game's GameFAQs page.
-- GitHub, to search the RAPatches repo.
+- GitHub, to search the RAPatches repo and to download guides from the RetroAchievements guides wiki.
 - media.retroachievements.org and RAWG, for images.
 
 GameFAQs, HowLongToBeat and romhack.ing are only opened as links when you tap them.
