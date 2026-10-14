@@ -5,6 +5,7 @@
 const SUBSET_TITLE = /^(.*?)\s*\[Subset\s*-\s*(.+?)\]\s*$/i;
 const subsetListCache = {};          // base game ID -> its subsets
 const openSubsetPanels = new Map();  // subset game ID -> { wrap, title, meta, subset } for lists that are open
+const subsetMetaEls = new Map();     // subset game ID -> { meta, subset } for every row in the open Subsets list
 
 function subsetParts(title){
   const m = SUBSET_TITLE.exec(String(title || ''));
@@ -43,11 +44,29 @@ async function findSubsets(baseId, baseTitle, consoleId){
   return found;
 }
 
+// Always shows earned/total with a percentage. Until the achievement list has loaded
+// we don't know the earned count yet, so it shows a placeholder instead of a bare total.
 function subsetMetaText(subset, list){
-  if(!list) return `${subset.count} achievements · ${subset.points} pts`;
+  if(!list) return `?/${subset.count} achievements earned \u00b7 ${subset.points} pts`;
   const hardcore = statsMode === 'hardcore';
   const earned = list.filter(a => hardcore ? a.DateEarnedHardcore : a.DateEarned).length;
-  return `${earned}/${list.length} earned · ${subset.points} pts`;
+  const pct = list.length ? Math.round(earned / list.length * 100) : 0;
+  return `${earned}/${list.length} achievements earned (${pct}%) \u00b7 ${subset.points} pts`;
+}
+
+// Loads every subset's achievements in the background so the progress shows without
+// having to open each one first.
+function loadSubsetProgress(subsets){
+  subsets.forEach(async subset => {
+    try{
+      const list = await getAchievementsList(subset.id);
+      const row = subsetMetaEls.get(subset.id);
+      if(row && row.meta.isConnected) row.meta.textContent = subsetMetaText(subset, list);
+    }catch(e){
+      const row = subsetMetaEls.get(subset.id);
+      if(row && row.meta.isConnected) row.meta.textContent = `${subset.count} achievements \u00b7 ${subset.points} pts`;
+    }
+  });
 }
 
 function subsetRowHtml(s){
@@ -59,7 +78,7 @@ function subsetRowHtml(s){
         <img class="subset-icon" src="${imgUrl(s.icon)}" alt="">
         <span class="subset-text">
           <span class="subset-name">${subsetEsc(s.name)}</span>
-          <span class="subset-meta">${subsetMetaText(s, null)}</span>
+          <span class="subset-meta">${subsetMetaText(s, achievementsListCache[s.id])}</span>
         </span>
         ${award}
       </button>
@@ -115,15 +134,23 @@ async function setupSubsetsUI(card, gameId, ext){
     if(built) return;
     built = true;
     wrap.innerHTML = subsets.map(subsetRowHtml).join('');
+    subsetMetaEls.clear();
     wrap.querySelectorAll('.subset-item').forEach(item => {
       const subset = subsets.find(s => s.id === Number(item.dataset.subsetId));
+      subsetMetaEls.set(subset.id, { meta: item.querySelector('.subset-meta'), subset });
       item.querySelector('.subset-head').addEventListener('click', () => toggleSubset(item, subset));
     });
+    loadSubsetProgress(subsets);
   });
 }
 
 // The casual/hardcore toggle redraws any subset lists that are open.
 function refreshOpenSubsetPanels(){
+  subsetMetaEls.forEach((row, id) => {
+    if(!row.meta.isConnected){ subsetMetaEls.delete(id); return; }
+    const list = achievementsListCache[id];
+    if(list) row.meta.textContent = subsetMetaText(row.subset, list);
+  });
   openSubsetPanels.forEach((entry, id) => {
     if(!entry.wrap.isConnected){ openSubsetPanels.delete(id); return; }
     const list = achievementsListCache[id];
@@ -134,4 +161,5 @@ function refreshOpenSubsetPanels(){
 
 function clearSubsetPanels(){
   openSubsetPanels.clear();
+  subsetMetaEls.clear();
 }
