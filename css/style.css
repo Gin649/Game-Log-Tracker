@@ -581,6 +581,10 @@
   }
   .guide-list-item-btn.danger{border-color:var(--danger);color:var(--danger);}
   .guide-list-item-btn:disabled{opacity:0.6;cursor:default;}
+  /* RetroAchievements guide results: the "GitHub" link is an <a> styled like the buttons, and long
+     page names wrap instead of being cut off so two similar guides can be told apart. */
+  a.guide-list-item-btn{display:inline-block;text-decoration:none;}
+  .guide-list-item[data-ra-page] .guide-list-item-name{white-space:normal;overflow:visible;line-height:1.35;}
 
   .patch-result-list{display:flex;flex-direction:column;gap:1px;background:var(--border);border-radius:6px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);margin-top:4px;max-height:340px;overscroll-behavior:contain;}
   .patch-result-row{background:var(--panel);padding:9px 11px;display:flex;align-items:center;gap:10px;}
@@ -696,7 +700,23 @@
   .guide-reader-body.html-guide *{color:inherit !important;background:transparent !important;max-width:100%;box-sizing:border-box;}
   .guide-reader-body.html-guide a{color:var(--gr-accent) !important;}
   .guide-reader-body.html-guide pre{white-space:pre-wrap;word-break:break-word;}
-  .guide-reader-body.html-guide img{max-width:100%;height:auto;}
+  .guide-reader-body.html-guide img{max-width:100%;height:auto;vertical-align:middle;}
+  /* Structure for guides converted from Markdown (RA guides) and for imported HTML guides. */
+  .guide-reader-body.html-guide h1,.guide-reader-body.html-guide h2,.guide-reader-body.html-guide h3,
+  .guide-reader-body.html-guide h4,.guide-reader-body.html-guide h5,.guide-reader-body.html-guide h6{line-height:1.3;margin:1.4em 0 0.5em;font-weight:700;}
+  .guide-reader-body.html-guide h1{font-size:1.45em;}
+  .guide-reader-body.html-guide h2{font-size:1.25em;}
+  .guide-reader-body.html-guide h3{font-size:1.1em;}
+  .guide-reader-body.html-guide h4,.guide-reader-body.html-guide h5,.guide-reader-body.html-guide h6{font-size:1em;}
+  .guide-reader-body.html-guide p{margin:0 0 0.9em;}
+  .guide-reader-body.html-guide ul,.guide-reader-body.html-guide ol{margin:0 0 0.9em;padding-left:1.4em;}
+  .guide-reader-body.html-guide li{margin:0.2em 0;}
+  .guide-reader-body.html-guide hr{border:0;border-top:1px solid var(--gr-border-2);margin:1.3em 0;}
+  .guide-reader-body.html-guide blockquote{margin:0.8em 0;padding:0.1em 0 0.1em 12px;border-left:3px solid var(--gr-accent);}
+  .guide-reader-body.html-guide .ra-table-wrap{overflow-x:auto;margin:0 0 0.9em;}
+  .guide-reader-body.html-guide table{border-collapse:collapse;}
+  .guide-reader-body.html-guide th,.guide-reader-body.html-guide td{border:1px solid var(--gr-border-2);padding:4px 8px;vertical-align:top;text-align:left;}
+  .guide-reader-body.html-guide img.ra-badge{width:36px;height:36px;margin-right:4px;border-radius:3px;}
   .guide-reader-empty{padding:24px 8px;text-align:center;font-family:'Space Mono',monospace;font-size:0.8125rem;line-height:1.6;color:var(--gr-muted-2);}
   .guide-reader-body iframe{width:100%;height:100%;border:0;display:block;}
 
