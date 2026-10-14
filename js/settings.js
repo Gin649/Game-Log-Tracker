@@ -24,7 +24,7 @@ function closeDataModal(){
 
 // About
 // Bump this every release, together with CACHE_NAME in sw.js.
-const APP_VERSION = '2.1.1.3';
+const APP_VERSION = '2.1.1.4';
 function openAboutModal(){
   $('#about-version').textContent = APP_VERSION;
   $('#about-backdrop').classList.add('open');
