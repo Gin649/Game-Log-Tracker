@@ -2,6 +2,11 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.1.4
+
+### Fixed
+- Subset rows show their progress before you open them, e.g. "19/19 achievements · 100% · 50 pts", and keep that format once opened (it used to switch from "19 achievements" to "19/19 earned"). They also follow the Casual/Hardcore toggle while still closed.
+
 ## v2.1.1.3
 
 ### Added
