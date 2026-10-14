@@ -79,7 +79,7 @@ function readFileAsDataURL(file){
 // just an arbitrary file the person picked off their device.
 function sanitizeGuideHtml(rawHtml){
   const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
-  doc.querySelectorAll('script,style,link,meta').forEach(el => el.remove());
+  doc.querySelectorAll('script,style,link,meta,iframe,frame,frameset,object,embed,applet,form,base').forEach(el => el.remove());
   doc.querySelectorAll('*').forEach(el => {
     [...el.attributes].forEach(attr => {
       const n = attr.name.toLowerCase();
@@ -87,7 +87,9 @@ function sanitizeGuideHtml(rawHtml){
       // black background they render text invisible.
       if(n === 'style' || n === 'color' || n === 'bgcolor' || n === 'text' || n === 'background') el.removeAttribute(attr.name);
       if(n.startsWith('on')) el.removeAttribute(attr.name);
-      if((n === 'href' || n === 'src') && /^\s*javascript:/i.test(attr.value)) el.removeAttribute(attr.name);
+      if(n === 'srcdoc' || n === 'formaction') el.removeAttribute(attr.name);
+      if((n === 'href' || n === 'src' || n === 'xlink:href') && /^\s*(javascript|vbscript):/i.test(attr.value)) el.removeAttribute(attr.name);
+      if(n === 'href' && /^\s*data:/i.test(attr.value)) el.removeAttribute(attr.name);
     });
   });
   return doc.body ? doc.body.innerHTML : rawHtml;

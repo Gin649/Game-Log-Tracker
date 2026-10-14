@@ -208,6 +208,7 @@
       <div style="display:flex;flex-direction:column;gap:10px;" id="guide-empty-wrap">
         ${isAdding ? '<button class="guide-btn guide-btn-ghost" id="guide-cancel-btn" style="flex:none;">‹ Back to saved guides</button>' : ''}
         ${archiveSection}
+        ${renderRaGuideSection()}
         ${renderGuideSearchStep(title)}
         <button class="guide-btn guide-btn-outline" id="guide-paste-btn">Paste Guide Text</button>
         <div id="guide-paste-box" style="display:none;flex-direction:column;gap:8px;">
@@ -233,7 +234,7 @@
   function renderGuideListItem(guide){
     const pct = Math.round((guide.scrollFrac || 0) * 100);
     const pctLabel = guide.kind === 'pdf' ? '' : `${pct}% read`;
-    const kind = String(guide.kind || 'text').toUpperCase();
+    const kind = guide.source === 'ra-guides' ? 'RA GUIDE' : String(guide.kind || 'text').toUpperCase();
     return `
       <div class="guide-list-item" data-guide-id="${guideEsc(guide.id)}">
         <div class="guide-list-item-info">
@@ -302,6 +303,8 @@
           archiveStatus.textContent = e.message;
         }
       });
+
+      wireRaGuideSection(guideWrap, gameId, title, consoleId, refreshList);
 
       const gfLink = guideWrap.querySelector('#guide-gf-link');
       if(gfLink) gfLink.addEventListener('click', (e) => { e.preventDefault(); openInExternalBrowser(gfLink.href); });
@@ -876,12 +879,31 @@
   $('#guide-menu-hide').addEventListener('click', () => setReaderMenuHidden(true));
   $('#guide-menu-show').addEventListener('click', () => setReaderMenuHidden(false));
 
+  // Links inside an HTML guide: "#section" links scroll the reader (the guide's own table of
+  // contents), web links open in the phone's browser instead of replacing the app.
+  function guideBodyLinkClick(e){
+    const a = e.target.closest ? e.target.closest('a[href]') : null;
+    if(!a) return;
+    e.preventDefault();
+    const href = a.getAttribute('href') || '';
+    if(href.charAt(0) === '#'){
+      const body = $('#guide-reader-body');
+      let id = href.slice(1);
+      try{ id = decodeURIComponent(id); }catch(err){}
+      const el = id ? Array.from(body.querySelectorAll('[id]')).find(n => n.id === id) : null;
+      if(el) body.scrollTo({ top: Math.max(0, body.scrollTop + el.getBoundingClientRect().top - body.getBoundingClientRect().top - 8), behavior: 'auto' });
+      return;
+    }
+    if(/^https?:/i.test(a.href)) openInExternalBrowser(a.href);
+  }
+
   function openGuideReader(gameId, title, guide){
     if(!guide) return;
     const overlay = $('#guide-reader-overlay');
     const body = $('#guide-reader-body');
     $('#guide-reader-fn').textContent = guide.filename;
     body.onscroll = null;
+    body.onclick = null;
     body.className = 'guide-reader-body';
     guideReaderScrollGameId = gameId;
     closeToolPanels();
@@ -910,6 +932,7 @@
       body.classList.add('html-guide');
       try{
         body.innerHTML = guide.content;
+        body.onclick = guideBodyLinkClick;
         setupGuideScrollTracking(body, gameId, guide);
       }catch(e){
         showReaderMessage('Could not display this guide: ' + e.message);
@@ -938,6 +961,7 @@
     $('#guide-reader-overlay').classList.remove('open', 'menu-hidden');
     $('#guide-reader-body').innerHTML = '';
     $('#guide-reader-body').onscroll = null;
+    $('#guide-reader-body').onclick = null;
     guideReaderScrollGameId = null;
   }
   $('#guide-reader-close').addEventListener('click', closeGuideReader);
