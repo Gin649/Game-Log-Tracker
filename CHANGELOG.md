@@ -13,6 +13,7 @@ Notable changes to Game Log Tracker, newest first.
 - Game Library's "Last played" now matches Overview. It used to show only the date of your last achievement unlock, so playing a game without unlocking anything never moved it up. It now uses whichever is newer, the unlock or the actual last play.
 
 ### Changed
+- App updates download much less. The update check now asks the server which files changed and only downloads those, instead of re-downloading the whole app (about 700 KB) every time.
 - Links inside HTML guides no longer navigate the app away. `#section` links scroll the reader, and web links open in the browser. This applies to imported HTML guides too.
 - Importing an HTML guide now also removes iframes, objects, embeds, forms, and `data:` links, on top of the scripts and event handlers it already removed.
 
