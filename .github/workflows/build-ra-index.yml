@@ -1,12 +1,13 @@
-name: Build RAPatches index
+name: Build RA indexes
 
-# Refreshes ra-patches-index.json: a flat list of every patch file path in
-# RetroAchievements/RAPatches. GitHub Pages serves it as a normal file, so
-# the app loads it same-origin instead of calling GitHub's tree API from
-# every visitor's own browser.
+# Refreshes two small index files and commits them next to the app:
+#   ra-patches-index.json  every patch file path in RetroAchievements/RAPatches
+#   ra-guides-index.json   every guide page in the RetroAchievements/guides wiki
+# GitHub Pages serves them as normal files, so the app loads them same-origin instead of
+# querying GitHub from every visitor's own browser.
 on:
   schedule:
-    - cron: '17 6 * * *'  # once a day; RAPatches doesn't change fast enough to need more
+    - cron: '17 6 * * *'  # once a day; neither repo changes fast enough to need more
   workflow_dispatch: {}    # lets you trigger a rebuild manually from the Actions tab
 
 permissions:
@@ -22,24 +23,26 @@ jobs:
         with:
           node-version: 24
 
-      - name: Build index
+      - name: Build RAPatches index
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # raises the RAPatches API rate limit; scoped read-only to this repo by default
         run: node tools/build-ra-index.mjs ra-patches-index.json
 
+      - name: Build RA guides index
+        run: node tools/build-ra-guides-index.mjs ra-guides-index.json  # shallow-clones the public guides wiki; no token needed
+
       - name: Commit if changed
         run: |
-          # `git add` first, then diff the index against HEAD — this is what correctly
-          # detects a brand-new file. A plain `git diff` (no --cached) only compares
-          # files git is already tracking, so on the very first run — before this file
-          # has ever been committed — it reports "no changes" even though the file is
-          # new, and nothing gets committed.
-          git add ra-patches-index.json
-          if git diff --cached --quiet -- ra-patches-index.json; then
+          # `git add` first, then diff against HEAD — this is what correctly detects a
+          # brand-new file. A plain `git diff` (no --cached) only compares files git is
+          # already tracking, so on the very first run it would report "no changes" even
+          # though the file is new, and nothing would get committed.
+          git add ra-patches-index.json ra-guides-index.json
+          if git diff --cached --quiet -- ra-patches-index.json ra-guides-index.json; then
             echo "No changes."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -m "Update RAPatches index [automated]"
+          git commit -m "Update RA indexes [automated]"
           git push
