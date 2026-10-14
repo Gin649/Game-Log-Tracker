@@ -3,11 +3,13 @@
 // Social: people you follow on RetroAchievements
 // "Following" list from API_GetUsersIFollow.php, then one API_GetUserSummary.php
 // call per person (rich presence + last game). Tapping a person shows their
-// recent unlocks and a link to their RA profile. Nothing here is saved to disk.
+// recent unlocks and a link to their RA profile. The list is also saved on the device, so the
+// tab opens instantly with the last known statuses and refreshes behind them.
 const SOCIAL_MAX_FRIENDS = 100;          // RA's default page size for the Following list
 const SOCIAL_PLAYING_MS = 10 * 60 * 1000; // presence newer than this counts as "Playing now"
 const SOCIAL_CACHE_MS = 2 * 60 * 1000;    // reopening within this window reuses what's loaded
 const SOCIAL_UNLOCK_DAYS = 14;
+const SOCIAL_WORKERS = 6;                  // summary requests in flight at once
 const SOCIAL_FRIENDS_URL = 'https://retroachievements.org/friends.php';
 let socialFriends = [];   // [{ name, points, summary, failed }]
 let socialTotal = 0;
@@ -21,6 +23,55 @@ const socialUnlocksCache = {}; // lowercased name -> { at, list }
 function socialEsc(v){
   return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+// Only the fields the tab shows are kept, so the saved copy stays small.
+function socialSlim(s){
+  if(!s) return null;
+  const recent = Array.isArray(s.RecentlyPlayed) && s.RecentlyPlayed[0] ? s.RecentlyPlayed[0] : null;
+  return {
+    LastGame: s.LastGame ? { Title: s.LastGame.Title, ConsoleName: s.LastGame.ConsoleName } : undefined,
+    RecentlyPlayed: recent ? [{ Title: recent.Title, LastPlayed: recent.LastPlayed }] : [],
+    RichPresenceMsg: s.RichPresenceMsg,
+    RichPresenceMsgDate: s.RichPresenceMsgDate,
+    LastActivity: s.LastActivity ? { lastupdate: s.LastActivity.lastupdate } : undefined,
+    TotalPoints: s.TotalPoints
+  };
+}
+const socialStoreKey = () => `social-cache:${creds.username.trim().toLowerCase()}`;
+async function socialLoadSaved(){
+  try{
+    const r = await window.storage.get(socialStoreKey(), false);
+    if(r && r.value){
+      const j = JSON.parse(r.value);
+      if(j && Array.isArray(j.friends)){
+        return {
+          total: Number(j.total) || j.friends.length,
+          friends: j.friends.filter(f => f && f.name).map(f => ({ name: f.name, points: f.points || 0, summary: f.summary || null, at: f.at || 0, failed: false }))
+        };
+      }
+    }
+  }catch(e){ /* nothing saved yet */ }
+  return null;
+}
+async function socialSave(){
+  try{
+    await window.storage.set(socialStoreKey(), JSON.stringify({
+      ts: Date.now(), total: socialTotal,
+      friends: socialFriends.map(f => ({ name: f.name, points: f.points, summary: f.summary, at: f.at }))
+    }), false);
+  }catch(e){ /* non-fatal */ }
+}
+// How old a person's saved status may get before it is fetched again. Someone active in the
+// last day is always refreshed; people who have been quiet for a while change rarely, so they
+// are checked less often. The Refresh button ignores this and refreshes everyone.
+function socialTtl(f){
+  const info = socialInfo(f);
+  if(!info.date) return 60 * 60 * 1000;
+  const idle = Date.now() - info.date.getTime();
+  if(info.playing || idle < 24 * 3600 * 1000) return 0;
+  if(idle < 30 * 86400 * 1000) return 15 * 60 * 1000;
+  return 2 * 3600 * 1000;
+}
+
 function socialInitials(name){
   const s = String(name || '?').replace(/[^A-Za-z0-9]/g, '');
   return (s.slice(0, 2) || '?').toUpperCase();
@@ -82,11 +133,11 @@ function renderSocialList(){
   let html = `<h2 style="margin-bottom:4px;">Social</h2>
       <p class="sub" style="margin-bottom:12px;">People you follow on RetroAchievements</p>`;
   if(socialError){
-    html += `<div class="error-box">Could not load your following list: ${socialEsc(socialError)}</div>`;
-  }else if(socialLoading && socialFriends.length === 0){
-    html += '<div class="loading">Loading</div>';
-  }else if(socialFriends.length === 0){
-    html += '<div class="empty">You\u2019re not following anyone on RetroAchievements yet.</div>';
+    html += `<div class="error-box">Could not load your following list: ${socialEsc(socialError)}${socialFriends.length ? ' Showing the last saved list.' : ''}</div>`;
+  }
+  if(socialFriends.length === 0){
+    if(!socialError && socialLoading) html += '<div class="loading">Loading</div>';
+    else if(!socialError) html += '<div class="empty">You\u2019re not following anyone on RetroAchievements yet.</div>';
   }else{
     html += '<div class="soc-list">' + socialSorted().map(f => {
       const info = socialInfo(f);
@@ -126,7 +177,13 @@ async function loadSocial(force){
   const token = ++socialToken;
   socialLoading = true;
   socialError = '';
-  if(force || !socialFriends.length) socialFriends = [];
+  // Show what is already known straight away: this session's list, or else the copy saved
+  // on this device. The refresh below then updates it in place instead of blanking it.
+  if(!socialFriends.length){
+    const saved = await socialLoadSaved();
+    if(token !== socialToken) return;
+    if(saved){ socialFriends = saved.friends; socialTotal = saved.total; }
+  }
   renderSocialList();
   try{
     const data = await raFetch('API_GetUsersIFollow.php', { c: SOCIAL_MAX_FRIENDS });
@@ -137,27 +194,44 @@ async function loadSocial(force){
     socialFriends.forEach(f => { prev[f.name.toLowerCase()] = f; });
     socialFriends = results.map(r => {
       const name = r.User || r.user;
-      return { name, points: r.Points ?? r.points ?? 0, summary: null, failed: false };
+      const old = name ? prev[name.toLowerCase()] : null;
+      return { name, points: r.Points ?? r.points ?? 0, summary: old ? old.summary : null, at: old ? old.at || 0 : 0, failed: false };
     }).filter(f => f.name);
     renderSocialList();
-    // Presence needs one summary call per person; run a few at a time.
-    let next = 0;
+
+    // One summary call per person, but only for those who need it: people with nothing
+    // loaded yet first, then anyone whose saved status is older than socialTtl allows.
+    const now = Date.now();
+    const queue = socialFriends
+      .filter(f => force || !f.summary || (now - (f.at || 0)) >= socialTtl(f))
+      .sort((a, b) => {
+        if(!a.summary !== !b.summary) return a.summary ? 1 : -1;
+        const da = socialInfo(a).date, db = socialInfo(b).date;
+        return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
+      });
+    let next = 0, done = 0;
     const worker = async () => {
       while(token === socialToken){
         const i = next++;
-        if(i >= socialFriends.length) return;
-        const f = socialFriends[i];
+        if(i >= queue.length) return;
+        const f = queue[i];
         try{
-          f.summary = await raFetch('API_GetUserSummary.php', { u: f.name, g: 1, a: 0 });
-        }catch(e){ f.failed = true; }
+          f.summary = socialSlim(await raFetch('API_GetUserSummary.php', { u: f.name, g: 1, a: 0 }));
+          f.at = Date.now();
+          f.failed = false;
+        }catch(e){
+          if(!f.summary) f.failed = true; // a failed refresh keeps the older status instead of blanking it
+        }
+        done++;
         if(token === socialToken && socialView.mode === 'list' && $('#social-backdrop').classList.contains('open')){
-          if(i % 4 === 3 || i === socialFriends.length - 1) renderSocialList();
+          if(done % 4 === 0 || done === queue.length) renderSocialList();
         }
       }
     };
-    await Promise.all([worker(), worker(), worker(), worker()]);
+    await Promise.all(Array.from({ length: SOCIAL_WORKERS }, worker));
     if(token !== socialToken) return;
     socialLoadedAt = Date.now();
+    socialSave();
   }catch(e){
     if(token !== socialToken) return;
     socialError = e && e.message ? e.message : String(e);
