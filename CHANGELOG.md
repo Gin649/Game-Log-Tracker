@@ -2,6 +2,16 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.1.7
+
+### Added
+- Holding a Beaten by Year tile shows the game's title above it, since phones have no hover. Tapping still opens the game.
+
+### Changed
+- Casual and hardcore mode are now fully separate for Beaten and Mastered. Casual mode shows only casual awards, and hardcore mode only hardcore ones. A game you beat or mastered in hardcore no longer shows a Beaten/Mastered pill, a Beaten by Year entry, or a count in "started games beaten" while in casual mode, and the "(HC)" suffix is gone.
+- Beaten by Year tiles are simpler: the Beaten pill and the cut-off title are gone, and Mastered games get a small pill on the bottom of the icon. Tap a tile to open the game.
+- In Add Game, "Other system (not on RetroAchievements)…" is now at the top of the System list instead of the bottom. The first real system is still selected by default.
+
 ## v2.1.1.6
 
 ### Fixed
