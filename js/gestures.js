@@ -128,8 +128,9 @@ enableDragToScroll($('#system-chips')); // the console-name chips above the libr
 
     const card = $('#modal-card');
     if(!profileOpen() || card.dataset.gameId !== String(gameId)) return; // closed or moved to another game meanwhile
+    const openPanels = openProfilePanelIds(); // sections to expand again after the redraw
     stopWalkthroughPlayers(); // saves the watch position before the profile is redrawn
-    await openGameModal(gameId);
+    await openGameModal(gameId, { restorePanels: openPanels });
   }
 
   // The game profile is a full-screen overlay that scrolls itself (#modal-backdrop),

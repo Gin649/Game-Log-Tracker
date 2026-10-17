@@ -81,19 +81,44 @@
   // Fullscreen needs a real user gesture, so grab the first tap on a non-interactive part
   // of the page and request it then. Taps on buttons, links and inputs are skipped: requesting
   // fullscreen consumes that tap's user activation, which can break gesture-gated APIs like
-  // the install prompt.
+  // the install prompt. The manifest is "standalone", so this is what decides whether the
+  // system bars are hidden. Display > Standalone mode (display-mode.js) sets window.gltStandalone
+  // to keep them visible, and uses gltEnterFullscreen / gltExitFullscreen when it's switched.
   (function () {
-    function requestFS(e) {
-      if (e.target.closest('button, a, input, select, textarea, label')) return;
+    const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+    window.gltStandalone = false;
+
+    function enterFullscreen() {
       const el = document.documentElement;
       const req = el.requestFullscreen || el.webkitRequestFullscreen ||
                   el.mozRequestFullScreen || el.msRequestFullscreen;
-      if (req && !document.fullscreenElement && !document.webkitFullscreenElement) {
-        try { req.call(el).catch(() => {}); } catch (err) { /* non-fatal */ }
+      if (req && !fsElement()) {
+        try { const p = req.call(el); if (p && p.catch) p.catch(() => {}); } catch (err) { /* non-fatal */ }
       }
-      window.removeEventListener('click', requestFS, true);
-      window.removeEventListener('touchend', requestFS, true);
     }
-    window.addEventListener('click', requestFS, { capture: true });
-    window.addEventListener('touchend', requestFS, { capture: true });
+
+    function disarm() {
+      window.removeEventListener('click', onTap, true);
+      window.removeEventListener('touchend', onTap, true);
+    }
+
+    function onTap(e) {
+      if (e.target.closest('button, a, input, select, textarea, label')) return;
+      if (window.gltStandalone) return; // stay armed: Standalone mode may be switched off later
+      enterFullscreen();
+      disarm();
+    }
+
+    // For the Display menu: switching Standalone off is itself the tap that enters fullscreen.
+    window.gltEnterFullscreen = function () { disarm(); enterFullscreen(); };
+    window.gltExitFullscreen = function () {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen ||
+                   document.mozCancelFullScreen || document.msExitFullscreen;
+      if (exit && fsElement()) {
+        try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch (err) { /* non-fatal */ }
+      }
+    };
+
+    window.addEventListener('click', onTap, { capture: true });
+    window.addEventListener('touchend', onTap, { capture: true });
   })();

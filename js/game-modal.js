@@ -323,7 +323,25 @@ function setupLinkRaUI(gameId, local, card){
 let openAchievementsGameId = null; // gameId whose achievements panel is currently rendered in the modal, if any, lets the hardcore toggle refresh it in place without re-fetching
 let openBeatenAchievementsGameId = null; // same, for the Beaten Achievements panel
 
-async function openGameModal(gameId){
+// Ids of the profile's section buttons (achievements, guide, ...) that are currently expanded.
+function openProfilePanelIds(){
+  return Array.from($('#modal-card').querySelectorAll('.btn-view-achievements.open'))
+    .map(btn => btn.id)
+    .filter(Boolean);
+}
+
+// Expand the sections named in ids again, in page order, after the profile was redrawn.
+function reopenProfilePanels(card, ids){
+  ids.forEach(id => {
+    const btn = card.querySelector('#' + id);
+    if(btn && btn.style.display !== 'none' && !btn.classList.contains('open')) btn.click();
+  });
+}
+
+// restorePanels: button ids from openProfilePanelIds(), used when the profile is redrawn in
+// place (pull-to-refresh) so the sections you had open stay open.
+async function openGameModal(gameId, opts){
+  const restorePanels = (opts && opts.restorePanels) || [];
   const card = $('#modal-card');
   const local = findGameLocal(gameId);
   card.dataset.gameId = gameId;
@@ -520,7 +538,12 @@ async function openGameModal(gameId){
     }
   });
 
-  setupSubsetsUI(card, gameId, ext);
+  // Subsets only get their button once the subset lookup finishes, so wait for it when that
+  // section was open.
+  const subsetsReady = setupSubsetsUI(card, gameId, ext);
+  if(restorePanels.includes('modal-subsets-btn')) await subsetsReady.catch(() => {});
+  if(card.dataset.gameId !== String(gameId)) return; // user moved on while subsets loaded
+  reopenProfilePanels(card, restorePanels);
 }
 
 function closeGameModal(){
