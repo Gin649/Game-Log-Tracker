@@ -23,7 +23,7 @@ function renderProfile(p){
       hardcoreUnlocks += hardcore;
       if(awarded > 0){
         startedCasual++;
-        if(g.HighestAwardKind) beatenCasual++;
+        if(g.HighestAwardKind === 'completed' || g.HighestAwardKind === 'beaten-softcore') beatenCasual++;
       }
       if(hardcore > 0){
         startedHardcore++;
@@ -63,22 +63,23 @@ function renderProfile(p){
     `;
 }
 
+// The two modes are kept apart: hardcore shows only hardcore awards, casual only casual ones.
+function awardCountsInMode(kind){
+  if(statsMode === 'hardcore') return kind === 'mastered' || kind === 'beaten-hardcore';
+  return kind === 'completed' || kind === 'beaten-softcore';
+}
+
 // Label and color class for a game's award in the current mode, or null when it has none.
 function awardInfo(kind){
+  if(!awardCountsInMode(kind)) return null;
   if(statsMode === 'hardcore'){
-    // From a hardcore-only lens, softcore-earned completions don't count,
-    // only games actually beaten/mastered in hardcore mode show as done.
-    if(kind === 'mastered') return { label: 'Mastered', cls: 'pill-gold' };
-    if(kind === 'beaten-hardcore') return { label: 'Beaten (HC)', cls: 'pill-gold' };
-    return null;
+    return kind === 'mastered'
+      ? { label: 'Mastered', cls: 'pill-gold' }
+      : { label: 'Beaten', cls: 'pill-gold' };
   }
-  const map = {
-    'mastered':        { label: 'Mastered',    cls: 'pill-teal' },
-    'completed':       { label: 'Mastered',    cls: 'pill-teal' },
-    'beaten-hardcore': { label: 'Beaten (HC)',  cls: 'pill-gold' },
-    'beaten-softcore': { label: 'Beaten',       cls: 'pill-teal' },
-  };
-  return map[kind] || null;
+  return kind === 'completed'
+    ? { label: 'Mastered', cls: 'pill-teal' }
+    : { label: 'Beaten', cls: 'pill-teal' };
 }
 
 function awardPill(kind){
@@ -103,7 +104,7 @@ function renderRecentGames(games){
     // Beaten / Mastered label on the corner of the box art
     const lib = libById.get(g.GameID);
     const award = lib && isGameAwarded(lib) ? awardInfo(lib.HighestAwardKind) : null;
-    const badge = award ? `<span class="pill pill-corner ${award.cls}">${award.label.replace(' (HC)', '')}</span>` : '';
+    const badge = award ? `<span class="pill pill-corner ${award.cls}">${award.label}</span>` : '';
     return `
         <div class="cart" data-game-id="${g.GameID}">
           <div class="art-wrap"><img class="art" src="${imgUrl(g.ImageIcon)}" alt="${g.Title}">${badge}</div>
@@ -157,8 +158,7 @@ function renderSystemChips(){
     ? libraryData.filter(g => {
         if(g.customConsole) return g.manualBeaten && g.manualBeatenDate;
         if(!g.HighestAwardKind || !g.HighestAwardDate) return false;
-        if(statsMode === 'hardcore') return g.HighestAwardKind === 'beaten-hardcore' || g.HighestAwardKind === 'mastered';
-        return true;
+        return awardCountsInMode(g.HighestAwardKind);
       })
     : activeTab === 'backlog'
     ? libraryData.filter(isBacklogGame)
@@ -205,9 +205,7 @@ function sortableTitle(title){
 // including how the casual/hardcore toggle changes what counts as done.
 function isGameAwarded(g){
   if(g.customConsole) return !!g.manualBeaten;
-  const kind = g.HighestAwardKind;
-  if(statsMode === 'hardcore') return kind === 'mastered' || kind === 'beaten-hardcore';
-  return !!kind;
+  return awardCountsInMode(g.HighestAwardKind);
 }
 
 // Backlog vs Library: a manual RA game (not customConsole) stays in the Backlog until
@@ -373,15 +371,36 @@ function renderBacklog(){
   });
 }
 
+// Small floating label with a game's title, used when a Beaten by Year tile is held.
+let yearTipEl = null, yearTipTimer = null;
+function showYearTip(item){
+  if(!yearTipEl){
+    yearTipEl = document.createElement('div');
+    yearTipEl.className = 'year-tip';
+    document.body.appendChild(yearTipEl);
+  }
+  yearTipEl.textContent = item.getAttribute('title') || '';
+  yearTipEl.classList.add('show');
+  const r = item.getBoundingClientRect();
+  const w = yearTipEl.offsetWidth, h = yearTipEl.offsetHeight;
+  const left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2));
+  const top = r.top - h - 8 >= 8 ? r.top - h - 8 : r.bottom + 8;
+  yearTipEl.style.left = left + 'px';
+  yearTipEl.style.top = top + 'px';
+  clearTimeout(yearTipTimer);
+  yearTipTimer = setTimeout(hideYearTip, 2500);
+}
+function hideYearTip(){
+  if(yearTipEl) yearTipEl.classList.remove('show');
+}
+window.addEventListener('scroll', hideYearTip, { passive: true });
+
 function renderByYear(){
   const el = $('#year-wrap');
   const raBeaten = libraryData.filter(g => {
     if(g.customConsole || !g.HighestAwardKind || !g.HighestAwardDate) return false;
     if(systemFilter !== 'All' && g.ConsoleName !== systemFilter) return false;
-    if(statsMode === 'hardcore'){
-      return g.HighestAwardKind === 'beaten-hardcore' || g.HighestAwardKind === 'mastered';
-    }
-    return true;
+    return awardCountsInMode(g.HighestAwardKind);
   });
   const manualBeaten = libraryData.filter(g =>
     g.customConsole && g.manualBeaten && g.manualBeatenDate &&
@@ -419,18 +438,47 @@ function renderByYear(){
         <div class="year-group">
           <div class="year-heading">${year} <span class="n">${games.length} completion${games.length===1?'':'s'}</span></div>
           <div class="year-icons">
-            ${games.map(g => `
+            ${games.map(g => {
+              // Only Mastered gets a pill here (drawn on the icon), a plain beat is already the default for this tab.
+              const award = g.customConsole ? null : awardInfo(g.HighestAwardKind);
+              const pill = award && award.label === 'Mastered'
+                ? `<span class="pill pill-year ${award.cls}">Mastered</span>` : '';
+              return `
               <div class="year-item" data-game-id="${g.GameID}" title="${g.Title}">
-                <img src="${imgUrl(g.ImageIcon)}" alt="">
-                <div class="yt">${g.Title}</div>
-                ${g.customConsole ? '<span class="pill pill-teal">Beaten</span>' : awardPill(g.HighestAwardKind)}
+                <img src="${imgUrl(g.ImageIcon)}" alt="${g.Title}">
+                ${pill}
               </div>
-            `).join('')}
+            `;
+            }).join('')}
           </div>
         </div>
       `;
   }).join('');
+  let lastLongPress = 0;
   el.querySelectorAll('.year-item').forEach(item => {
-    item.addEventListener('click', () => openGameModal(Number(item.getAttribute('data-game-id'))));
+    item.addEventListener('click', () => {
+      if(Date.now() - lastLongPress < 600) return; // the release of a long-press isn't a tap
+      openGameModal(Number(item.getAttribute('data-game-id')));
+    });
+    // Touch screens have no hover, so holding a tile shows the game's title instead.
+    let holdTimer = null, startX = 0, startY = 0, held = false;
+    const cancelHold = () => { clearTimeout(holdTimer); holdTimer = null; };
+    item.addEventListener('touchstart', (e) => {
+      held = false;
+      const t = e.touches[0];
+      startX = t.clientX; startY = t.clientY;
+      cancelHold();
+      holdTimer = setTimeout(() => { held = true; showYearTip(item); }, 450);
+    }, { passive: true });
+    item.addEventListener('touchmove', (e) => {
+      const t = e.touches[0];
+      if(Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) cancelHold();
+    }, { passive: true });
+    item.addEventListener('touchend', (e) => {
+      cancelHold();
+      if(held){ lastLongPress = Date.now(); if(e.cancelable) e.preventDefault(); }
+    });
+    item.addEventListener('touchcancel', cancelHold);
+    item.addEventListener('contextmenu', (e) => e.preventDefault()); // no image menu on long-press
   });
 }

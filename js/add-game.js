@@ -35,8 +35,10 @@ async function openAddGameModal(){
       .map(c => ({ id: c.ID ?? c.id, name: c.Name ?? c.name }))
       .filter(c => c.id != null && c.name)
       .sort((a, b) => a.name.localeCompare(b.name));
-    sel.innerHTML = sorted.map(c => `<option value="${c.id}">${c.name}</option>`).join('')
-      + `<option value="__custom__">Other system (not on RetroAchievements)…</option>`;
+    sel.innerHTML = `<option value="__custom__">Other system (not on RetroAchievements)…</option>`
+      + sorted.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    // Other sits at the top of the list, but the first real system stays the default pick.
+    if(sorted.length) sel.value = String(sorted[0].id);
   }catch(e){
     sel.innerHTML = '<option value="">Could not load systems</option><option value="__custom__">Other system (not on RetroAchievements)…</option>';
   }

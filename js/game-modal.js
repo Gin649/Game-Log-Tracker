@@ -407,9 +407,8 @@ async function openGameModal(gameId, opts){
   const est = estHoursCache[gameId];
   const awardKind = local ? local.HighestAwardKind : null;
   // Show the award date beside the badge, but only when the badge itself says "done" for the current mode
-  // (hardcore mode only counts Mastered / Beaten (HC)).
-  const doneKinds = isHardcoreMode ? ['mastered', 'beaten-hardcore'] : ['mastered', 'completed', 'beaten-hardcore', 'beaten-softcore'];
-  const raBeatenDateLabel = (local && local.HighestAwardDate && doneKinds.includes(awardKind))
+  // (each mode only counts its own awards).
+  const raBeatenDateLabel = (local && local.HighestAwardDate && awardCountsInMode(awardKind))
     ? formatBeatenDate(parseRADate(local.HighestAwardDate)) : '';
 
   const raUrl = `https://retroachievements.org/game/${gameId}`;
