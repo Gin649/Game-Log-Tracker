@@ -1,4 +1,4 @@
-// Display > 3-Button Navigation (standalone mode): keeps the phone's system bars (and the bottom navigation bar)
+// Display > Standalone mode: keeps the phone's system bars (and the bottom navigation bar)
 // visible instead of letting the app go fullscreen. bootstrap.js owns the fullscreen request;
 // this just tells it what to do and remembers the choice. Off by default, so the app opens
 // fullscreen on the first tap like before.

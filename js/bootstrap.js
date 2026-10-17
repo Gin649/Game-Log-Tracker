@@ -82,7 +82,7 @@
   // of the page and request it then. Taps on buttons, links and inputs are skipped: requesting
   // fullscreen consumes that tap's user activation, which can break gesture-gated APIs like
   // the install prompt. The manifest is "standalone", so this is what decides whether the
-  // system bars are hidden. Display > 3-Button Navigation (display-mode.js) sets window.gltStandalone
+  // system bars are hidden. Display > Standalone mode (display-mode.js) sets window.gltStandalone
   // to keep them visible, and uses gltEnterFullscreen / gltExitFullscreen when it's switched.
   (function () {
     const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
@@ -104,7 +104,7 @@
 
     function onTap(e) {
       if (e.target.closest('button, a, input, select, textarea, label')) return;
-      if (window.gltStandalone) return; // stay armed: 3-Button Navigation may be switched off later
+      if (window.gltStandalone) return; // stay armed: Standalone mode may be switched off later
       enterFullscreen();
       disarm();
     }
