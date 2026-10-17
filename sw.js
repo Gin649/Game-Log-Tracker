@@ -4,7 +4,7 @@
 // keeps serving its own files, so old and new code never mix.
 
 const CACHE_PREFIX = 'gl-tracker-';
-const CACHE_NAME = CACHE_PREFIX + 'v116';
+const CACHE_NAME = CACHE_PREFIX + 'v117';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -29,6 +29,7 @@ const ASSETS_TO_CACHE = [
   './js/sync.js',
   './js/gestures.js',
   './js/device-status.js',
+  './js/display-mode.js',
   './js/menu.js',
   './js/startup.js',
   './js/rom-patcher.js',
