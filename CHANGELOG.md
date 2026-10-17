@@ -2,13 +2,21 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.1.6
+
+### Changed
+- The Display option is now called "3-Button Navigation".
+
+### Fixed
+- The Back button (and back gesture) inside a game profile now closes the profile, like swiping it away, instead of leaving the app.
+
 ## v2.1.1.5
 
 ### Added
-- Display > Standalone mode. Keeps your phone's system bars, including the bottom navigation bar, visible instead of going fullscreen. It is off by default, so the app opens fullscreen on the first tap as before. Switching it on leaves fullscreen straight away, and switching it off goes back in.
+- Display > 3-Button Navigation. Keeps your phone's system bars, including the bottom navigation bar, visible instead of going fullscreen. It is off by default, so the app opens fullscreen on the first tap as before. Switching it on leaves fullscreen straight away, and switching it off goes back in.
 
 ### Changed
-- `manifest.json` now says `standalone` instead of `fullscreen`. The app asks for fullscreen itself on the first tap (unless Standalone mode is on), which is what lets the new option work. If you installed the app earlier, reinstall it (or wait for Android to refresh the install) so it stops forcing fullscreen from the manifest.
+- `manifest.json` now says `standalone` instead of `fullscreen`. The app asks for fullscreen itself on the first tap (unless 3-Button Navigation is on), which is what lets the new option work. If you installed the app earlier, reinstall it (or wait for Android to refresh the install) so it stops forcing fullscreen from the manifest.
 
 ### Fixed
 - Pulling down to refresh inside a game profile no longer closes the sections you had open (View Achievements, Game Guide, Subsets and so on). They stay expanded after the refresh.
