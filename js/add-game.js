@@ -37,19 +37,22 @@ async function openAddGameModal(){
       .sort((a, b) => a.name.localeCompare(b.name));
     sel.innerHTML = `<option value="__custom__">Other system (not on RetroAchievements)…</option>`
       + sorted.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-    // Other sits at the top of the list, but the first real system stays the default pick.
-    if(sorted.length) sel.value = String(sorted[0].id);
   }catch(e){
-    sel.innerHTML = '<option value="">Could not load systems</option><option value="__custom__">Other system (not on RetroAchievements)…</option>';
+    sel.innerHTML = '<option value="__custom__">Other system (not on RetroAchievements)…</option><option value="">Could not load systems</option>';
   }
+  // "Other" is the first option and starts selected, so a non-RA game is just a title away.
+  sel.value = '__custom__';
+  syncAddGameSystem();
 }
 
-$('#addgame-system').addEventListener('change', () => {
+function syncAddGameSystem(){
   const isCustom = $('#addgame-system').value === '__custom__';
   $('#addgame-custom-console-field').style.display = isCustom ? 'block' : 'none';
   const multiHint = $('#addgame-multi-hint');
   if(multiHint) multiHint.style.display = isCustom ? 'none' : 'block'; // the multi-select checkboxes are RA-search only
-});
+}
+
+$('#addgame-system').addEventListener('change', syncAddGameSystem);
 
 // Reflects addGameSelections (checked but not yet committed) in the modal.
 function renderAddGameSelectionBar(){
