@@ -323,6 +323,21 @@ function setupLinkRaUI(gameId, local, card){
 let openAchievementsGameId = null; // gameId whose achievements panel is currently rendered in the modal, if any, lets the hardcore toggle refresh it in place without re-fetching
 let openBeatenAchievementsGameId = null; // same, for the Beaten Achievements panel
 
+// Back button / back gesture. Opening a profile adds a history entry, so Back closes the
+// profile (same as swiping it away) instead of leaving the app. Closing it any other way
+// (the X, a swipe, Escape) takes that entry off again so the history stays in step.
+let profileHistoryPushed = false;
+function pushProfileHistory(){
+  if(profileHistoryPushed) return; // already open, e.g. redrawn by pull-to-refresh
+  profileHistoryPushed = true;
+  history.pushState({ gltProfile: true }, '');
+}
+window.addEventListener('popstate', () => {
+  if(!profileHistoryPushed) return;
+  profileHistoryPushed = false; // Back already removed the entry
+  if($('#modal-backdrop').classList.contains('open')) closeGameModal({ fromHistory: true });
+});
+
 // Ids of the profile's section buttons (achievements, guide, ...) that are currently expanded.
 function openProfilePanelIds(){
   return Array.from($('#modal-card').querySelectorAll('.btn-view-achievements.open'))
@@ -348,6 +363,7 @@ async function openGameModal(gameId, opts){
   openAchievementsGameId = null;
   openBeatenAchievementsGameId = null;
   clearSubsetPanels();
+  pushProfileHistory();
   $('#modal-backdrop').classList.add('open');
   card.innerHTML = `
       <button class="modal-close" id="modal-close-btn">✕</button>
@@ -546,13 +562,19 @@ async function openGameModal(gameId, opts){
   reopenProfilePanels(card, restorePanels);
 }
 
-function closeGameModal(){
+function closeGameModal(opts){
   $('#modal-backdrop').classList.remove('open');
   openAchievementsGameId = null;
   openBeatenAchievementsGameId = null;
   clearSubsetPanels();
   stopWalkthroughPlayers();
   closeGuideReader();
+  // Closed by something other than Back: drop the history entry the open added. (opts is an
+  // event object when this is used directly as a click handler, which has no fromHistory.)
+  if(profileHistoryPushed && !(opts && opts.fromHistory === true)){
+    profileHistoryPushed = false;
+    history.back();
+  }
 }
 
 // Box art pinch-to-zoom viewer
