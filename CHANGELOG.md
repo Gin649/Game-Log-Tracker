@@ -7,9 +7,10 @@ Notable changes to Game Log Tracker, newest first.
 ### Added
 - Holding a Beaten by Year tile shows the game's title above it, since phones have no hover. Tapping still opens the game.
 
-### Fixed
+### Changed
 - Casual and hardcore mode are now fully separate for Beaten and Mastered. Casual mode shows only casual awards, and hardcore mode only hardcore ones. A game you beat or mastered in hardcore no longer shows a Beaten/Mastered pill, a Beaten by Year entry, or a count in "started games beaten" while in casual mode, and the "(HC)" suffix is gone.
 - Beaten by Year tiles are simpler: the Beaten pill and the cut-off title are gone, and Mastered games get a small pill on the bottom of the icon. Tap a tile to open the game.
+- Manually added (non-RA) games now use RetroAchievements' name for their system when it has one (RAWG's "NES" becomes "NES/Famicom", "Genesis" becomes "Genesis/Mega Drive", and so on), so they group under the same System chip as your RA games. Games you added earlier are renamed the next time the library loads. Platforms RA doesn't cover, like PS4 or Switch, keep their RAWG names.
 - In Add Game, "Other system (not on RetroAchievements)…" is now at the top of the System list instead of the bottom, and it is selected by default, so adding a non-RA game only needs a title.
 
 ## v2.1.1.6
