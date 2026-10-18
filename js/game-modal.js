@@ -48,7 +48,7 @@ async function attachRawgLookup(gameId, title, card){
         const badgeEl = card.querySelector('#rawg-badge');
         if(!badgeEl) return;
 
-        const label = rating ? String(rating.score) : 'N/A';
+        const label = rating ? String(rating.score) : 'NR'; // not rated
         const tier = !rating ? 'tier-muted' : rating.score >= 80 ? 'tier-green' : rating.score >= 50 ? 'tier-yellow' : 'tier-red';
         badgeEl.innerHTML = `<span class="rawg-score ${tier}" id="rawg-retry" title="Tap to look up again">${label}</span>`;
 

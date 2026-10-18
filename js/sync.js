@@ -241,4 +241,31 @@ $('#btn-hardcore-toggle').addEventListener('click', () => {
   refreshOpenSubsetPanels();
 });
 $('#lib-search').addEventListener('input', renderLibrary);
+
+// Game Library: Hide beaten / Show beaten. Remembered between visits.
+function syncHideDoneButton(){
+  const btn = $('#btn-hide-done');
+  btn.textContent = libraryHideDone ? 'Show beaten' : 'Hide beaten';
+  btn.classList.toggle('active', libraryHideDone);
+  btn.setAttribute('aria-pressed', String(libraryHideDone));
+}
+$('#btn-hide-done').addEventListener('click', async () => {
+  libraryHideDone = !libraryHideDone;
+  syncHideDoneButton();
+  renderSystemChips();
+  // hiding can leave the picked system with no games; fall back to All rather than an empty list
+  if(systemFilter !== 'All' && !$('#system-chips .chip.active')){ systemFilter = 'All'; renderSystemChips(); }
+  renderLibrary();
+  try{ await window.storage.set('library-hide-done', libraryHideDone ? '1' : '0', false); }catch(e){ /* non-fatal */ }
+});
+(async () => {
+  try{
+    const saved = await window.storage.get('library-hide-done', false);
+    if(saved && saved.value === '1'){
+      libraryHideDone = true;
+      syncHideDoneButton();
+      if(libraryData && libraryData.length){ renderSystemChips(); renderLibrary(); } // data may have rendered first
+    }
+  }catch(e){ /* nothing saved yet */ }
+})();
 $('#backlog-search').addEventListener('input', renderBacklog);

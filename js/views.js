@@ -162,7 +162,7 @@ function renderSystemChips(){
       })
     : activeTab === 'backlog'
     ? libraryData.filter(isBacklogGame)
-    : libraryData.filter(g => !isBacklogGame(g));
+    : libraryData.filter(g => !isBacklogGame(g) && !(activeTab === 'library' && libraryHideDone && isGameAwarded(g)));
   source.forEach(g => { counts[g.ConsoleName] = (counts[g.ConsoleName] || 0) + 1; });
   const systems = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
 
@@ -226,6 +226,7 @@ function renderLibrary(){
   let rows = libraryData.filter(g =>
     !isBacklogGame(g) &&
     !isSubsetGame(g) &&
+    !(libraryHideDone && isGameAwarded(g)) &&
     foldText(g.Title).includes(searchVal) &&
     (systemFilter === 'All' || g.ConsoleName === systemFilter)
   );
@@ -249,7 +250,10 @@ function renderLibrary(){
 
   $('#lib-count').textContent = rows.length ? `(${rows.length})` : '';
 
-  if(rows.length === 0){ wrap.innerHTML = '<div class="empty">No games match.</div>'; return; }
+  if(rows.length === 0){
+    wrap.innerHTML = `<div class="empty">${libraryHideDone && !searchVal && systemFilter === 'All' ? 'No games in progress.' : 'No games match.'}</div>`;
+    return;
+  }
 
   wrap.innerHTML = `
       <table class="lib-table">

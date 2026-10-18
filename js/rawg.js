@@ -107,25 +107,58 @@ async function fetchRawgRatingLive(title){
   return null;
 }
 
+// IGDB's critic and user ratings (both out of 100) through our Worker, which holds the Twitch
+// login. Resolves to { critic, user, name }, with null for whichever IGDB doesn't have.
+async function fetchIgdbScores(title){
+  const clean = String(title).replace(/^(?:~[^~]*~\s*)+/, '').trim(); // drop "~Hack~" style tags
+  const res = await fetchWithTimeout(`https://ra-proxy.gin649.workers.dev/igdb/score?name=${encodeURIComponent(clean)}`, WORKER_TIMEOUT_MS);
+  if(!res.ok) throw new Error(`IGDB: HTTP ${res.status}`);
+  const j = await res.json();
+  const valid = n => (typeof n === 'number' && n > 0 && n <= 100) ? n : null;
+  return { critic: valid(j.critic), user: valid(j.user), name: j.name || null };
+}
+
+// One score per game: the plain average of whatever is available out of RAWG's score, IGDB's
+// critic score and IGDB's user score. partial = IGDB couldn't be reached, so the number is
+// provisional and shouldn't be remembered for long.
+async function fetchCombinedRating(title){
+  const [rawgRes, igdbRes] = await Promise.allSettled([fetchRawgRatingLive(title), fetchIgdbScores(title)]);
+  if(rawgRes.status === 'rejected' && igdbRes.status === 'rejected') throw rawgRes.reason;
+  if(rawgRes.status === 'rejected') console.error(`RAWG lookup failed for "${title}":`, rawgRes.reason && rawgRes.reason.message);
+  if(igdbRes.status === 'rejected') console.error(`IGDB lookup failed for "${title}":`, igdbRes.reason && igdbRes.reason.message);
+
+  const rawg = rawgRes.status === 'fulfilled' ? rawgRes.value : null;
+  const igdb = igdbRes.status === 'fulfilled' ? igdbRes.value : null;
+  const scores = [rawg && rawg.score, igdb && igdb.critic, igdb && igdb.user].filter(n => typeof n === 'number' && n > 0);
+  if(scores.length === 0) return null;
+
+  return {
+    score: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+    metacritic: false, // an average now, not a single Metacritic number
+    matchedName: (rawg && rawg.matchedName) || (igdb && igdb.name) || title,
+    partial: igdbRes.status === 'rejected' || rawgRes.status === 'rejected',
+  };
+}
+
 async function getRawgRating(title, forceRefresh){
-  const cacheKey = `rawg-rating:${title.toLowerCase()}`;
+  const cacheKey = `rating-avg:${title.toLowerCase()}`; // new key: older entries held a RAWG-only score
   if(!forceRefresh){
     try{
       const r = await window.storage.get(cacheKey, false);
       if(r && r.value){
         const parsed = JSON.parse(r.value);
         const isStaleZeroBug = parsed.data && parsed.data.score === 0; // fixed bug artifact, never a real score
-        const ttl = parsed.data ? 30 * 24 * 60 * 60 * 1000 : 10 * 60 * 1000;
+        const ttl = (parsed.data && !parsed.data.partial) ? 30 * 24 * 60 * 60 * 1000 : 10 * 60 * 1000;
         if(!isStaleZeroBug && Date.now() - parsed.ts < ttl) return parsed.data;
       }
     }catch(e){ /* not cached yet */ }
   }
 
   let data = null;
-  try{ data = await fetchRawgRatingLive(title); }
+  try{ data = await fetchCombinedRating(title); }
   catch(e){
     data = null;
-    console.error(`RAWG lookup failed for "${title}":`, e.message);
+    console.error(`Rating lookup failed for "${title}":`, e.message);
   }
 
   try{ await window.storage.set(cacheKey, JSON.stringify({ data, ts: Date.now() }), false); }

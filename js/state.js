@@ -12,6 +12,7 @@ let librarySort = { key: 'lastPlayed', dir: 'desc' };
 const estHoursCache = {}; // in-memory, keyed by GameID, for this session, { hours, beaten }
 const achievementsListCache = {}; // in-memory, keyed by GameID, full per-achievement list with earn dates, opportunistically filled by getEstimatedHours()
 let systemFilter = 'All';
+let libraryHideDone = false; // Game Library: hide beaten/mastered games so only ones in progress show
 
 // Games checked in the Add Game modal's RA-system search but not yet
 // committed, keyed by GameID, carries what's needed to add it later so
