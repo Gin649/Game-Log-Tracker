@@ -2,6 +2,15 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.1.8
+
+### Added
+- Game Library has a "Hide beaten" button next to the search box. It hides beaten and mastered games (for the mode you're in) so you only see games in progress, updates the System chip counts to match, and is remembered between visits.
+
+### Changed
+- The review score badge now averages RAWG's score with IGDB's critic and user ratings into one number, out of 100 like before. Whatever is available is used, so a game with only one source still shows that score.
+- Games with no review score show "NR" instead of "N/A".
+
 ## v2.1.1.7
 
 ### Added
