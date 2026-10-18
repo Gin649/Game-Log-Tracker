@@ -192,8 +192,14 @@ async function normalizeCustomConsoleNames(games){
   return changed;
 }
 
+// RA's full system list also has consoles it doesn't officially support (and hubs/events), which
+// only clutter the pickers. Systems for non-RA games like PS3 go through "Other" instead.
+function onlySupportedConsoles(list){
+  return (list || []).filter(c => (c.Active ?? c.active) !== false && (c.IsGameSystem ?? c.isGameSystem) !== false);
+}
+
 async function getConsoleList(){
-  const cacheKey = 'ra-consoles';
+  const cacheKey = 'ra-consoles-supported'; // separate from the old full-list cache
   try{
     const r = await window.storage.get(cacheKey, false);
     if(r && r.value){
@@ -202,7 +208,9 @@ async function getConsoleList(){
     }
   }catch(e){ /* not cached yet */ }
 
-  const data = await raFetch('API_GetConsoleIDs.php', {});
+  // a=1 asks RA for active systems only and g=1 drops hubs and events; the filter below covers
+  // the case where those parameters don't make it through a proxy.
+  const data = onlySupportedConsoles(await raFetch('API_GetConsoleIDs.php', { a: 1, g: 1 }));
   try{ await window.storage.set(cacheKey, JSON.stringify({ data, ts: Date.now() }), false); }catch(e){}
   return data;
 }
