@@ -93,6 +93,7 @@
     padding:8px 14px;
   }
   .btn-ghost:hover{color:var(--text);border-color:var(--muted);}
+  .btn-ghost.active{color:var(--gold);border-color:var(--gold);}
 
   /* Hamburger dropdown menu */
   .menu-wrap{position:relative;}
