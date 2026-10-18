@@ -64,7 +64,9 @@ async function loadAll(opts){
     const realIds = new Set(libraryData.map(g => g.GameID));
     const manual = await loadManualGames();
     const stillManual = manual.filter(g => !realIds.has(g.GameID));
-    if(stillManual.length !== manual.length) await saveManualGames(stillManual);
+    // Older custom games may still carry RAWG's platform name; use RA's so they group together.
+    const renamed = await normalizeCustomConsoleNames(stillManual);
+    if(stillManual.length !== manual.length || renamed) await saveManualGames(stillManual);
     libraryData = [...libraryData, ...stillManual];
 
     // Also bring back anything promoteManualGameToReal() confirmed earlier

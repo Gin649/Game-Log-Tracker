@@ -247,7 +247,7 @@ async function addManualGameFromRawg(rawgGame, customConsole){
       GameID: gameId,
       Title: rawgGame.name,
       ConsoleID: null,
-      ConsoleName: customConsole,
+      ConsoleName: await raConsoleNameFor(customConsole),
       ImageIcon: rawgGame.background_image || null,
       ImageBoxArt: rawgGame.background_image || null,
       MaxPossible: 0,

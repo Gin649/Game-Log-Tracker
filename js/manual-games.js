@@ -125,6 +125,73 @@ async function removeManualGame(gameId){
 }
 
 // Console + game list lookups, for manually adding a game
+// RAWG names its platforms differently from RetroAchievements ("NES" vs "NES/Famicom"), which
+// would leave a manually added NES game under its own System chip. This maps a RAWG platform
+// (lowercase) to [RA console id, pattern that RA's name for that id must match]. The pattern
+// is a safety check: if RA's list doesn't look like what's expected, the RAWG name is kept.
+// Platforms RA doesn't cover at all (PS4, Switch, PC, ...) aren't listed and stay as they are.
+const RAWG_TO_RA_CONSOLE = {
+  'genesis': [1, /genesis|mega drive/i],
+  'nintendo 64': [2, /64/],
+  'snes': [3, /snes|super famicom/i],
+  'game boy': [4, /^game boy$/i],
+  'game boy advance': [5, /advance/i],
+  'game boy color': [6, /color/i],
+  'nes': [7, /nes|famicom/i],
+  'sega cd': [9, /sega cd|mega cd/i],
+  'sega 32x': [10, /32x/i],
+  'sega master system': [11, /master system/i],
+  'playstation': [12, /^playstation$/i],
+  'atari lynx': [13, /lynx/i],
+  'game gear': [15, /game gear/i],
+  'gamecube': [16, /gamecube/i],
+  'jaguar': [17, /^atari jaguar$/i],
+  'nintendo ds': [18, /^nintendo ds$/i],
+  'wii': [19, /^wii$/i],
+  'wii u': [20, /wii u/i],
+  'playstation 2': [21, /playstation 2/i],
+  'xbox': [22, /^xbox$/i],
+  'atari 2600': [25, /2600/],
+  'atari st': [36, /atari st/i],
+  'apple ii': [38, /apple ii/i],
+  'sega saturn': [39, /saturn/i],
+  'dreamcast': [40, /dreamcast/i],
+  'psp': [41, /portable/i],
+  '3do': [43, /3do/i],
+  'atari 5200': [50, /5200/],
+  'atari 7800': [51, /7800/],
+  'nintendo 3ds': [62, /3ds/i],
+  'nintendo dsi': [78, /dsi/i],
+};
+
+// RA's own name for a RAWG platform, or the RAWG name itself when there's no safe match.
+async function raConsoleNameFor(rawgName, consoleList){
+  const hit = RAWG_TO_RA_CONSOLE[String(rawgName || '').toLowerCase()];
+  if(!hit) return rawgName;
+  try{
+    const list = consoleList || await getConsoleList();
+    const c = (list || []).find(x => Number(x.ID ?? x.id) === hit[0]);
+    const name = c && (c.Name ?? c.name);
+    return name && hit[1].test(name) ? name : rawgName;
+  }catch(e){ return rawgName; }
+}
+
+// Renames custom games already saved under a RAWG name. Safe to run every load: a name that's
+// already RA's isn't in the table, so it comes back unchanged. Returns true if anything changed.
+async function normalizeCustomConsoleNames(games){
+  const needs = games.some(g => g.customConsole && RAWG_TO_RA_CONSOLE[String(g.ConsoleName || '').toLowerCase()]);
+  if(!needs) return false;
+  let list;
+  try{ list = await getConsoleList(); }catch(e){ return false; }
+  let changed = false;
+  for(const g of games){
+    if(!g.customConsole) continue;
+    const name = await raConsoleNameFor(g.ConsoleName, list);
+    if(name !== g.ConsoleName){ g.ConsoleName = name; changed = true; }
+  }
+  return changed;
+}
+
 async function getConsoleList(){
   const cacheKey = 'ra-consoles';
   try{
