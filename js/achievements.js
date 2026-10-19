@@ -147,6 +147,22 @@ function applyAchOrder(list, order){
   return known.concat(fresh);
 }
 
+// Default order when there's no custom one: earned achievements first with the most
+// recently unlocked on top, then locked ones in the set's own order. Array.sort is
+// stable, so equal unlock times keep set order. Shared by the full list and the
+// beaten list.
+function splitEarnedLocked(list, isHardcoreMode){
+  const date = (a) => isHardcoreMode ? a.DateEarnedHardcore : a.DateEarned;
+  const unlockTime = (a) => {
+    const t = Date.parse(String(date(a)).replace(' ', 'T') + 'Z');
+    return isNaN(t) ? 0 : t;
+  };
+  return {
+    earned: list.filter(a => date(a)).sort((a, b) => unlockTime(b) - unlockTime(a)),
+    locked: list.filter(a => !date(a))
+  };
+}
+
 function renderAchievementsList(list, isHardcoreMode, order, reorderMode){
   if(!list || list.length === 0) return '<div class="achievements-list-loading">No achievement data available.</div>';
   // Match the rest of the app's hardcore/casual convention: hardcore mode
@@ -158,14 +174,8 @@ function renderAchievementsList(list, isHardcoreMode, order, reorderMode){
   if(order){
     return applyAchOrder(list, order).map(a => achRowHtml(a, !isEarned(a), isHardcoreMode, reorderMode)).join('');
   }
-  // No custom order: earned achievements first, most recently unlocked on top,
-  // then locked ones in the set's own order. Array.sort is stable, so ties keep set order.
-  const unlockTime = (a) => {
-    const t = Date.parse(String(isEarned(a)).replace(' ', 'T') + 'Z');
-    return isNaN(t) ? 0 : t;
-  };
-  const earned = list.filter(a => isEarned(a)).sort((a, b) => unlockTime(b) - unlockTime(a));
-  const locked = list.filter(a => !isEarned(a));
+  // No custom order: earned first (latest unlock on top), then locked in set order.
+  const { earned, locked } = splitEarnedLocked(list, isHardcoreMode);
   return earned.map(a => achRowHtml(a, false, isHardcoreMode, reorderMode)).join('') + locked.map(a => achRowHtml(a, true, isHardcoreMode, reorderMode)).join('');
 }
 
@@ -418,7 +428,6 @@ function renderBeatenAchievementsList(list, isHardcoreMode){
   if(beaten.length === 0){
     return '<div class="achievements-list-loading">This game\'s achievement set hasn\'t been marked with progression/win-condition achievements on RetroAchievements yet.</div>';
   }
-  const earned = beaten.filter(a => isHardcoreMode ? a.DateEarnedHardcore : a.DateEarned);
-  const locked = beaten.filter(a => isHardcoreMode ? !a.DateEarnedHardcore : !a.DateEarned);
+  const { earned, locked } = splitEarnedLocked(beaten, isHardcoreMode);
   return earned.map(a => achRowHtml(a, false, isHardcoreMode)).join('') + locked.map(a => achRowHtml(a, true, isHardcoreMode)).join('');
 }
