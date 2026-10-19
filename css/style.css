@@ -454,6 +454,22 @@
   .btn-view-achievements .arrow{transition:transform 0.15s;}
   .btn-view-achievements.open .arrow{transform:rotate(90deg);}
   .btn-view-achievements:disabled{opacity:0.8;cursor:default;}
+
+  /* Game Details section: average playtime and the RAWG write-up */
+  .gd-wrap{margin-top:10px;background:var(--bg-alt);border:1px solid var(--border);border-radius:6px;padding:12px;}
+  .gd-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
+  .gd-label{font-size:0.725rem;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:0.04em;}
+  .gd-mode{font-size:0.6875rem;color:var(--muted);}
+  .gd-boxes{display:flex;gap:8px;}
+  .gd-box{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:10px;}
+  .gd-box .gd-k{font-size:0.6875rem;color:var(--muted);}
+  .gd-box .gd-v{font-size:1.25rem;color:var(--gold);margin:3px 0 2px;}
+  .gd-box .gd-n{font-size:0.6875rem;color:var(--muted);min-height:1em;}
+  .gd-empty{font-size:0.8125rem;color:var(--muted);}
+  .gd-about-label{margin:14px 0 6px;}
+  .gd-about{font-size:0.8125rem;line-height:1.55;white-space:pre-line;}
+  .gd-about.clamp{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;}
+  .gd-more{background:none;border:0;padding:0;cursor:pointer;font-size:0.75rem;color:var(--gold);margin-top:6px;}
   .cheats-spinner{
     display:inline-block;width:0.9em;height:0.9em;margin-right:6px;vertical-align:-0.12em;
     border:2px solid currentColor;border-right-color:transparent;border-radius:50%;
