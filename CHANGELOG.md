@@ -2,6 +2,11 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.2.0
+
+### Changed
+- Achievements with no custom order are now listed with the most recently unlocked first, followed by the ones you haven't unlocked. This applies to a game's list and its subsets, and follows the Casual/Hardcore toggle. A saved custom order still takes priority.
+
 ## v2.1.1.9
 
 ### Added
