@@ -61,12 +61,24 @@ async function rawgGet(url){
   ]);
 }
 
+// The score and the Game Details write-up both start with the same RAWG search, so the second
+// one reuses the first's request (kept for a minute) instead of asking RAWG again.
+const rawgSharedRequests = new Map();
+function rawgGetShared(url){
+  if(!rawgSharedRequests.has(url)){
+    const p = rawgGet(url);
+    rawgSharedRequests.set(url, p);
+    p.then(() => setTimeout(() => rawgSharedRequests.delete(url), 60000), () => rawgSharedRequests.delete(url));
+  }
+  return rawgSharedRequests.get(url);
+}
+
 async function fetchRawgRatingLive(title){
   if(!rawgCreds) rawgCreds = await loadRawgCreds();
   if(!rawgCreds || !rawgCreds.apiKey) return null;
 
   const url = `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgCreds.apiKey)}&search=${encodeURIComponent(title)}&page_size=5`;
-  const json = await rawgGet(url);
+  const json = await rawgGetShared(url);
   const results = (json && json.results) || [];
   if(results.length === 0) return null;
 
