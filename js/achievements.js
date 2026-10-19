@@ -158,7 +158,13 @@ function renderAchievementsList(list, isHardcoreMode, order, reorderMode){
   if(order){
     return applyAchOrder(list, order).map(a => achRowHtml(a, !isEarned(a), isHardcoreMode, reorderMode)).join('');
   }
-  const earned = list.filter(a => isEarned(a));
+  // No custom order: earned achievements first, most recently unlocked on top,
+  // then locked ones in the set's own order. Array.sort is stable, so ties keep set order.
+  const unlockTime = (a) => {
+    const t = Date.parse(String(isEarned(a)).replace(' ', 'T') + 'Z');
+    return isNaN(t) ? 0 : t;
+  };
+  const earned = list.filter(a => isEarned(a)).sort((a, b) => unlockTime(b) - unlockTime(a));
   const locked = list.filter(a => !isEarned(a));
   return earned.map(a => achRowHtml(a, false, isHardcoreMode, reorderMode)).join('') + locked.map(a => achRowHtml(a, true, isHardcoreMode, reorderMode)).join('');
 }
