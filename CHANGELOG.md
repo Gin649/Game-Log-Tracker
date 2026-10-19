@@ -2,13 +2,18 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.1.9
+
+### Added
+- Game profiles have a new Game Details section, above View Achievements. It shows the average time other players take to beat and to master the game, from RetroAchievements, for the mode you're in (casual numbers in casual mode, hardcore in hardcore mode), and a write-up of the game from RAWG with a Read more toggle. It loads when you open it, and a section with nothing to show is left out. Games you added by hand get the same section with just the RAWG write-up, since they have no RetroAchievements playtime.
+
 ## v2.1.1.8
 
 ### Added
 - Game Library has a "Hide beaten" button next to the search box. It hides beaten and mastered games (for the mode you're in) so you only see games in progress, updates the System chip counts to match, and is remembered between visits.
 
 ### Changed
-- The review score badge now averages RAWG's score with IGDB's critic and user ratings into one number, out of 100 like before. Whatever is available is used, so a game with only one source still shows that score.
+- The review score badge now averages RAWG's score with IGDB's critic and user ratings into one number, out of 100 like before. Whatever is available is used, so a game with only one source still shows that score. Needs the updated Worker with the IGDB route.
 - Games with no review score show "NR" instead of "N/A".
 
 ## v2.1.1.7
@@ -20,6 +25,7 @@ Notable changes to Game Log Tracker, newest first.
 - Casual and hardcore mode are now fully separate for Beaten and Mastered. Casual mode shows only casual awards, and hardcore mode only hardcore ones. A game you beat or mastered in hardcore no longer shows a Beaten/Mastered pill, a Beaten by Year entry, or a count in "started games beaten" while in casual mode, and the "(HC)" suffix is gone.
 - Beaten by Year tiles are simpler: the Beaten pill and the cut-off title are gone, and Mastered games get a small pill on the bottom of the icon. Tap a tile to open the game.
 - Manually added (non-RA) games now use RetroAchievements' name for their system when it has one (RAWG's "NES" becomes "NES/Famicom", "Genesis" becomes "Genesis/Mega Drive", and so on), so they group under the same System chip as your RA games. Games you added earlier are renamed the next time the library loads. Platforms RA doesn't cover, like PS4 or Switch, keep their RAWG names.
+- The System lists in Add Game and "Link to RetroAchievements" only show systems RetroAchievements officially supports. Consoles it doesn't (PS3 and the like) are added through "Other" instead.
 - In Add Game, "Other system (not on RetroAchievements)…" is now at the top of the System list instead of the bottom, and it is selected by default, so adding a non-RA game only needs a title.
 
 ## v2.1.1.6
