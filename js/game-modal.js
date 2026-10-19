@@ -151,6 +151,9 @@ function renderCustomGameModal(gameId, local, card){
         </div>
       </div>
 
+      <button class="btn-view-achievements" id="modal-details-btn"><span class="arrow">▸</span> Game Details</button>
+      <div class="gd-wrap" id="modal-details" style="display:none;"></div>
+
       <button class="btn-view-achievements" id="modal-guide-btn"><span class="arrow">▸</span> Game Guide</button>
       <div class="guide-panel" id="modal-guide-panel" style="display:none;"></div>
 
@@ -223,6 +226,7 @@ function renderCustomGameModal(gameId, local, card){
   });
 
   attachRawgLookup(gameId, local.Title, card);
+  setupGameDetailsUI(gameId, local.Title, card, { aboutOnly: true });
   setupGameGuideUI(gameId, local.Title, card, local.ConsoleID);
   setupCheatsUI(gameId, local.Title, card, local.ConsoleName);
   setupWalkthroughUI(gameId, local.Title, card, local.ConsoleName);
@@ -439,6 +443,9 @@ async function openGameModal(gameId, opts){
         </div>
       </div>
 
+      <button class="btn-view-achievements" id="modal-details-btn"><span class="arrow">▸</span> Game Details</button>
+      <div class="gd-wrap" id="modal-details" style="display:none;"></div>
+
       <button class="btn-view-achievements" id="modal-view-ach-btn"><span class="arrow">▸</span> View Achievements</button>
       <div class="achievements-list" id="modal-achievements" style="display:none;"></div>
 
@@ -496,6 +503,7 @@ async function openGameModal(gameId, opts){
   }
 
   attachRawgLookup(gameId, title, card);
+  setupGameDetailsUI(gameId, title, card);
   setupGameGuideUI(gameId, title, card, ext.ConsoleID || (local && local.ConsoleID));
   setupCheatsUI(gameId, title, card, console_);
   setupWalkthroughUI(gameId, title, card, console_);
