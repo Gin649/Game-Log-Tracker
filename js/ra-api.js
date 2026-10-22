@@ -119,6 +119,22 @@ async function clearCreds(){
   try{ await window.storage.delete('ra-credentials', false); }catch(e){}
 }
 
+// Casual/Hardcore mode survives reloads (including "Update app") so it doesn't reset to Casual.
+async function saveStatsMode(mode){
+  try{ await window.storage.set('stats-mode', mode, false); }catch(e){ /* non-fatal */ }
+}
+async function loadStatsMode(){
+  try{
+    const r = await window.storage.get('stats-mode', false);
+    if(r && (r.value === 'hardcore' || r.value === 'casual')) return r.value;
+  }catch(e){ /* none stored yet */ }
+  return 'casual';
+}
+function applyStatsModeLabel(){
+  const btn = document.getElementById('btn-hardcore-toggle');
+  if(btn) btn.textContent = statsMode === 'hardcore' ? 'Switch to Casual Mode' : 'Switch to Hardcore Mode';
+}
+
 // Playtime: RA reports UserTotalPlaytime (seconds) in the GetGameInfoAndUserProgress
 // call we already make. Some clients never send it, so when it is 0 or missing we
 // estimate: for beaten/completed/mastered games, the span from first unlock to the

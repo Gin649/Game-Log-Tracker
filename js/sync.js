@@ -222,7 +222,8 @@ $('#btn-disconnect').addEventListener('click', async () => {
 });
 $('#btn-hardcore-toggle').addEventListener('click', () => {
   statsMode = statsMode === 'hardcore' ? 'casual' : 'hardcore';
-  $('#btn-hardcore-toggle').textContent = statsMode === 'hardcore' ? 'Switch to Casual Mode' : 'Switch to Hardcore Mode';
+  applyStatsModeLabel();
+  saveStatsMode(statsMode);
   if(lastProfile) renderProfile(lastProfile);
   renderRecentGames(recentGamesData);
   renderSystemChips();

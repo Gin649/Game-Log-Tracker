@@ -20,6 +20,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 // Restore RA credentials if previously connected, and show the dashboard right away.
 (async () => {
+  statsMode = await loadStatsMode();
+  applyStatsModeLabel();
   showDashboard();
   const saved = await loadCreds();
   if(saved && saved.username && saved.apiKey){
