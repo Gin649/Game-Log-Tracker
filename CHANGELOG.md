@@ -2,6 +2,11 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.2.1
+
+### Fixed
+- The Casual/Hardcore mode is now remembered. Previously it dropped back to Casual after tapping Update app or reloading.
+
 ## v2.1.2.0
 
 ### Changed
