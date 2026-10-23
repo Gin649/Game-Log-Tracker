@@ -1006,3 +1006,41 @@
   .soc-now{background:var(--bg-alt);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:12px;}
   .soc-now .soc-game{font-size:0.8125rem;font-weight:600;}
   .soc-profile-link{display:block;text-align:center;text-decoration:none;box-sizing:border-box;}
+
+  /* Manual section (end of Game Details) and its PDF reader */
+  .gd-manual-note{font-size:0.75rem;color:var(--muted);line-height:1.5;margin-top:8px;}
+  .gd-manual-actions{display:flex;gap:8px;flex-wrap:wrap;}
+  .gd-manual-btn{
+    background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 14px;
+    font-family:'Space Mono',monospace;font-size:0.75rem;font-weight:700;cursor:pointer;text-decoration:none;
+    display:inline-flex;align-items:center;
+  }
+  .gd-manual-btn:hover{border-color:var(--gold);}
+  .gd-manual-btn.primary{border-color:var(--gold-dim);color:var(--gold);}
+  .gd-manual-bar{height:6px;border-radius:3px;background:var(--panel);border:1px solid var(--border);margin-top:10px;overflow:hidden;}
+  .gd-manual-bar span{display:block;height:100%;background:var(--gold);transition:width 0.15s;}
+  .gd-manual-bar.indeterminate span{width:35%;animation:gd-manual-slide 1.1s ease-in-out infinite;}
+  @keyframes gd-manual-slide{0%{margin-left:-35%;}100%{margin-left:100%;}}
+
+  .manual-reader{
+    position:fixed;inset:0;z-index:210;background:#111;display:none;flex-direction:column;
+    padding-top:calc(env(safe-area-inset-top, 0px) + var(--status-h));padding-bottom:env(safe-area-inset-bottom, 0px);
+  }
+  .manual-reader.open{display:flex;}
+  html.manual-reader-open{overflow:hidden;}
+  .manual-reader-head{
+    display:flex;align-items:center;gap:8px;flex-shrink:0;padding:10px 12px;background:var(--bg);border-bottom:1px solid var(--border);
+  }
+  .manual-reader-title{
+    flex:1;min-width:0;font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--muted);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .manual-reader-pages{font-family:'Space Mono',monospace;font-size:0.7rem;color:var(--gold);flex-shrink:0;}
+  .manual-reader-btn{
+    background:transparent;border:1px solid var(--border);color:var(--text);border-radius:4px;flex-shrink:0;
+    padding:5px 11px;font-family:'Space Mono',monospace;font-size:0.78rem;cursor:pointer;
+  }
+  .manual-reader-body{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px;background:#2a2a2a;}
+  .manual-page{margin:0 auto 8px;background:#fff;}
+  .manual-page canvas{display:block;}
+  .manual-reader-msg{color:#ddd;font-family:'Space Mono',monospace;font-size:0.8rem;text-align:center;padding:40px 20px;line-height:1.5;}
