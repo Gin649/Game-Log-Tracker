@@ -1,5 +1,5 @@
 // Game Details section in a game's profile: other players' typical playtime from
-// RetroAchievements (for the mode you're in) and a write-up from RAWG.
+// RetroAchievements (for the mode you're in), a write-up from RAWG and the game's manual (manuals.js).
 
 const PLAYTIME_TTL = 7 * 24 * 60 * 60 * 1000; // medians barely move
 const PLAYTIME_MISS_TTL = 10 * 60 * 1000;
@@ -102,7 +102,7 @@ function playtimeBox(label, seconds, players){
 }
 
 // aboutOnly: games tracked by hand (not on RA) have no playtime data, so only the write-up shows.
-function renderGameDetails(wrap, stats, description, aboutOnly){
+function renderGameDetails(wrap, stats, description, aboutOnly, manualCtx){
   if(description) description = tidyDescription(description); // also fixes write-ups saved before this was added
   const hard = statsMode === 'hardcore';
   const m = (!aboutOnly && stats) ? (hard ? stats.hardcore : stats.casual) : null;
@@ -110,6 +110,7 @@ function renderGameDetails(wrap, stats, description, aboutOnly){
 
   if(!hasTimes && !description){
     wrap.innerHTML = `<div class="gd-empty">${aboutOnly ? 'No write-up available for this game yet.' : 'No details available for this game yet.'}</div>`;
+    addManualSection(wrap, manualCtx);
     return;
   }
 
@@ -139,10 +140,12 @@ function renderGameDetails(wrap, stats, description, aboutOnly){
       });
     }
   }
+  addManualSection(wrap, manualCtx);
 }
 
 function setupGameDetailsUI(gameId, title, card, opts){
   const aboutOnly = !!(opts && opts.aboutOnly); // manual games: no RA playtime to fetch
+  const manualCtx = { gameId, title, consoleName: opts && opts.consoleName };
   const btn = card.querySelector('#modal-details-btn');
   const wrap = card.querySelector('#modal-details');
   if(!btn || !wrap) return;
@@ -173,7 +176,7 @@ function setupGameDetailsUI(gameId, title, card, opts){
 
     const stats = statsRes.status === 'fulfilled' ? statsRes.value : null;
     const description = descRes.status === 'fulfilled' ? descRes.value : null;
-    renderGameDetails(wrap, stats, description, aboutOnly);
+    renderGameDetails(wrap, stats, description, aboutOnly, manualCtx);
     if(!stats && !description){ loaded = false; pending = null; } // both failed: try again next time it's opened
   });
 }

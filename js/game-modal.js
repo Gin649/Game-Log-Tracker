@@ -226,7 +226,7 @@ function renderCustomGameModal(gameId, local, card){
   });
 
   attachRawgLookup(gameId, local.Title, card);
-  setupGameDetailsUI(gameId, local.Title, card, { aboutOnly: true });
+  setupGameDetailsUI(gameId, local.Title, card, { aboutOnly: true, consoleName: local.ConsoleName });
   setupGameGuideUI(gameId, local.Title, card, local.ConsoleID);
   setupCheatsUI(gameId, local.Title, card, local.ConsoleName);
   setupWalkthroughUI(gameId, local.Title, card, local.ConsoleName);
@@ -503,7 +503,7 @@ async function openGameModal(gameId, opts){
   }
 
   attachRawgLookup(gameId, title, card);
-  setupGameDetailsUI(gameId, title, card);
+  setupGameDetailsUI(gameId, title, card, { consoleName: console_ });
   setupGameGuideUI(gameId, title, card, ext.ConsoleID || (local && local.ConsoleID));
   setupCheatsUI(gameId, title, card, console_);
   setupWalkthroughUI(gameId, title, card, console_);
