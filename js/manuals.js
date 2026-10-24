@@ -49,6 +49,19 @@ const MANUAL_SYSTEM_ALIASES = {
   'xbox 360': ['Microsoft Xbox 360']
 };
 
+// Systems that sometimes hold a different scan of the same game (a handheld model, a renamed
+// console), used by the alternative-manual search.
+const MANUAL_RELATED = {
+  'Sega Genesis': ['Sega Nomad'],
+  'Sega Nomad': ['Sega Genesis'],
+  'NEC TurboGrafx-16': ['NEC PC Engine'],
+  'NEC PC Engine': ['NEC TurboGrafx-16'],
+  'Nintendo Game Boy': ['Nintendo Game Boy Color'],
+  'Nintendo Game Boy Color': ['Nintendo Game Boy'],
+  'SNK Neo-Geo Pocket': ['SNK Neo-Geo Pocket Color'],
+  'SNK Neo-Geo Pocket Color': ['SNK Neo-Geo Pocket']
+};
+
 function manualNorm(s){
   return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
@@ -69,7 +82,7 @@ function manualSystemsFor(consoleName){
 // Title spellings to try on the site, best guess first. Follows the guide matcher's ideas:
 // the article moved back to the front, "Version"/"Edition" dropped, accents folded, either
 // half of a "Title: Subtitle", and the publisher brand ("Disney's") left off or put on.
-function manualTitleVariants(title){
+function manualTitleVariants(title, strict){
   const full = (typeof cheatsCleanTitle === 'function' ? cheatsCleanTitle(title) : String(title || '')).trim();
   if(!full) return [];
   const fold = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -91,6 +104,10 @@ function manualTitleVariants(title){
   add(noNoise(fold(noArticle(full))));
   add(noBrand(fold(full)));
 
+  // Strict is for the alternative search, which collects every manual it finds, so it sticks to
+  // spellings of this exact game and skips the looser guesses below.
+  if(strict) return out.slice(0, 5);
+
   // Each side of a subtitle, when it still reads like a title (two words or more).
   [' - ', ': '].forEach(sep => {
     const i = full.indexOf(sep);
@@ -106,6 +123,13 @@ function manualTitleVariants(title){
   if(base && !/^disney/i.test(base)) add("Disney's " + base);
 
   return out.slice(0, 6);
+}
+
+function manualAltSystemsFor(consoleName){
+  const own = manualSystemsFor(consoleName);
+  const all = [...own];
+  own.forEach(s => (MANUAL_RELATED[s] || []).forEach(r => { if(!all.includes(r)) all.push(r); }));
+  return all.slice(0, 4);
 }
 
 function manualSupported(title, consoleName){
@@ -177,6 +201,16 @@ async function findManual(gameId, title, consoleName){
   return res.json();
 }
 
+async function findAlternatives(gameId, title, consoleName){
+  const qs = new URLSearchParams();
+  manualAltSystemsFor(consoleName).forEach(s => qs.append('system', s));
+  manualTitleVariants(title, true).forEach(g => qs.append('game', g));
+  qs.set('all', '1');
+  const res = await fetchWithTimeout(`${MANUAL_WORKER}/manual/find?${qs}`, 30000);
+  if(!res.ok) throw new Error('Alternative lookup failed (HTTP ' + res.status + ')');
+  return res.json();
+}
+
 async function downloadManualPdf(path, onProgress){
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 120000);
@@ -228,12 +262,16 @@ function setupManualUI(body, ctx){
 
   async function showIdle(extra){
     const file = await manualFileGet(gameId);
+    const meta = await loadManualMeta(gameId);
     if(file){
-      set(`${note('PDF, ' + manualSizeLabel(file.size) + ', saved on this device')}
-        <div class="gd-manual-actions">${btn('Read manual', 'read', true)}${btn('Save PDF', 'save')}${btn('Remove', 'remove')}</div>${extra || ''}`);
+      // "copy 2 of 3" only shows once an alternative search has found more than one manual.
+      const alts = meta && meta.alts && meta.alts.length > 1 ? meta.alts : null;
+      const at = alts ? alts.indexOf(file.path || meta.path) : -1;
+      const copy = alts && at >= 0 ? `, copy ${at + 1} of ${alts.length}` : '';
+      set(`${note('PDF, ' + manualSizeLabel(file.size) + ', saved on this device' + copy)}
+        <div class="gd-manual-actions">${btn('Read manual', 'read', true)}${btn('Save PDF', 'save')}${btn('Look for Alternative Manual', 'alt')}${btn('Remove', 'remove')}</div>${extra || ''}`);
       return;
     }
-    const meta = await loadManualMeta(gameId);
     if(meta && !meta.found){
       set(`${note('No manual found on Games Database for this game.')}
         <div class="gd-manual-actions">${btn('Try again', 'find')}<a class="gd-manual-btn" href="${MANUAL_LIST_URL}" target="_blank" rel="noopener">Browse site ↗</a></div>${extra || ''}`);
@@ -248,6 +286,27 @@ function setupManualUI(body, ctx){
     set(`${note(text)}${bar}`);
   }
 
+  // Downloads a manual and keeps it as this game's one saved copy. Saving under the same id
+  // replaces whatever was there, and only once the new download has finished, so a failed
+  // attempt leaves the old manual alone and a swap never leaves two copies on the device.
+  async function fetchAndKeep(path){
+    showProgress('Downloading…', null);
+    const blob = await downloadManualPdf(path, (got, total) => {
+      const label = total ? `Downloading… ${manualSizeLabel(got)} of ${manualSizeLabel(total)}` : `Downloading… ${manualSizeLabel(got)}`;
+      showProgress(label, total ? got / total : null);
+    });
+    const name = decodeURIComponent(path.split('/').pop()).replace(/_/g, ' ');
+    try{
+      await manualFilePut({ id: String(gameId), blob, name, size: blob.size, ts: Date.now(), path });
+    }catch(e){
+      return false;
+    }
+    return true;
+  }
+
+  const NO_ROOM = 'Downloaded, but there was no room to keep it on this device. Free some space and try again.';
+  const FAILED = 'Could not get the manual right now. Check your connection and try again.';
+
   async function run(){
     if(busy) return;
     busy = true;
@@ -261,25 +320,48 @@ function setupManualUI(body, ctx){
       }
       if(!meta.found){ busy = false; return showIdle(); }
 
-      showProgress('Downloading…', null);
-      const blob = await downloadManualPdf(meta.path, (got, total) => {
-        const label = total ? `Downloading… ${manualSizeLabel(got)} of ${manualSizeLabel(total)}` : `Downloading… ${manualSizeLabel(got)}`;
-        showProgress(label, total ? got / total : null);
-      });
-      const name = decodeURIComponent(meta.path.split('/').pop()).replace(/_/g, ' ');
-      try{
-        await manualFilePut({ id: String(gameId), blob, name, size: blob.size, ts: Date.now() });
-      }catch(e){
-        busy = false;
-        return showIdle(note('Downloaded, but there was no room to keep it on this device. Free some space and try again.'));
-      }
+      const kept = await fetchAndKeep(meta.path);
       busy = false;
+      if(!kept) return showIdle(note(NO_ROOM));
       await showIdle();
       if(body.isConnected) openManualReader(gameId, title);
     }catch(e){
       console.error('Manual failed:', e && e.message);
       busy = false;
-      showIdle(note('Could not get the manual right now. Check your connection and try again.'));
+      showIdle(note(FAILED));
+    }
+  }
+
+  // Swaps the saved manual for another one the site has for this game (another region or
+  // scan, possibly filed under a related system). Repeated taps cycle through what was found.
+  async function runAlternative(){
+    if(busy) return;
+    busy = true;
+    try{
+      const file = await manualFileGet(gameId);
+      const meta = await loadManualMeta(gameId);
+      const current = (file && file.path) || (meta && meta.path) || '';
+      let all = meta && meta.alts && meta.alts.length ? meta.alts : null;
+      if(!all){
+        showProgress('Looking for another manual…', null);
+        const res = await findAlternatives(gameId, title, consoleName);
+        all = (res && res.paths) || [];
+        if(current && !all.includes(current)) all.unshift(current);
+        await saveManualMeta(gameId, { found: true, path: current || all[0], alts: all });
+      }
+      const next = all.length > 1 ? all[(all.indexOf(current) + 1) % all.length] : null;
+      if(!next){ busy = false; return showIdle(note('No alternative manual found for this game.')); }
+
+      const kept = await fetchAndKeep(next);
+      busy = false;
+      if(!kept) return showIdle(note(NO_ROOM));
+      await saveManualMeta(gameId, { found: true, path: next, alts: all });
+      await showIdle();
+      if(body.isConnected) openManualReader(gameId, title);
+    }catch(e){
+      console.error('Alternative manual failed:', e && e.message);
+      busy = false;
+      showIdle(note(FAILED));
     }
   }
 
@@ -288,6 +370,7 @@ function setupManualUI(body, ctx){
     if(!el || busy) return;
     const act = el.dataset.act;
     if(act === 'find') run();
+    else if(act === 'alt') runAlternative();
     else if(act === 'read') openManualReader(gameId, title);
     else if(act === 'save'){
       const file = await manualFileGet(gameId);
