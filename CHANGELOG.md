@@ -5,7 +5,7 @@ Notable changes to Game Log Tracker, newest first.
 ## v2.1.2.2
 
 ### Added
-- Game Manuals are now Added in the Game Details section for systems Games Database covers. Tap Download manual and the PDF is found, saved on your device, and opened in a built-in reader with zoom. If you wish you can Save PDF to your downloads folder. Also you can Remove it from your device once you don't need it anymore. 
+- Game Details now ends with a Manual section for systems Games Database covers. Tap Download manual and the PDF is found, saved on your device, and opened in a built-in reader with zoom. After that it works offline, and you can Save PDF or Remove it from the same place. If the scan is the wrong language or region, Look for Alternative Manual searches the game's related systems (Genesis and Nomad, for example), swaps the saved PDF for another one, and repeated taps cycle through what it found.
 
 ## v2.1.2.1
 
