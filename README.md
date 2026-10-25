@@ -4,6 +4,8 @@ A web app for keeping track of all your games by tracking retroachievements and 
 
 Live app: https://gin649.github.io/Game-Log-Tracker
 
+Join the Discord: https://discord.gg/V3GdECWXg
+
 Play some games with us. Join the discord, invite link at bottom of the Readme.
 
 ## What it does
@@ -114,7 +116,7 @@ Achievement data comes from RetroAchievements and ratings and box art from RAWG.
 
 ## Contact
 
-Questions or bugs: open an issue here, or find me on Discord at https://discord.gg/dJtAy4pvA.
+Questions or bugs: open an issue here, or find me on Discord.
 
 ## License
 
