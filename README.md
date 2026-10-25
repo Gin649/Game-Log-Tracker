@@ -6,7 +6,7 @@ Live app: https://gin649.github.io/Game-Log-Tracker
 
 Join the Discord: https://discord.gg/V3GdECWXg
 
-Play some games with us. Join the discord, invite link at bottom of the Readme.
+Play some games with us. 
 
 ## What it does
 
