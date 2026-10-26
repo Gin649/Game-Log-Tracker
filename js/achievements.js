@@ -68,8 +68,27 @@ const achOrderCache = {}; // gameId -> array of IDs, or null when no custom orde
 // Filter and reorder state for each achievements list, keyed by game ID. A game's own list
 // and its subset lists can be open at the same time, so they can't share one set of flags.
 const achPanelStates = {};
+// The Missable / Locked filter toggles are remembered across page refreshes
+// (per user + game/subset, in localStorage). Reorder mode and import errors are not.
+function achFilterKey(gameId){
+  return `ach-filters:${(creds && creds.username ? creds.username : '').trim().toLowerCase()}:${gameId}`;
+}
+function loadAchFilters(gameId){
+  try{
+    const v = JSON.parse(localStorage.getItem(achFilterKey(gameId)) || '{}');
+    return { missableOnly: !!v.missableOnly, lockedOnly: !!v.lockedOnly };
+  }catch(e){ return { missableOnly: false, lockedOnly: false }; }
+}
+function saveAchFilters(gameId){
+  const st = achPanelStates[gameId];
+  if(!st) return;
+  try{
+    if(st.missableOnly || st.lockedOnly) localStorage.setItem(achFilterKey(gameId), JSON.stringify({ missableOnly: st.missableOnly, lockedOnly: st.lockedOnly }));
+    else localStorage.removeItem(achFilterKey(gameId));
+  }catch(e){ /* storage unavailable: filters just won't persist */ }
+}
 function achState(gameId){
-  if(!achPanelStates[gameId]) achPanelStates[gameId] = { missableOnly: false, reorderMode: false, importError: '' };
+  if(!achPanelStates[gameId]) achPanelStates[gameId] = { ...loadAchFilters(gameId), reorderMode: false, importError: '' };
   return achPanelStates[gameId];
 }
 function resetAchState(gameId){
@@ -182,24 +201,39 @@ function renderAchievementsList(list, isHardcoreMode, order, reorderMode){
 // Wraps renderAchievementsList with the "Missable Only" filter bar RA's own
 // site shows, only rendered when the set actually has any missable
 // achievements, since most sets on RA haven't been typed at all yet.
-function renderAchievementsPanel(list, isHardcoreMode, missableOnly, order, reorderMode, gameId, gameTitle, importError){
+function renderAchievementsPanel(list, isHardcoreMode, missableOnly, lockedOnly, order, reorderMode, gameId, gameTitle, importError){
   if(!list || list.length === 0) return '<div class="achievements-list-loading">No achievement data available.</div>';
   const missableCount = list.filter(isMissable).length;
   const showMissable = missableCount > 0 && !reorderMode;
+  const lockedCount = splitEarnedLocked(list, isHardcoreMode).locked.length;
+  const showLocked = lockedCount > 0 && !reorderMode;
   const leftBtns = reorderMode
     ? `<button class="ach-filter-btn active" id="ach-reorder-toggle" type="button">✓ Done</button>`
     : `<button class="ach-filter-btn" id="ach-reorder-toggle" type="button">⇅ Reorder</button>`
       + (order ? `<button class="ach-filter-btn" id="ach-reorder-reset" type="button">Reset order</button>` : '');
   const filterBar = `<div class="ach-filter-row">
         <div class="ach-filter-left">${leftBtns}</div>
+        <div class="ach-filter-right">
         ${showMissable ? `<button class="ach-filter-btn ${missableOnly ? 'active' : ''}" id="ach-missable-toggle" type="button">
-             <span class="ach-missable-badge" aria-hidden="true">!</span> Missable Only (<span class="ach-filter-count">${missableCount}</span>)
+             <span class="ach-missable-badge ach-filter-icon" aria-hidden="true">!</span> Missable (<span class="ach-filter-count">${missableCount}</span>)
            </button>` : ''}
+        ${showLocked ? `<button class="ach-filter-btn ${lockedOnly ? 'active' : ''}" id="ach-locked-toggle" type="button" title="Show only locked achievements">
+             <svg class="ach-lock-icon ach-filter-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-7-2a2 2 0 0 1 4 0v2h-4V7z"/></svg> Locked (<span class="ach-filter-count">${lockedCount}</span>)
+           </button>` : ''}
+        </div>
       </div>
       ${reorderMode ? '<div class="ach-reorder-hint">Press and hold a row, then drag it. Or use ▲▼. Your order saves automatically.</div>' : ''}`;
-  const rows = (missableOnly && !reorderMode) ? list.filter(isMissable) : list;
+  let rows = list;
+  if(!reorderMode){
+    if(missableOnly && showMissable) rows = rows.filter(isMissable);
+    if(lockedOnly && showLocked){
+      const lockedIds = new Set(splitEarnedLocked(list, isHardcoreMode).locked);
+      rows = rows.filter(a => lockedIds.has(a));
+    }
+  }
+  const filterLabel = (missableOnly && lockedOnly) ? 'locked missable' : lockedOnly ? 'locked' : 'missable';
   const body = rows.length === 0
-    ? '<div class="achievements-list-loading">No missable achievements in this set.</div>'
+    ? `<div class="achievements-list-loading">No ${filterLabel} achievements in this set.</div>`
     : `<div class="ach-rows${reorderMode ? ' reordering' : ''}" id="ach-rows">${renderAchievementsList(rows, isHardcoreMode, order, reorderMode)}</div>`;
 
   // Share/import buttons go below the list: sharing a custom order is a niche
@@ -222,11 +256,20 @@ function renderAchWrapContent(achWrap, gameId, gameTitle){
   const order = achOrderCache[gameId] || null;
   const local = findGameLocal(gameId);
   const title = gameTitle || (local ? local.Title : '');
-  achWrap.innerHTML = renderAchievementsPanel(list, statsMode === 'hardcore', state.missableOnly, order, state.reorderMode, gameId, title, state.importError);
+  achWrap.innerHTML = renderAchievementsPanel(list, statsMode === 'hardcore', state.missableOnly, state.lockedOnly, order, state.reorderMode, gameId, title, state.importError);
   const toggleBtn = achWrap.querySelector('#ach-missable-toggle');
   if(toggleBtn){
     toggleBtn.addEventListener('click', () => {
       state.missableOnly = !state.missableOnly;
+      saveAchFilters(gameId);
+      renderAchWrapContent(achWrap, gameId, title);
+    });
+  }
+  const lockedBtn = achWrap.querySelector('#ach-locked-toggle');
+  if(lockedBtn){
+    lockedBtn.addEventListener('click', () => {
+      state.lockedOnly = !state.lockedOnly;
+      saveAchFilters(gameId);
       renderAchWrapContent(achWrap, gameId, title);
     });
   }
@@ -234,7 +277,8 @@ function renderAchWrapContent(achWrap, gameId, gameTitle){
   if(reorderBtn){
     reorderBtn.addEventListener('click', () => {
       state.reorderMode = !state.reorderMode;
-      if(state.reorderMode) state.missableOnly = false; // can't reorder a filtered subset
+      // Can't reorder a filtered subset. The list is shown unfiltered while reordering,
+      // so the saved filter toggles are left alone and come back when Done is pressed.
       renderAchWrapContent(achWrap, gameId, title);
     });
   }
