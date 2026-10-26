@@ -499,7 +499,11 @@
     font-family:'Comic Sans MS','Comic Neue',cursive;font-weight:700;font-size:0.95rem;line-height:1;
   }
   .ach-filter-row{padding:10px 12px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
-  .ach-filter-left{display:flex;gap:8px;flex-wrap:wrap;}
+  .ach-filter-left,.ach-filter-right{display:flex;gap:8px;flex-wrap:wrap;}
+  .ach-filter-right{margin-left:auto;}
+  /* Missable "!" icon is 30% smaller than the on-row badge; the lock icon matches its footprint. */
+  .ach-filter-btn .ach-missable-badge.ach-filter-icon{width:15px;height:15px;border-width:1.5px;font-size:0.665rem;}
+  .ach-filter-btn .ach-lock-icon{width:15px;height:15px;flex-shrink:0;}
   .ach-rows{display:flex;flex-direction:column;gap:1px;position:relative;}
   .ach-row.ach-shifting{transition:transform 0.15s ease;}
   .ach-reorder-hint{padding:6px 12px;background:var(--panel);border-bottom:1px solid var(--border);font-size:0.75rem;color:var(--muted);}
