@@ -2,6 +2,18 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.2.3
+
+### Added
+- Game profiles can now filter the achievements list to the ones you haven't unlocked. A Locked button sits next to Missable above the list, shows how many are left, and remembers its setting. It follows the Casual/Hardcore toggle and can be combined with Missable.
+- Game Details now shows Your Time in teal on the Time to Beat and Time to Master boxes once you have reached that point in a game. It follows the Casual/Hardcore toggle. RetroAchievements doesn't report these times, so for games you beat or master from this update on, the app saves RetroAchievements' playtime the first time it sees the new award (pull to refresh after a session to capture it promptly). For earlier games the beat time is estimated from your unlock dates and scaled to your real playtime, and is marked with ~. Master time uses your tracked playtime when RetroAchievements has it.
+
+### Changed
+- The dashboard now opens instantly with your last saved profile, recent games, unlocks and library, then updates in the background once RetroAchievements responds. If a refresh fails, what you were looking at stays on screen.
+- Achievement lists are now saved on your device. Opening a game's achievements after a reload no longer needs a new request, and subset details fill in sooner.
+- A saved game is re-checked as soon as its unlock count changes. Games you haven't played in a few days keep their saved data for up to a week instead of 12 hours.
+- Backup files no longer include saved RetroAchievements data that is rebuilt automatically, which keeps them much smaller. The saved beat and master times are still included, since they can't be rebuilt.
+
 ## v2.1.2.2
 
 ### Added
