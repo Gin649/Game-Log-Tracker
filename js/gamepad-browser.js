@@ -8,10 +8,8 @@
 // Two kinds of input are read:
 //   - The browser's Gamepad API: external pads and handhelds whose controls show up as a gamepad.
 //     Browsers hide a pad until a button is pressed on it.
-//   - Keyboard keys: some handhelds (Android ones especially) send their D-pad and buttons to the
-//     page as arrow keys, Enter and Escape instead. Turn this off under Controller in the menu if a
-//     real keyboard gets in the way.
-// "Test controller" in the menu shows what the device is actually sending.
+//   - Keyboard keys, as a fallback: some handhelds send their D-pad and buttons to the page as arrow
+//     keys, Enter and Escape instead of as a gamepad.
 (function(){
   if(!window.GLTPad) return;
 
@@ -19,7 +17,6 @@
   const STICK_ON = 0.55, STICK_OFF = 0.35;   // left stick counts as a direction, with a little hysteresis
   const RIGHT_DEAD = 0.15;                   // right stick dead zone
   const TRIGGER_ON = 0.6, TRIGGER_OFF = 0.3; // analog triggers
-  const KEYS_SETTING = 'pad-keys';
 
   // Button numbers in the standard layout. Pads that don't report it get the same numbers as a guess.
   const BUTTONS = [
@@ -46,12 +43,6 @@
   let sentRight = 0;
   let raf = 0;
   let paused = false;   // true while the window is in the background
-  let keysOn = /Android/i.test(navigator.userAgent); // overwritten by the saved setting
-  let lastKey = '';
-  let lastConnected = '';
-
-  const $dbg = () => document.getElementById('pad-debug');
-  const debugOpen = () => { const d = $dbg(); return !!d && d.style.display === 'block'; };
 
   function update(name){
     const down = !!(fromPad[name] || fromKeys[name]);
@@ -134,16 +125,16 @@
   function poll(){
     raf = 0;
     const pads = paused ? [] : connectedPads();
-    if(pads.length) readPads(pads);
-    else{ // no controller right now: let go of whatever it was holding, but not a held key
+    if(pads.length){
+      readPads(pads);
+    }else{ // no controller right now: let go of whatever it was holding, but not a held key
       NAMES.forEach(n => { fromPad[n] = false; update(n); });
       if(sentRight){ sentRight = 0; window.GLTPad.rs(0); }
       stickDir = null;
     }
-    if(debugOpen()) renderDebug();
-    // Keep watching while a controller is connected (the page may just be in the background) or the
-    // test panel is open; otherwise sleep until gamepadconnected wakes this up.
-    if(pads.length || connectedPads().length || debugOpen()) raf = requestAnimationFrame(poll);
+    // Keep watching while a controller is connected (the page may just be in the background);
+    // otherwise sleep until gamepadconnected wakes this up.
+    if(pads.length || connectedPads().length) raf = requestAnimationFrame(poll);
   }
 
   function start(){
@@ -158,87 +149,24 @@
     return el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|file|range|color)$/.test(el.type);
   }
 
-  function describeKey(e, verb){
-    lastKey = verb + ' key=' + e.key + ' code=' + e.code + ' keyCode=' + e.keyCode;
-    if(debugOpen()) renderDebug();
-  }
-
   document.addEventListener('keydown', (e) => {
-    describeKey(e, 'down');
     const name = KEY_MAP[e.key];
-    if(!keysOn || !name || typing(e.target) || e.ctrlKey || e.altKey || e.metaKey) return;
+    if(!name || typing(e.target) || e.ctrlKey || e.altKey || e.metaKey) return;
     e.preventDefault(); // stops the arrow keys scrolling the page underneath the highlight
     fromKeys[name] = true;
     update(name);
   }, true);
 
   document.addEventListener('keyup', (e) => {
-    describeKey(e, 'up');
     const name = KEY_MAP[e.key];
     if(!name || !fromKeys[name]) return;
     fromKeys[name] = false;
     update(name);
   }, true);
 
-  // ---- test panel and settings in the menu ----------------------------------------------------
-
-  function renderDebug(){
-    const pads = connectedPads();
-    const lines = [
-      'page focused: ' + (document.hasFocus() ? 'yes' : 'no') + (paused ? ' (paused)' : ''),
-      'gamepad API: ' + (navigator.getGamepads ? 'yes' : 'not available'),
-      'controllers: ' + pads.length + (pads.length ? '' : ' (press a button on the controller)'),
-    ];
-    pads.forEach((p, i) => {
-      const held = [];
-      p.buttons.forEach((b, n) => { if(b.pressed || b.value > 0.3) held.push(n); });
-      lines.push('[' + i + '] ' + p.id.slice(0, 60));
-      lines.push('    layout: ' + (p.mapping || 'not standard') + ', ' + p.buttons.length + ' buttons, ' + p.axes.length + ' axes');
-      lines.push('    buttons held: ' + (held.join(' ') || 'none'));
-      lines.push('    axes: ' + p.axes.map(a => a.toFixed(2)).join(' '));
-    });
-    if(lastConnected) lines.push('last connected: ' + lastConnected.slice(0, 60));
-    lines.push('keys: ' + (keysOn ? 'on' : 'off') + ', last ' + (lastKey || 'none yet'));
-    $dbg().textContent = lines.join('\n');
-  }
-
-  function syncKeysUi(){
-    const sw = document.getElementById('pad-keys-switch');
-    if(!sw) return;
-    sw.classList.toggle('on', keysOn);
-    sw.setAttribute('aria-checked', keysOn ? 'true' : 'false');
-  }
-
-  const testBtn = document.getElementById('pad-test-btn');
-  if(testBtn) testBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const d = $dbg();
-    const open = d.style.display !== 'block';
-    d.style.display = open ? 'block' : 'none';
-    document.getElementById('pad-test-arrow').textContent = open ? '▾' : '▸';
-    if(open){ renderDebug(); start(); }
-  });
-
-  const keysSwitch = document.getElementById('pad-keys-switch');
-  if(keysSwitch) keysSwitch.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    keysOn = !keysOn;
-    if(!keysOn){ NAMES.forEach(n => { fromKeys[n] = false; update(n); }); }
-    syncKeysUi();
-    try{ await window.storage.set(KEYS_SETTING, keysOn ? '1' : '0', false); }catch(err){ /* non-fatal */ }
-  });
-
-  (async () => {
-    try{
-      const saved = await window.storage.get(KEYS_SETTING, false);
-      keysOn = !!saved && saved.value === '1';
-    }catch(e){ /* nothing saved yet, keep the default for this device */ }
-    syncKeysUi();
-  })();
-
   // ---- wiring --------------------------------------------------------------------------------
 
-  window.addEventListener('gamepadconnected', (e) => { lastConnected = e.gamepad ? e.gamepad.id : ''; start(); });
+  window.addEventListener('gamepadconnected', start);
   // The browser stops updating pads in the background, so ignore them until the page is back.
   window.addEventListener('blur', () => { paused = true; releaseAll(); });
   window.addEventListener('focus', () => { paused = false; });

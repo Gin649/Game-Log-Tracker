@@ -103,6 +103,7 @@
     }
 
     function onTap(e) {
+      if (!e.isTrusted) return; // a controller press clicks the highlighted item from script; that isn't a tap
       if (e.target.closest('button, a, input, select, textarea, label')) return;
       if (window.gltStandalone) return; // stay armed: Standalone mode may be switched off later
       enterFullscreen();
