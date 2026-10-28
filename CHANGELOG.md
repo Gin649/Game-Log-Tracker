@@ -2,6 +2,11 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.2.4
+
+### Added
+- Controller support. Connect a gamepad to your phone, tablet or computer and press any button, and a gold highlight shows where you are. The D-pad or left stick moves it, A opens what's highlighted and B goes back, the right stick scrolls, Select opens the menu, and X refreshes. L1 and R1 switch the console filter, and L2 and R2 switch tabs. Touching the screen hides the highlight again, so touch works exactly as before. A Controller section in the menu can swap A and B. It works with controllers your browser reports with the standard layout, in Chrome, Edge and Firefox, and only while the page is in front.
+
 ## v2.1.2.3
 
 ### Added

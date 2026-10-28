@@ -39,6 +39,7 @@ Play some games with us.
 ### Other things
 
 - Text size controls in the menu.
+- Controller support. Plug in or pair a gamepad and press a button: the D-pad or left stick moves a highlight, A confirms, B goes back, the right stick scrolls, Select opens the menu, X refreshes, L1 / R1 change console and L2 / R2 change tab. Touch still works and hides the highlight. A and B can be swapped under Controller in the menu. It needs a controller your browser reports with the standard layout, and the page has to be in front.
 - An optional clock and battery readout at the top of every screen, turned on under Display in the menu. The battery shows as four pixel hearts that empty as it drops to 75, 50, 25 and 5 percent, with the time next to them. It needs Chrome or Edge on Android or Linux, because other browsers don't let sites read the battery. It's off by default.
 - Standalone mode, under Display in the menu, keeps your phone's system bars visible instead of going fullscreen. It's off by default, so the app opens fullscreen on the first tap.
 - Pull down to refresh, on a game's profile too. Sections you had open stay open.

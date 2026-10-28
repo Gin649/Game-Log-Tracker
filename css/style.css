@@ -130,7 +130,7 @@
     display:flex;justify-content:space-between;align-items:center;
     color:var(--gold);font-weight:700;
   }
-  .dropdown-heading #ra-heading-arrow,.dropdown-heading #textsize-heading-arrow,.dropdown-heading #display-heading-arrow{font-size:0.625rem;color:var(--muted);}
+  .dropdown-heading #ra-heading-arrow,.dropdown-heading #textsize-heading-arrow,.dropdown-heading #display-heading-arrow,.dropdown-heading #pad-heading-arrow{font-size:0.625rem;color:var(--muted);}
   .dropdown-plain{color:var(--text);font-weight:400;}
   .dropdown-subitem{
     padding-left:26px;font-size:0.7188rem;color:var(--muted);background:var(--bg-alt);
@@ -175,6 +175,17 @@
   .display-switch.on{background:var(--teal);border-color:var(--teal);}
   .display-switch.on::after{left:18px;background:var(--bg);}
   .display-switch:disabled{opacity:0.4;cursor:default;}
+
+  /* Controller highlight: only shows while a controller is being used (see gamepad.js). */
+  body.pad-mode .pad-focus{
+    outline:3px solid var(--gold);
+    outline-offset:-3px;
+    box-shadow:0 0 0 4px rgba(228,169,63,0.28);
+    scroll-margin:110px 20px;
+  }
+  body.pad-mode .pad-focus.display-switch,
+  body.pad-mode .pad-focus.chip{outline-offset:2px;}
+  .pad-help{margin:6px 14px 10px;font-size:0.6562rem;line-height:1.7;color:var(--muted);}
 
   /* Optional clock and battery readout (Display menu). Sits above every full-screen layer, and
      those layers leave room for it through --status-h, which is 0 unless the readout is on. */
