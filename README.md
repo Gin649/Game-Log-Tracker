@@ -4,7 +4,7 @@ A web app for keeping track of all your games by tracking retroachievements and 
 
 Live app: https://gin649.github.io/Game-Log-Tracker
 
-Join the Discord: https://discord.gg/V3GdECWXg
+Join the Discord: https://discord.gg/6dgZA4yD2
 
 Play some games with us. 
 
