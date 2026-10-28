@@ -185,6 +185,12 @@
   }
   body.pad-mode .pad-focus.display-switch,
   body.pad-mode .pad-focus.chip{outline-offset:2px;}
+  .pad-debug{
+    margin:0;padding:8px 14px;background:var(--bg-alt);border-top:1px solid var(--border);
+    font-family:'Space Mono',monospace;font-size:0.6rem;line-height:1.5;color:var(--text);
+    white-space:pre-wrap;word-break:break-all;
+  }
+  .dropdown-heading #pad-test-arrow{font-size:0.625rem;color:var(--muted);}
   .pad-help{margin:6px 14px 10px;font-size:0.6562rem;line-height:1.7;color:var(--muted);}
 
   /* Optional clock and battery readout (Display menu). Sits above every full-screen layer, and

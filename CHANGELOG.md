@@ -2,6 +2,15 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.2.5
+
+### Added
+- Controller support now covers handhelds whose controls arrive as keyboard keys (arrow keys, Enter, Esc, Page Up and Page Down) as well as ones that show up as a gamepad. The keyboard option is on by default on Android and can be switched under Controller in the menu. Gamepads that don't use the browser's standard layout are accepted too, using the standard button numbers as a best guess.
+- Controller, then Test controller, in the menu shows what your device is sending (controllers, buttons held, sticks, last key pressed), which helps when a handheld doesn't respond.
+
+### Fixed
+- The controller highlight no longer depends on the browser reporting the page as focused, which some Android browsers don't do reliably.
+
 ## v2.1.2.4
 
 ### Added
