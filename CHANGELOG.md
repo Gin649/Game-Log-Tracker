@@ -2,6 +2,13 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.2.6
+
+### Changed
+- Social now fills the whole screen instead of a small window, so it is easier to read.
+- Search in the guide reader no longer runs while you type. Type the full word, then tap the new → button beside the search box (the keyboard's search key works too). Editing the word clears the old results until you search again.
+- Manuals no longer have a Save PDF button, since the PDF is already saved in your storage folder.
+
 ## v2.1.2.5
 
 ### Added

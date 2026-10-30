@@ -447,7 +447,7 @@
   // viewer). Positions are stored as character offsets into the guide text, so they survive
   // font-size changes and rotation.
   let readerGuide = null, readerGameId = null, readerIndex = null;
-  const findState = { ranges: [], starts: [], idx: -1, origin: null, capped: false, timer: null };
+  const findState = { ranges: [], starts: [], idx: -1, origin: null, capped: false, term: '' };
   const hasHighlightAPI = typeof CSS !== 'undefined' && !!CSS.highlights && typeof Highlight !== 'undefined';
   const isReaderOpen = () => $('#guide-reader-overlay').classList.contains('open');
 
@@ -529,10 +529,11 @@
     const has = findState.ranges.length > 0;
     $('#guide-find-prev').disabled = !has;
     $('#guide-find-next').disabled = !has && !$('#guide-find-input').value.trim();
+    $('#guide-find-go').disabled = !$('#guide-find-input').value.trim();
     $('#guide-find-back').disabled = findState.origin === null;
   }
   function clearFind(){
-    findState.ranges = []; findState.starts = []; findState.idx = -1; findState.capped = false;
+    findState.ranges = []; findState.starts = []; findState.idx = -1; findState.capped = false; findState.term = '';
     if(hasHighlightAPI){ CSS.highlights.delete('guide-find'); CSS.highlights.delete('guide-find-current'); }
     $('#guide-find-count').textContent = '';
     updateFindButtons();
@@ -560,6 +561,7 @@
     if(!raw){ updateFindButtons(); return; }
     if(raw.length < 2){ $('#guide-find-count').textContent = 'Type 2+ letters'; return; }
     const needle = raw.toLowerCase();
+    findState.term = needle; // the word these results belong to
     const idx = getReaderIndex();
     const CAP = 5000;
     const ranges = [], starts = [];
@@ -697,7 +699,7 @@
     $('#guide-find-btn').classList.remove('active');
     $('#guide-marks-btn').classList.remove('active');
     $('#guide-text-btn').classList.remove('active');
-    if(findWasOpen){ clearTimeout(findState.timer); clearFind(); findState.origin = null; }
+    if(findWasOpen){ clearFind(); findState.origin = null; }
     $('#guide-marks-msg').textContent = '';
   }
   function toggleFindBar(){
@@ -728,15 +730,22 @@
   $('#guide-find-back').addEventListener('click', () => {
     if(findState.origin !== null) $('#guide-reader-body').scrollTo({ top: findState.origin, behavior: 'auto' });
   });
+  // The search only runs when you ask for it: the → button or Enter. Typing just clears the old
+  // results, so a count and highlights for a different word aren't left on screen.
+  function submitFind(backwards){
+    const term = $('#guide-find-input').value.trim().toLowerCase();
+    if(term && term === findState.term && findState.ranges.length) stepMatch(backwards ? -1 : 1);
+    else runFind();
+  }
+  $('#guide-find-go').addEventListener('click', () => submitFind(false));
   $('#guide-find-input').addEventListener('input', () => {
-    clearTimeout(findState.timer);
-    findState.timer = setTimeout(runFind, 250);
+    if($('#guide-find-input').value.trim().toLowerCase() !== findState.term) clearFind();
+    else updateFindButtons();
   });
   $('#guide-find-input').addEventListener('keydown', (e) => {
     if(e.key === 'Enter'){
       e.preventDefault();
-      clearTimeout(findState.timer);
-      if(findState.ranges.length) stepMatch(e.shiftKey ? -1 : 1); else runFind();
+      submitFind(e.shiftKey);
     }
   });
   $('#guide-marks-add').addEventListener('click', addBookmarkHere);

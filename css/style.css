@@ -437,6 +437,22 @@
   .game-profile-card .modal-close{
     top:calc(10px + env(safe-area-inset-top) + var(--status-h));right:calc(10px + env(safe-area-inset-right));
   }
+  /* Social fills the screen the same way, so the list and each friend's recent unlocks are easier to read. */
+  .social-view{
+    background:var(--bg);padding:0;overflow-x:hidden;overflow-y:auto;
+    -webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;
+  }
+  .social-card{
+    max-width:none;margin:0;border:none;border-radius:0;
+    min-height:100%;min-height:100dvh;
+    padding-top:calc(env(safe-area-inset-top) + var(--status-h));
+    padding-bottom:env(safe-area-inset-bottom);
+    overflow-x:hidden;
+  }
+  .social-card .modal-body{max-width:960px;margin:0 auto;padding:12px 20px 40px;}
+  .social-card .modal-close{
+    top:calc(10px + env(safe-area-inset-top) + var(--status-h));right:calc(10px + env(safe-area-inset-right));
+  }
   /* Game profile text runs 10% larger than the shared modal baseline used by
      the settings dialogs (Connect RA, Add game, RAWG, Data), scoped so it
      doesn't affect those. */
