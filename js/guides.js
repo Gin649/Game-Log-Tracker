@@ -527,8 +527,7 @@
   // search
   function updateFindButtons(){
     const has = findState.ranges.length > 0;
-    $('#guide-find-prev').disabled = !has;
-    $('#guide-find-next').disabled = !has && !$('#guide-find-input').value.trim();
+    $('#guide-find-nav').style.display = has ? 'flex' : 'none'; // Prev / Next only once there are results
     $('#guide-find-go').disabled = !$('#guide-find-input').value.trim();
     $('#guide-find-back').disabled = findState.origin === null;
   }
@@ -588,11 +587,7 @@
     showMatch(lo >= ranges.length ? 0 : lo);
   }
   function stepMatch(delta){
-    if(!findState.ranges.length){
-      if(delta > 0 && $('#guide-find-input').value.trim()) runFind();
-      return;
-    }
-    showMatch(findState.idx + delta);
+    if(findState.ranges.length) showMatch(findState.idx + delta);
   }
 
   // bookmarks
@@ -731,13 +726,9 @@
     if(findState.origin !== null) $('#guide-reader-body').scrollTo({ top: findState.origin, behavior: 'auto' });
   });
   // The search only runs when you ask for it: the → button or Enter. Typing just clears the old
-  // results, so a count and highlights for a different word aren't left on screen.
-  function submitFind(backwards){
-    const term = $('#guide-find-input').value.trim().toLowerCase();
-    if(term && term === findState.term && findState.ranges.length) stepMatch(backwards ? -1 : 1);
-    else runFind();
-  }
-  $('#guide-find-go').addEventListener('click', () => submitFind(false));
+  // results, so a count and highlights for a different word aren't left on screen. Prev and Next
+  // (shown once there are results) step through them.
+  $('#guide-find-go').addEventListener('click', runFind);
   $('#guide-find-input').addEventListener('input', () => {
     if($('#guide-find-input').value.trim().toLowerCase() !== findState.term) clearFind();
     else updateFindButtons();
@@ -745,7 +736,7 @@
   $('#guide-find-input').addEventListener('keydown', (e) => {
     if(e.key === 'Enter'){
       e.preventDefault();
-      submitFind(e.shiftKey);
+      runFind();
     }
   });
   $('#guide-marks-add').addEventListener('click', addBookmarkHere);
