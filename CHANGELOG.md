@@ -17,6 +17,8 @@ Styles, headings and behaviour brought over from the DS Launcher app (1.0.6 to 1
 - Headings are bold, as are the years in Beaten. Hide beaten is now Hide Beaten.
 - The menu entries alternate gold and white. Text size is now inside Display Options, and the controller settings are under Gamepad Config.
 - Only one section is open at a time in the menu, and the section you open scrolls to the top so you can see all of it. The menu scrolls if it is taller than the screen.
+- Only one section is open at a time in a game profile. Opening ROM Hacks closes Game Guide, for example.
+- In a game profile, Back now closes the open section first (achievements, guides, ROM hacks and so on). Pressing it again closes the profile. This works with the Back button, the back gesture and the controller's B button.
 - On the controller, the tab buttons and the console buttons wrap around. Going past the last one returns to the first, and going back from the first goes to the last. The help text now calls the refresh button Y (the left button, the same one as before).
 
 ## v2.1.2.6

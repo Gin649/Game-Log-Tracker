@@ -338,9 +338,30 @@ function pushProfileHistory(){
 }
 window.addEventListener('popstate', () => {
   if(!profileHistoryPushed) return;
+  if($('#modal-backdrop').classList.contains('open') && closeOpenProfileSection()){
+    history.pushState({ gltProfile: true }, ''); // Back closed a section, so the profile keeps its history entry
+    return;
+  }
   profileHistoryPushed = false; // Back already removed the entry
   if($('#modal-backdrop').classList.contains('open')) closeGameModal({ fromHistory: true });
 });
+
+// Back closes the open section (achievements, guide, ROM hacks...) before it closes the profile.
+// Returns true if a section was open.
+function closeOpenProfileSection(){
+  const open = $('#modal-card').querySelectorAll('.btn-view-achievements.open');
+  if(!open.length) return false;
+  open[open.length - 1].click();
+  return true;
+}
+
+// Only one section is open at a time: opening one closes any other that is open.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest && e.target.closest('#modal-card .btn-view-achievements');
+  if(!btn || btn.classList.contains('open')) return;
+  if(btn.querySelector('.arrow') && btn.querySelector('.arrow').textContent !== '\u25B8') return; // external links (cheats, YouTube) don't open a section
+  $('#modal-card').querySelectorAll('.btn-view-achievements.open').forEach(o => { if(o !== btn) o.click(); });
+}, true);
 
 // Ids of the profile's section buttons (achievements, guide, ...) that are currently expanded.
 function openProfilePanelIds(){

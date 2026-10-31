@@ -43,7 +43,7 @@ Play some games with us.
 - An optional clock and battery readout at the top of every screen, turned on under Display Options in the menu. The battery shows as four pixel hearts that empty as it drops to 75, 50, 25 and 5 percent, with the time next to them. It needs Chrome or Edge on Android or Linux, because other browsers don't let sites read the battery. It's off by default.
 - Standalone mode, under Display Options in the menu, keeps your phone's system bars visible instead of going fullscreen. It's off by default, so the app opens fullscreen on the first tap.
 - Pull down to refresh, on a game's profile too. Sections you had open stay open.
-- The Back button and back gesture inside a game profile close it instead of leaving the app.
+- The Back button and back gesture inside a game profile close the open section first, then the profile, instead of leaving the app. Only one section is open at a time.
 - About, at the bottom of the menu, has the app version, links to GitHub and Discord, a contact email and credits.
 - Swipe left or right on a game's profile to go back to the screen you opened it from.
 - Drag to scroll the system chips with a mouse.

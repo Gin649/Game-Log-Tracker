@@ -267,6 +267,7 @@
         $('#guide-reader-close').click();
         return true;
       }
+      if(top.el.id === 'modal-backdrop' && closeOpenProfileSection()) return true; // Back closes the open section first
       const back = top.el.querySelector('.soc-back, #patch-back-btn');
       if(back && isVisible(back)){ back.click(); return true; }
       const close = top.el.querySelector('.modal-close');
