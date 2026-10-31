@@ -10,13 +10,13 @@ Play some games with us.
 
 ## What it does
 
-**Overview** shows your RetroAchievements profile stats, the games you played recently with playtime and completion, and a feed of your latest unlocks. Games you've beaten or mastered get a small label on the corner of their box art. Pull down to refresh.
+**Last Played** shows your RetroAchievements profile stats, the games you played recently with playtime and completion, and a feed of your latest unlocks. Games you've beaten or mastered get a small label on the corner of their box art. Pull down to refresh.
 
-**Game Library** lists every game you've played on RA. You can search it, sort it, filter by system, and see progress bars, award status and playtime for each game. Playtime comes from RA when it has it. When it doesn't, the app estimates it from your unlock times. "Last played" matches Overview, using whichever is newer, your last unlock or your last play. The Award column is sortable, and sorting by name ignores tags like ~Hack~ and ~Homebrew~. A "Hide beaten" button next to the search box hides beaten and mastered games for the mode you're in, so you only see games in progress. The System chip counts follow it, and it's remembered between visits.
+**Game Library** lists every game you've played on RA. You can search it, sort it, filter by system, and see progress bars, award status and playtime for each game. Playtime comes from RA when it has it. When it doesn't, the app estimates it from your unlock times. "Last played" matches Overview, using whichever is newer, your last unlock or your last play. The Award column is sortable, and sorting by name ignores tags like ~Hack~ and ~Homebrew~. A "Hide Beaten" button next to the search box hides beaten and mastered games for the mode you're in, so you only see games in progress. The System chip counts follow it, and it's remembered between visits. By default the list is A–Z, with your three most recently played games under a gold RECENTLY PLAYED heading and the rest under ALL GAMES A–Z. The heading count reads like (35 games).
 
-**Beaten by Year** groups everything you've beaten or mastered by the year you did it. Mastered games get a small pill on the bottom of the icon. Tap a tile to open the game, or hold it to see the title, since phones have no hover.
+**Beaten** groups everything you've beaten or mastered by the year you did it. Mastered games get a small pill on the bottom of the icon. Tap a tile to open the game, or hold it to see the title, since phones have no hover.
 
-**Backlog** is for games you plan to play. You can search RA's game list by system and tick several results to add them in one go. You can add several at once, and your ticks stay across new searches. You can also add games from systems RA doesn't track, using RAWG for box art and details. For those, you pick the platform from a dropdown of RAWG's data instead of typing it, and "Other system (not on RetroAchievements)" is at the top of the System list and selected by default, so a non-RA game only needs a title. Platforms RA names (RAWG's "NES" becomes "NES/Famicom") are renamed to match so they group under the same System chip as your RA games. Those games never count toward your RA stats. An RA game moves into the Library once RA shows progress on it. A non-RA game moves when you tick "Now Playing", and marking it complete puts it in Beaten by Year. If a non-RA game shows up on RA later, you can link it to its RA entry.
+**Backlog** is for games you plan to play. You can search RA's game list by system and tick several results to add them in one go. You can add several at once, and your ticks stay across new searches. You can also add games from systems RA doesn't track, using RAWG for box art and details. For those, you pick the platform from a dropdown of RAWG's data instead of typing it, and "Other system (not on RetroAchievements)" is at the top of the System list and selected by default, so a non-RA game only needs a title. Platforms RA names (RAWG's "NES" becomes "NES/Famicom") are renamed to match so they group under the same System chip as your RA games. Those games never count toward your RA stats. An RA game moves into the Library once RA shows progress on it. A non-RA game moves when you tick "Now Playing", and marking it complete puts it in Beaten. If a non-RA game shows up on RA later, you can link it to its RA entry.
 
 **Casual / Hardcore** is one switch in the menu that flips every stat, list and progress bar between casual and hardcore numbers. Beaten and Mastered are fully separate too: casual mode shows only casual awards, and hardcore mode only hardcore ones.
 
@@ -38,15 +38,17 @@ Play some games with us.
 
 ### Other things
 
-- Text size controls in the menu.
-- Controller support. Plug in or pair a gamepad and press a button: the D-pad or left stick moves a highlight, A confirms, B goes back, the right stick scrolls, Select opens the menu, X refreshes, L1 / R1 change console and L2 / R2 change tab. Touch still works and hides the highlight. A and B can be swapped under Controller in the menu. It works with gamepads and with handhelds whose controls arrive as arrow keys, Enter and Esc, and the page has to be in front.
-- An optional clock and battery readout at the top of every screen, turned on under Display in the menu. The battery shows as four pixel hearts that empty as it drops to 75, 50, 25 and 5 percent, with the time next to them. It needs Chrome or Edge on Android or Linux, because other browsers don't let sites read the battery. It's off by default.
-- Standalone mode, under Display in the menu, keeps your phone's system bars visible instead of going fullscreen. It's off by default, so the app opens fullscreen on the first tap.
+- Text size controls, under Display Options in the menu.
+- Controller support. Plug in or pair a gamepad and press a button: the D-pad or left stick moves a highlight, A confirms, B goes back, the right stick scrolls, Select opens the menu, Y (the left button) refreshes, L1 / R1 change console and L2 / R2 change tab. Past the last console or tab it wraps around to the first. Touch still works and hides the highlight. A and B can be swapped under Gamepad Config in the menu. It works with gamepads and with handhelds whose controls arrive as arrow keys, Enter and Esc, and the page has to be in front.
+- An optional clock and battery readout at the top of every screen, turned on under Display Options in the menu. The battery shows as four pixel hearts that empty as it drops to 75, 50, 25 and 5 percent, with the time next to them. It needs Chrome or Edge on Android or Linux, because other browsers don't let sites read the battery. It's off by default.
+- Standalone mode, under Display Options in the menu, keeps your phone's system bars visible instead of going fullscreen. It's off by default, so the app opens fullscreen on the first tap.
 - Pull down to refresh, on a game's profile too. Sections you had open stay open.
 - The Back button and back gesture inside a game profile close it instead of leaving the app.
 - About, at the bottom of the menu, has the app version, links to GitHub and Discord, a contact email and credits.
 - Swipe left or right on a game's profile to go back to the screen you opened it from.
 - Drag to scroll the system chips with a mouse.
+- Reorder and rename the console tabs. Hold a tab in Game Library or Backlog, drag a tab to move it, tap it to rename it (with a Reset to go back to the original name), and press the teal OK button to finish. Game Library and Backlog share one order, and Beaten uses your names. They're remembered.
+- Only one menu section is open at a time, and the one you open scrolls to the top.
 - Install prompt on browsers that support it, and a short "Add to Home Screen" hint on iOS.
 
 ## Getting started

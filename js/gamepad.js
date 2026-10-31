@@ -2,12 +2,12 @@
 //
 //   D-pad / left stick  move the highlight      A  confirm        B  back
 //   Right stick         scroll quickly          Select  hamburger menu
-//   X                   refresh                 L1 / R1  previous / next console
-//                                                       L2 / R2  previous / next tab
+//   X                   refresh (the left face button; handhelds with Nintendo-style labels print it as Y)
+//   L1 / R1             previous / next console L2 / R2  previous / next tab (both wrap around)
 //
 // The Android app turns controller input into calls on window.GLTPad (see PadRouter.java).
 // This file decides what each button does on the page. A and B can be swapped from the
-// hamburger menu (Controller). Touch works exactly as before; touching the screen hides the
+// hamburger menu (Gamepad Config). Touch works exactly as before; touching the screen hides the
 // highlight again.
 (function(){
   const SWAP_KEY = 'pad-swap-ab';
@@ -23,7 +23,7 @@
     'a[href]', 'button', 'input', 'select', 'textarea', 'summary',
     '[tabindex]', '[role="button"]', '[role="switch"]',
     '.cart', '.unlock', '.year-item', '.subset-head', '.ag-result', '.soc-row',
-    '.lib-table th', '.lib-table tbody tr', '.modal-art',
+    '.lib-table th', '.lib-table tbody tr:not(.lib-sec)', '.modal-art',
   ].join(',');
 
   let swapAB = false;
@@ -55,6 +55,8 @@
   function topOverlay(){
     const zoom = $('#img-zoom-overlay');
     if(zoom.classList.contains('open')) return { type: 'zoom', el: zoom };
+    const rename = document.getElementById('chip-rename'); // the console tab rename pop-up (views.js)
+    if(rename) return { type: 'pop', el: rename };
     const guide = $('#guide-reader-overlay');
     if(guide.classList.contains('open')) return { type: 'guide', el: guide };
     const modals = document.querySelectorAll('.modal-backdrop.open');
@@ -221,7 +223,7 @@
     if(menuOpen() || topOverlay()) return;
     const panel = document.querySelector('.tab-panel.active');
     if(!panel) return;
-    const first = candidates(panel).find(i => i.el.matches('.cart, .lib-table tbody tr, .year-item'));
+    const first = candidates(panel).find(i => i.el.matches('.cart, .lib-table tbody tr:not(.lib-sec), .year-item'));
     if(first) setFocus(first.el);
   }
 
@@ -253,6 +255,11 @@
     const top = topOverlay();
     if(top){
       if(top.type === 'zoom'){ $('#img-zoom-close').click(); return true; }
+      if(top.type === 'pop'){
+        const cancel = top.el.querySelector('#chip-rename-cancel');
+        if(cancel) cancel.click(); else top.el.remove();
+        return true;
+      }
       if(top.type === 'guide'){
         if($('#guide-find-bar').classList.contains('open')){ $('#guide-find-close').click(); return true; }
         if($('#guide-marks-panel').classList.contains('open')){ $('#guide-marks-btn').click(); return true; }
@@ -267,6 +274,8 @@
       if(top.el.id === 'modal-backdrop'){ closeGameModal(); return true; }
       return false;
     }
+    const chipOk = document.getElementById('chip-ok'); // reorder mode for the console tabs: Back finishes it
+    if(chipOk){ chipOk.click(); return true; }
     if(menuOpen()){ closeDropdownMenu(); return true; }
     return false;
   }
@@ -286,7 +295,7 @@
     const tabs = Array.from(document.querySelectorAll('.tab-btn')).filter(isVisible);
     if(!tabs.length) return;
     const cur = Math.max(0, tabs.findIndex(t => t.classList.contains('active')));
-    const next = Math.min(tabs.length - 1, Math.max(0, cur + delta));
+    const next = (cur + delta + tabs.length) % tabs.length; // past the last tab wraps to the first, and back
     if(next !== cur){
       tabs[next].click();
       focusFirstGame();
@@ -298,10 +307,11 @@
     if(menuOpen() || topOverlay()) return;
     const row = $('#system-chips');
     if(!row || !row.classList.contains('visible')) return;
+    if(row.classList.contains('editing')) return; // reorder mode has no active console
     const chips = Array.from(row.querySelectorAll('.chip'));
     if(!chips.length) return;
     const cur = Math.max(0, chips.findIndex(c => c.classList.contains('active')));
-    const next = Math.min(chips.length - 1, Math.max(0, cur + delta));
+    const next = (cur + delta + chips.length) % chips.length; // wraps around at either end
     if(next === cur) return;
     chips[next].click(); // redraws the row, so look the active chip up again afterwards
     const active = row.querySelector('.chip.active');
@@ -407,8 +417,10 @@
     e.stopPropagation();
     const sub = $('#pad-submenu');
     const isOpen = sub.style.display === 'block';
+    if(!isOpen) collapseMenuSections('pad');
     sub.style.display = isOpen ? 'none' : 'block';
     $('#pad-heading-arrow').textContent = isOpen ? '▸' : '▾';
+    if(!isOpen) scrollMenuTo('pad');
   });
   $('#pad-swap-switch').addEventListener('click', async (e) => {
     e.stopPropagation();

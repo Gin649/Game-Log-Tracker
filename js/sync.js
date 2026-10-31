@@ -306,10 +306,10 @@ $('#btn-hardcore-toggle').addEventListener('click', () => {
 });
 $('#lib-search').addEventListener('input', renderLibrary);
 
-// Game Library: Hide beaten / Show beaten. Remembered between visits.
+// Game Library: Hide Beaten / Show Beaten. Remembered between visits.
 function syncHideDoneButton(){
   const btn = $('#btn-hide-done');
-  btn.textContent = libraryHideDone ? 'Show beaten' : 'Hide beaten';
+  btn.textContent = libraryHideDone ? 'Show Beaten' : 'Hide Beaten';
   btn.classList.toggle('active', libraryHideDone);
   btn.setAttribute('aria-pressed', String(libraryHideDone));
 }

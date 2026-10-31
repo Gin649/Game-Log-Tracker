@@ -114,13 +114,6 @@ document.addEventListener('visibilitychange', () => {
   if(deviceStatusOn && document.visibilityState === 'visible'){ drawDeviceStatus(); scheduleClock(); }
 });
 
-$('#btn-display-heading').addEventListener('click', (e) => {
-  e.stopPropagation();
-  const submenu = $('#display-submenu');
-  const isOpen = submenu.style.display === 'block';
-  submenu.style.display = isOpen ? 'none' : 'block';
-  $('#display-heading-arrow').textContent = isOpen ? '▸' : '▾';
-});
 $('#display-status-switch').addEventListener('click', async (e) => {
   e.stopPropagation();
   const next = !deviceStatusOn;

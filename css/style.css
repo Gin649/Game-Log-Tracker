@@ -115,7 +115,7 @@
   .dropdown-menu{
     display:none;position:absolute;top:calc(100% + 6px);right:0;
     background:var(--panel);border:1px solid var(--border);border-radius:6px;
-    min-width:150px;overflow:hidden;z-index:50;
+    min-width:150px;overflow-x:hidden;overflow-y:auto;max-height:calc(100vh - 90px - var(--status-h));z-index:50;
     box-shadow:0 8px 20px rgba(0,0,0,0.45);
   }
   .dropdown-menu.open{display:block;}
@@ -132,6 +132,9 @@
   }
   .dropdown-heading #ra-heading-arrow,.dropdown-heading #textsize-heading-arrow,.dropdown-heading #display-heading-arrow,.dropdown-heading #pad-heading-arrow{font-size:0.625rem;color:var(--muted);}
   .dropdown-plain{color:var(--text);font-weight:400;}
+  /* The main menu entries alternate gold and white (set by colorMenuItems in menu.js). */
+  #dropdown-menu .menu-gold{color:var(--gold);font-weight:700;}
+  #dropdown-menu .menu-white{color:var(--text);font-weight:700;}
   .dropdown-subitem{
     padding-left:26px;font-size:0.7188rem;color:var(--muted);background:var(--bg-alt);
   }
@@ -252,11 +255,11 @@
   .stat .lbl{font-size:0.6875rem;color:var(--muted);margin-top:4px;}
 
   .section-title{
-    font-family:'Space Mono',monospace;font-size:0.875rem;color:var(--muted);
+    font-family:'Space Mono',monospace;font-size:0.875rem;color:var(--text);font-weight:700;
     letter-spacing:0.5px;margin:32px 0 12px;
     display:flex;justify-content:space-between;align-items:center;
   }
-  .section-title span.count{color:var(--gold-dim);}
+  .section-title span.count{color:var(--gold);font-weight:700;}
 
   .cart-grid{
     display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));
@@ -351,6 +354,11 @@
   .lib-table tr:last-child td{border-bottom:none;}
   .lib-table tbody tr{cursor:pointer;}
   .lib-table tbody tr:hover{background:var(--panel-2);}
+  /* RECENTLY PLAYED / ALL GAMES A-Z labels in the Library */
+  .lib-table tbody tr.lib-sec{cursor:default;}
+  .lib-table tbody tr.lib-sec:hover{background:transparent;}
+  .lib-table tr.lib-sec td{padding:12px 10px 6px;border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:0.6875rem;font-weight:700;letter-spacing:1px;color:var(--gold);}
+  .lib-table tr.lib-sec.alt td{color:var(--muted);}
   .lib-table .g-title{display:flex;align-items:center;gap:8px;}
   .lib-table .g-title img{width:22px;height:22px;border-radius:2px;image-rendering:pixelated;}
   .lib-table .bar{width:90px;}
@@ -397,6 +405,17 @@
   }
   .chip:hover{color:var(--text);border-color:var(--muted);}
   .chip.active{background:var(--gold);color:#1a1424;border-color:var(--gold);font-weight:700;}
+
+  /* Console tabs: reorder / rename mode (hold a tab in Library or Backlog) */
+  .chip-row.editing .chip-ok{background:var(--teal);border-color:var(--teal);color:#10201f;font-weight:700;}
+  .chip-row.editing .chip-all-off{opacity:0.4;}
+  .chip.edit{display:inline-flex;align-items:center;padding:6px 12px;cursor:grab;user-select:none;-webkit-user-select:none;white-space:nowrap;border-color:var(--teal);color:var(--teal);background:rgba(89,201,165,0.15);}
+  .chip.edit.lifted{position:relative;z-index:5;box-shadow:0 4px 14px rgba(0,0,0,0.5);background:rgba(89,201,165,0.35);}
+  /* Rename tab pop-up */
+  .app-pop{position:fixed;inset:0;z-index:300;background:rgba(10,8,16,0.75);display:flex;align-items:center;justify-content:center;padding:20px;}
+  .app-pop-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:18px;width:100%;max-width:320px;display:flex;flex-direction:column;gap:10px;}
+  .app-pop-title{font-weight:700;color:var(--gold);text-align:center;}
+  .app-pop-sub{font-size:0.75rem;color:var(--muted);text-align:center;}
 
   /* Game detail modal */
   .modal-backdrop{
@@ -887,7 +906,7 @@
   /* By year */
   .year-group{margin-bottom:28px;}
   .year-heading{
-    font-family:'Space Mono',monospace;font-size:0.9375rem;color:var(--text);
+    font-family:'Space Mono',monospace;font-size:0.9375rem;color:var(--text);font-weight:700;
     margin:0 0 12px;display:flex;align-items:baseline;gap:8px;
   }
   .year-heading .n{font-size:0.6875rem;color:var(--muted);font-weight:400;}

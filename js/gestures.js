@@ -14,6 +14,7 @@ function enableDragToScroll(el){
 
   el.addEventListener('mousedown', (e) => {
     if(e.button !== 0) return; // left button only
+    if(el.classList.contains('editing')) return; // reordering console tabs uses its own drag
     isDown = true;
     moved = false;
     startX = e.pageX;
@@ -183,7 +184,7 @@ enableDragToScroll($('#system-chips')); // the console-name chips above the libr
         && !insideScrolledChild(e.target);
       profileMode = pulling;
     }else{
-      pulling = window.scrollY === 0 && !!creds && $('#dashboard').style.display === 'block';
+      pulling = window.scrollY === 0 && !!creds && $('#dashboard').style.display === 'block' && !e.target.closest('#dropdown-menu');
     }
     if(pulling) touchStartY = e.touches[0].clientY;
   }, { passive: true });

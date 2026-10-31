@@ -151,8 +151,148 @@ function renderUnlocks(list){
   });
 }
 
+// Console tabs can be put in your own order and renamed. Both are saved, and Library and Backlog share them.
+let consoleOrder = [];       // ConsoleNames in the order you chose
+let consoleNames = {};       // ConsoleName -> the name shown on its tab
+let consolePrefsState = 0;   // 0 not loaded, 1 loading, 2 loaded
+let chipEdit = false;        // reorder / rename mode
+let chipEditTab = '';
+
+async function loadConsolePrefs(){
+  if(consolePrefsState) return;
+  consolePrefsState = 1;
+  try{
+    const o = await window.storage.get('console-order', false);
+    if(o && o.value) consoleOrder = JSON.parse(o.value) || [];
+  }catch(e){ /* nothing saved yet */ }
+  try{
+    const n = await window.storage.get('console-names', false);
+    if(n && n.value) consoleNames = JSON.parse(n.value) || {};
+  }catch(e){ /* nothing saved yet */ }
+  consolePrefsState = 2;
+  try{ renderSystemChips(); }catch(e){ /* the next redraw will pick the saved order up */ }
+}
+function saveConsolePrefs(){
+  try{ window.storage.set('console-order', JSON.stringify(consoleOrder), false); }catch(e){ /* non-fatal */ }
+  try{ window.storage.set('console-names', JSON.stringify(consoleNames), false); }catch(e){ /* non-fatal */ }
+}
+const consoleLabel = sys => (consoleNames[sys] || sys);
+const chipEsc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// Your order first, then any console you haven't placed yet by number of games.
+function orderedSystems(counts){
+  const names = Object.keys(counts);
+  const rank = n => { const i = consoleOrder.indexOf(n); return i === -1 ? Infinity : i; };
+  return names.sort((a, b) => {
+    const ra = rank(a), rb = rank(b);
+    if(ra !== rb) return ra === Infinity ? 1 : rb === Infinity ? -1 : ra - rb;
+    return counts[b] - counts[a];
+  });
+}
+
+// Puts the visible consoles in the order given. They take the places those consoles already had in the saved
+// order, so consoles that aren't on this tab keep theirs and Library and Backlog stay in step.
+function applyConsoleOrder(arrangement){
+  const full = consoleOrder.slice();
+  arrangement.forEach(n => { if(!full.includes(n)) full.push(n); });
+  const slots = [];
+  full.forEach((n, i) => { if(arrangement.includes(n)) slots.push(i); });
+  slots.forEach((slot, k) => { full[slot] = arrangement[k]; });
+  consoleOrder = full;
+  saveConsolePrefs();
+}
+
+// Drag a tab to a new place: hold it for a moment to pick it up (moving sooner scrolls the row), slide it, let go.
+// A quick tap renames it instead.
+let chipClickBlockedUntil = 0;
+function wireChipDrag(chipRow, systems){
+  const chips = Array.from(chipRow.querySelectorAll('.chip.edit'));
+  let drag = null;
+  chipRow.addEventListener('touchmove', (e) => { if(drag && drag.lifted) e.preventDefault(); }, { passive: false });
+  chips.forEach((chip, idx) => {
+    const place = () => {
+      if(!drag || !drag.lifted) return;
+      drag.chip.style.transform = `translateX(${(drag.x - drag.x0) + (chipRow.scrollLeft - drag.s0)}px)`;
+    };
+    chip.addEventListener('pointerdown', (e) => {
+      if(drag) return;
+      drag = { chip, idx, x0: e.clientX, y0: e.clientY, s0: chipRow.scrollLeft, lifted: false, id: e.pointerId, x: e.clientX, timer: null, scroller: null };
+      drag.timer = setTimeout(() => {
+        if(!drag) return;
+        drag.lifted = true;
+        chip.classList.add('lifted');
+        try{ chip.setPointerCapture(drag.id); }catch(err){ /* non-fatal */ }
+        drag.scroller = setInterval(() => { // slide the row when the finger is near either edge
+          const r = chipRow.getBoundingClientRect();
+          if(drag.x < r.left + 48) chipRow.scrollLeft -= 8;
+          else if(drag.x > r.right - 48) chipRow.scrollLeft += 8;
+          place();
+        }, 16);
+      }, 250);
+    });
+    chip.addEventListener('pointermove', (e) => {
+      if(!drag || drag.chip !== chip) return;
+      drag.x = e.clientX;
+      if(!drag.lifted){
+        if(Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 10){ clearTimeout(drag.timer); drag = null; }
+        return;
+      }
+      place();
+    });
+    const end = (e) => {
+      if(!drag || drag.chip !== chip) return;
+      clearTimeout(drag.timer); clearInterval(drag.scroller);
+      const d = drag; drag = null;
+      if(!d.lifted) return; // a tap: the click that follows renames it
+      chipClickBlockedUntil = Date.now() + 500; // letting go after a drag isn't a tap
+      // where the picked-up tab ended up, compared with the middle of each of the others
+      const shift = (d.x - d.x0) + (chipRow.scrollLeft - d.s0);
+      const mid = c => c.offsetLeft + c.offsetWidth / 2;
+      const target = mid(d.chip) + shift;
+      const rest = chips.filter(c => c !== d.chip);
+      const at = rest.filter(c => mid(c) < target).length;
+      const next = systems.slice();
+      const moved = next.splice(d.idx, 1)[0];
+      next.splice(at, 0, moved);
+      if(e.type === 'pointerup') applyConsoleOrder(next);
+      renderSystemChips();
+    };
+    chip.addEventListener('pointerup', end);
+    chip.addEventListener('pointercancel', end);
+    chip.addEventListener('contextmenu', (e) => e.preventDefault());
+    chip.addEventListener('click', () => { if(Date.now() >= chipClickBlockedUntil) renameConsoleTab(systems[idx]); }); // a tap, or the controller's confirm button
+  });
+}
+
+function renameConsoleTab(sys){
+  const old = document.getElementById('chip-rename'); if(old) old.remove();
+  const pop = document.createElement('div');
+  pop.id = 'chip-rename';
+  pop.className = 'app-pop';
+  pop.innerHTML = `<div class="app-pop-card">
+    <div class="app-pop-title">Rename tab</div>
+    <div class="app-pop-sub">${chipEsc(sys)}</div>
+    <input type="text" id="chip-rename-input" value="${chipEsc(consoleLabel(sys))}" maxlength="40" style="width:100%;">
+    <button class="btn-primary" id="chip-rename-save">Save</button>
+    <button class="btn-ghost" id="chip-rename-reset">Use original name</button>
+    <button class="btn-ghost" id="chip-rename-cancel">Cancel</button>
+  </div>`;
+  document.body.appendChild(pop);
+  const done = () => { pop.remove(); renderSystemChips(); };
+  pop.querySelector('#chip-rename-save').addEventListener('click', () => {
+    const v = pop.querySelector('#chip-rename-input').value.trim();
+    if(v && v !== sys) consoleNames[sys] = v; else delete consoleNames[sys];
+    saveConsolePrefs(); done();
+  });
+  pop.querySelector('#chip-rename-reset').addEventListener('click', () => { delete consoleNames[sys]; saveConsolePrefs(); done(); });
+  pop.querySelector('#chip-rename-cancel').addEventListener('click', () => pop.remove());
+  pop.addEventListener('click', (e) => { if(e.target === pop) pop.remove(); });
+}
+
 function renderSystemChips(){
   const chipRow = $('#system-chips');
+  if(!consolePrefsState) loadConsolePrefs();
+  if(chipEdit && chipEditTab !== activeTab) chipEdit = false;
   const counts = {};
   const source = activeTab === 'year'
     ? libraryData.filter(g => {
@@ -164,19 +304,46 @@ function renderSystemChips(){
     ? libraryData.filter(isBacklogGame)
     : libraryData.filter(g => !isBacklogGame(g) && !(activeTab === 'library' && libraryHideDone && isGameAwarded(g)));
   source.forEach(g => { counts[g.ConsoleName] = (counts[g.ConsoleName] || 0) + 1; });
-  const systems = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
+  // Beaten keeps its game counts and its order by number of games; it still shows your tab names.
+  const yearTab = activeTab === 'year';
+  const systems = yearTab ? Object.keys(counts).sort((a, b) => counts[b] - counts[a]) : orderedSystems(counts);
 
-  if(systems.length === 0){ chipRow.innerHTML = ''; return; }
+  if(systems.length === 0){ chipRow.innerHTML = ''; chipRow.classList.remove('editing'); return; }
+
+  if(chipEdit){
+    // Reorder / rename mode: drag a tab to move it, tap its name to rename it, OK finishes.
+    chipRow.classList.add('editing');
+    chipRow.innerHTML = `<button class="chip chip-ok" id="chip-ok">OK</button>
+      <span class="chip chip-all-off">All</span>` + systems.map(sys => `
+      <button class="chip edit" data-sys="${chipEsc(sys)}">${chipEsc(consoleLabel(sys))}</button>`).join('');
+    chipRow.querySelector('#chip-ok').addEventListener('click', () => { chipEdit = false; renderSystemChips(); });
+    wireChipDrag(chipRow, systems.slice());
+    return;
+  }
+  chipRow.classList.remove('editing');
 
   const chips = ['All', ...systems];
   chipRow.innerHTML = chips.map(sys => `
-      <button class="chip ${sys === systemFilter ? 'active' : ''}" data-sys="${sys}">
-        ${sys}${sys === 'All' ? '' : ` (${counts[sys]})`}
+      <button class="chip ${sys === systemFilter ? 'active' : ''}" data-sys="${chipEsc(sys)}">
+        ${sys === 'All' ? 'All' : chipEsc(consoleLabel(sys))}${sys === 'All' || !yearTab ? '' : ` (${counts[sys]})`}
       </button>
     `).join('');
 
   chipRow.querySelectorAll('.chip').forEach(chip => {
+    // Holding a console tab (Library and Backlog) opens reorder / rename mode.
+    let timer = null, startX = 0, startY = 0, held = false;
+    const cancel = () => { clearTimeout(timer); timer = null; };
+    chip.addEventListener('pointerdown', (e) => {
+      held = false;
+      if(chip.getAttribute('data-sys') === 'All' || yearTab) return;
+      startX = e.clientX; startY = e.clientY;
+      timer = setTimeout(() => { held = true; chipEdit = true; chipEditTab = activeTab; renderSystemChips(); }, 600);
+    });
+    chip.addEventListener('pointermove', (e) => { if(timer && Math.hypot(e.clientX - startX, e.clientY - startY) > 10) cancel(); });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => chip.addEventListener(ev, cancel));
+    chip.addEventListener('contextmenu', (e) => e.preventDefault());
     chip.addEventListener('click', () => {
+      if(held){ held = false; return; } // the press that opened reorder mode isn't a tap
       systemFilter = chip.getAttribute('data-sys');
       renderSystemChips();
       renderBacklog();
@@ -248,7 +415,22 @@ function renderLibrary(){
     return 0;
   });
 
-  $('#lib-count').textContent = rows.length ? `(${rows.length})` : '';
+  // Default order (A to Z, no search): the three most recently played (on the picked console, if any) come
+  // first under their own heading, then everything else by name.
+  let recentSet = null; // the games shown first, with a label over them
+  if(key === 'Title' && dir === 'asc' && !searchVal){
+    const recent = rows
+      .filter(g => parseRADate(g.lastPlayed))
+      .sort((a, b) => parseRADate(b.lastPlayed) - parseRADate(a.lastPlayed))
+      .slice(0, 3);
+    if(recent.length){
+      const picked = new Set(recent);
+      rows = [...recent, ...rows.filter(g => !picked.has(g))];
+      recentSet = picked;
+    }
+  }
+
+  $('#lib-count').textContent = rows.length ? `(${rows.length} ${rows.length === 1 ? 'game' : 'games'})` : '';
 
   if(rows.length === 0){
     wrap.innerHTML = `<div class="empty">${libraryHideDone && !searchVal && systemFilter === 'All' ? 'No games in progress.' : 'No games match.'}</div>`;
@@ -265,7 +447,11 @@ function renderLibrary(){
           <th data-key="lastPlayed">Last played</th>
         </tr></thead>
         <tbody>
-          ${rows.map(g => {
+          ${rows.map((g, i) => {
+          const label = recentSet
+            ? (i === 0 ? '<tr class="lib-sec"><td colspan="5">RECENTLY PLAYED</td></tr>'
+              : (i === recentSet.size ? '<tr class="lib-sec alt"><td colspan="5">ALL GAMES A\u2013Z</td></tr>' : ''))
+            : '';
           const isCustom = g.customConsole === true;
           const est = estHoursCache[g.GameID];
           const earned = Number(g.NumAwarded || 0);
@@ -288,7 +474,7 @@ function renderLibrary(){
           const lastPlayedLabel = isCustom
             ? (g.manualBeatenDate ? new Date(g.manualBeatenDate).toLocaleDateString() : 'Never')
             : (g.lastPlayed ? timeAgo(g.lastPlayed) : 'Never');
-          return `
+          return label + `
             <tr data-game-id="${g.GameID}">
               <td><div class="g-title"><img src="${imgUrl(g.ImageIcon)}" alt=""><span>${g.Title}</span>${g.manual ? `<button class="manual-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : ''}</div></td>
               <td>${awardCell}</td>
@@ -310,7 +496,12 @@ function renderLibrary(){
       renderLibrary();
     });
   });
-  wrap.querySelectorAll('tbody tr').forEach(row => {
+  wireGameRows(wrap);
+}
+
+// Opens a game from a table row (not the section label rows); the ✕ removes a manually added game.
+function wireGameRows(wrap){
+  wrap.querySelectorAll('tbody tr:not(.lib-sec)').forEach(row => {
     row.addEventListener('click', () => openGameModal(Number(row.getAttribute('data-game-id'))));
   });
   wrap.querySelectorAll('.manual-remove').forEach(btn => {
@@ -338,7 +529,7 @@ function renderBacklog(){
   rows = rows.slice().sort((a, b) => sortableTitle(a.Title).localeCompare(sortableTitle(b.Title)));
 
   const countEl = $('#backlog-count');
-  if(countEl) countEl.textContent = rows.length ? `(${rows.length})` : '';
+  if(countEl) countEl.textContent = rows.length ? `(${rows.length} ${rows.length === 1 ? 'game' : 'games'})` : '';
 
   if(rows.length === 0){
     wrap.innerHTML = '<div class="empty">Nothing in your backlog — add a game to start tracking it.</div>';
@@ -364,15 +555,7 @@ function renderBacklog(){
       </table>
     `;
 
-  wrap.querySelectorAll('tbody tr').forEach(row => {
-    row.addEventListener('click', () => openGameModal(Number(row.getAttribute('data-game-id'))));
-  });
-  wrap.querySelectorAll('.manual-remove').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      removeManualGame(Number(btn.getAttribute('data-remove-id')));
-    });
-  });
+  wireGameRows(wrap);
 }
 
 // Small floating label with a game's title, used when a Beaten by Year tile is held.

@@ -2,6 +2,23 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.2.7
+
+Styles, headings and behaviour brought over from the DS Launcher app (1.0.6 to 1.0.8).
+
+### Added
+- Reorder and rename the console tabs. Hold a tab in Game Library or Backlog to start, then drag a tab to move it, tap it to rename it, and press the teal OK button to finish. Game Library and Backlog share one order, and Beaten uses your names. Your order and names are remembered.
+- Game Library now labels its two groups. The three games you played most recently sit under a gold RECENTLY PLAYED heading, and the rest are under ALL GAMES A–Z. This applies to the default A–Z sort without a search.
+
+### Changed
+- The tabs are now Last Played, Game Library, Backlog and Beaten. Overview is now Last Played and Beaten by Year is now Beaten.
+- Game Library now opens sorted A–Z by name.
+- The console tabs in Game Library and Backlog no longer show a game count, except in Beaten. The count beside the heading now reads, for example, (35 games), in bold gold.
+- Headings are bold, as are the years in Beaten. Hide beaten is now Hide Beaten.
+- The menu entries alternate gold and white. Text size is now inside Display Options, and the controller settings are under Gamepad Config.
+- Only one section is open at a time in the menu, and the section you open scrolls to the top so you can see all of it. The menu scrolls if it is taller than the screen.
+- On the controller, the tab buttons and the console buttons wrap around. Going past the last one returns to the first, and going back from the first goes to the last. The help text now calls the refresh button Y (the left button, the same one as before).
+
 ## v2.1.2.6
 
 ### Changed
