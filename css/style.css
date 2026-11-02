@@ -1141,3 +1141,6 @@ body.pad-mode .tab-btn.pad-focus{outline-offset:-3px;}
 
 .chip-row::after{content:'';flex:0 0 14px;} /* room after the last console so it can scroll fully into view */
 
+
+/* Keeps the strip above the pinned heading (clock and battery, or the notch) solid, so scrolled tiles never show through it. */
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:calc(var(--status-h) + env(safe-area-inset-top, 0px));background:var(--bg);z-index:30;pointer-events:none;}
