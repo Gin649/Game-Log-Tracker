@@ -55,8 +55,9 @@ enableDragToScroll($('#system-chips')); // the console-name chips above the libr
   let touchStartY = 0;
   let pulling = false;
   let currentPull = 0;
-  const PULL_THRESHOLD = 70;
-  const MAX_PULL = 100;
+  const PULL_THRESHOLD = 40;
+  const MAX_PULL = 56;
+  const EDGE = 90; // a pull only starts when the finger lands this close to the top of the screen (px)
 
   const indicator = document.createElement('div');
   indicator.className = 'pull-refresh-indicator';
@@ -165,7 +166,7 @@ enableDragToScroll($('#system-chips')); // the console-name chips above the libr
     padRefreshing = true;
     indicator.classList.toggle('over-profile', !!onProfile);
     indicator.textContent = 'Refreshing…';
-    indicator.style.height = '44px';
+    indicator.style.height = '32px';
     Promise.resolve(job).catch(() => {}).finally(() => {
       padRefreshing = false;
       indicator.style.height = '0px';
@@ -175,16 +176,17 @@ enableDragToScroll($('#system-chips')); // the console-name chips above the libr
 
   document.addEventListener('touchstart', (e) => {
     profileMode = false;
+    const nearTop = e.touches.length === 1 && e.touches[0].clientY <= EDGE;
     if(profileOpen()){
       const card = $('#modal-card');
-      pulling = !!creds && !!card.dataset.gameId
+      pulling = !!creds && !!card.dataset.gameId && nearTop
         && e.touches.length === 1
         && profileEl().contains(e.target)
         && profileEl().scrollTop <= 1 // <=1: scroll offsets can be fractional on scaled screens
         && !insideScrolledChild(e.target);
       profileMode = pulling;
     }else{
-      pulling = window.scrollY === 0 && !!creds && $('#dashboard').style.display === 'block' && !e.target.closest('#dropdown-menu');
+      pulling = nearTop && window.scrollY === 0 && !!creds && $('#dashboard').style.display === 'block' && !e.target.closest('#dropdown-menu');
     }
     if(pulling) touchStartY = e.touches[0].clientY;
   }, { passive: true });

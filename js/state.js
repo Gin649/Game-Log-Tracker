@@ -12,6 +12,8 @@ let librarySort = { key: 'Title', dir: 'asc' };
 const estHoursCache = {}; // in-memory, keyed by GameID, for this session, { hours, beaten }
 const achievementsListCache = {}; // in-memory, keyed by GameID, full per-achievement list with earn dates, opportunistically filled by getEstimatedHours()
 let systemFilter = 'All';
+let gameView = 'list'; // Game Library and Backlog: 'list' or 'tile' (Display Options)
+let tileCols = 4;       // tiles per row in tile view, 3 to 5
 let libraryHideDone = false; // Game Library: hide beaten/mastered games so only ones in progress show
 
 // Games checked in the Add Game modal's RA-system search but not yet

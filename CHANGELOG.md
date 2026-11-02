@@ -2,6 +2,18 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.2.8
+
+Styles from the DS Launcher app (1.1.0 to 1.1.2).
+
+### Added
+- Display Options, Game view: choose List View (the default) or Tile View for the Game Library and Backlog. Tile View shows the Last Played style tiles, with the three most recent first and the rest A-Z, and you can set 3, 4 or 5 tiles per row.
+
+### Changed
+- Easier navigation: the tabs, console row, search bar and column headings now stay in place while the list scrolls, and the controller moves through them more naturally. On the controller, left and right on the tabs and on the console row switch tab or console straight away.
+- Console chips no longer show a name cut in half at the edge, and the console you are on is always in view, including the last one.
+- Pull to refresh needs a shorter pull, starts only near the top edge, and its bar is smaller.
+
 ## v2.1.2.7
 
 Styles, headings and behaviour brought over from the DS Launcher app (1.0.6 to 1.0.8).

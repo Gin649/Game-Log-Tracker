@@ -171,6 +171,20 @@
 
   // The nearest candidate in a direction: close along that direction, and lined up across it.
   function pick(cur, dir, list){
+    if(dir === 'up' || dir === 'down'){
+      // Up and down go to the next row, even when that row is shorter (three recent tiles above a row of five):
+      // take the nearest row first, then the closest one across within it.
+      const c0 = cur.getBoundingClientRect();
+      let rowTop = dir === 'down' ? Infinity : -Infinity;
+      const ahead = [];
+      for(const it of list){
+        if(it.el === cur) continue;
+        if(dir === 'down' ? it.r.top <= c0.top + 12 : it.r.top >= c0.top - 12) continue; // same row, or behind
+        ahead.push(it);
+        rowTop = dir === 'down' ? Math.min(rowTop, it.r.top) : Math.max(rowTop, it.r.top);
+      }
+      list = ahead.filter(it => Math.abs(it.r.top - rowTop) <= 12);
+    }
     const c = cur.getBoundingClientRect();
     const cx = c.left + c.width / 2, cy = c.top + c.height / 2;
     let best = null, bestScore = Infinity;
@@ -212,7 +226,43 @@
     }
     const cur = ensureFocus();
     if(!cur) return;
-    const next = pick(cur, dir, candidates(getRoot()));
+    if((dir === 'left' || dir === 'right') && cur.classList.contains('tab-btn') && !menuOpen() && !topOverlay()){
+      // On the headings, left and right switch the tab at once (like L2 / R2) and the highlight goes with it.
+      const tabs = Array.from(document.querySelectorAll('.tab-btn')).filter(isVisible);
+      const at = tabs.indexOf(cur);
+      if(at >= 0 && tabs.length > 1){
+        const to = tabs[(at + (dir === 'right' ? 1 : -1) + tabs.length) % tabs.length];
+        to.click();
+        setFocus(to);
+      }
+      return;
+    }
+    if((dir === 'left' || dir === 'right') && cur.closest('#system-chips') && cur.classList.contains('chip')
+       && !cur.closest('#system-chips').classList.contains('editing') && !menuOpen() && !topOverlay()){
+      switchSystem(dir === 'right' ? 1 : -1, true); // on the console row, left and right change console at once, like L1 / R1
+      return;
+    }
+    let next = pick(cur, dir, candidates(getRoot()));
+    if(next && (dir === 'up' || dir === 'down')){
+      // Entering a row of headings or filters lands on the one you are on: the Game heading, the current
+      // console, the current tab.
+      if(next.closest('.tile-grid') && next.matches('.cart')){
+        // In tile view, up and down step through the rows on the leftmost tile of each.
+        const top = next.getBoundingClientRect().top;
+        let left = next, l = next.getBoundingClientRect().left;
+        next.closest('.tile-grid').querySelectorAll('.cart').forEach(t => {
+          const r = t.getBoundingClientRect();
+          if(Math.abs(r.top - top) <= 12 && r.left < l){ l = r.left; left = t; }
+        });
+        next = left;
+      }else if(next.matches('.lib-table th') && !cur.matches('.lib-table th')){
+        next = next.closest('tr').querySelector('th') || next;
+      }else if(next.closest('#system-chips') && !cur.closest('#system-chips')){
+        next = document.querySelector('#system-chips .chip.active') || next;
+      }else if(next.classList.contains('tab-btn') && !cur.classList.contains('tab-btn')){
+        next = document.querySelector('.tab-btn.active') || next;
+      }
+    }
     if(next) setFocus(next);
     else if(dir === 'up' || dir === 'down') scrollBy(getScroller(), dir === 'down' ? STEP_SCROLL : -STEP_SCROLL);
   }
@@ -303,8 +353,20 @@
     }
   }
 
+  // Centres the chosen console in the row, then makes sure the chip at the left edge shows its whole name
+  // instead of a cut-off piece.
+  function revealChip(row, active){
+    const max = Math.max(0, row.scrollWidth - row.clientWidth);
+    let target = active.offsetLeft - (row.clientWidth - active.offsetWidth) / 2;
+    target = Math.min(max, Math.max(0, target));
+    row.querySelectorAll('.chip').forEach(c => {
+      if(c.offsetLeft < target && c.offsetLeft + c.offsetWidth > target + 1) target = Math.max(0, c.offsetLeft - 6);
+    });
+    row.scrollLeft = target;
+  }
+
   // Library, Beaten by Year and Backlog share a row of console filters; step through it.
-  function switchSystem(delta){
+  function switchSystem(delta, keepFocus){
     if(menuOpen() || topOverlay()) return;
     const row = $('#system-chips');
     if(!row || !row.classList.contains('visible')) return;
@@ -316,8 +378,9 @@
     if(next === cur) return;
     chips[next].click(); // redraws the row, so look the active chip up again afterwards
     const active = row.querySelector('.chip.active');
-    if(active) active.scrollIntoView({ block: 'nearest', inline: 'center' });
-    focusFirstGame();
+    if(active) revealChip(row, active);
+    if(keepFocus && active) setFocus(active);
+    else focusFirstGame();
   }
 
   function press(name){
