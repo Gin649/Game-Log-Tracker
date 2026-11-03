@@ -12,6 +12,7 @@ Themes, IGDB and Social changes from the DS Launcher app (1.1.0 to 1.2.0).
 - Game Details: games not on RA now show IGDB's time to beat and 100% figures, and a description from IGDB.
 
 ### Changed
+- In Game Library and Backlog, All now stays pinned at the left of the console row while the other consoles scroll beside it, so it never moves around or scrolls out of view.
 - RAWG is gone. Ratings, descriptions and Add a game searches now all use IGDB through my Worker, and the RAWG key screen is removed. Any saved RAWG key is deleted.
 - Add a game waits longer for a search and retries once, so a slow answer no longer ends in an error.
 - Game Details opens faster, and the Download manual note is gone.
