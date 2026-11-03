@@ -125,12 +125,24 @@ async function removeManualGame(gameId){
 }
 
 // Console + game list lookups, for manually adding a game
-// RAWG names its platforms differently from RetroAchievements ("NES" vs "NES/Famicom"), which
-// would leave a manually added NES game under its own System chip. This maps a RAWG platform
-// (lowercase) to [RA console id, pattern that RA's name for that id must match]. The pattern
-// is a safety check: if RA's list doesn't look like what's expected, the RAWG name is kept.
+// IGDB (and RAWG, which earlier versions used) name platforms differently from RetroAchievements
+// ("Nintendo Entertainment System" vs "NES/Famicom"), which would leave a manually added NES game under its
+// own System chip. This maps a platform name (lowercase) to [RA console id, pattern that RA's name for that id
+// must match]. The pattern is a safety check: if RA's list doesn't look like what's expected, the name is kept.
 // Platforms RA doesn't cover at all (PS4, Switch, PC, ...) aren't listed and stay as they are.
-const RAWG_TO_RA_CONSOLE = {
+const PLATFORM_TO_RA_CONSOLE = {
+  'sega mega drive/genesis': [1, /genesis|mega drive/i],
+  'nintendo entertainment system': [7, /nes|famicom/i],
+  'family computer': [7, /nes|famicom/i],
+  'super nintendo entertainment system': [3, /snes|super famicom/i],
+  'super famicom': [3, /snes|super famicom/i],
+  'nintendo gamecube': [16, /gamecube/i],
+  'sega game gear': [15, /game gear/i],
+  'sega master system/mark iii': [11, /master system/i],
+  'atari jaguar': [17, /^atari jaguar$/i],
+  'playstation portable': [41, /portable/i],
+  'atari st/ste': [36, /atari st/i],
+  '3do interactive multiplayer': [43, /3do/i],
   'genesis': [1, /genesis|mega drive/i],
   'nintendo 64': [2, /64/],
   'snes': [3, /snes|super famicom/i],
@@ -164,9 +176,9 @@ const RAWG_TO_RA_CONSOLE = {
   'nintendo dsi': [78, /dsi/i],
 };
 
-// RA's own name for a RAWG platform, or the RAWG name itself when there's no safe match.
+// RA's own name for a platform, or the name itself when there's no safe match.
 async function raConsoleNameFor(rawgName, consoleList){
-  const hit = RAWG_TO_RA_CONSOLE[String(rawgName || '').toLowerCase()];
+  const hit = PLATFORM_TO_RA_CONSOLE[String(rawgName || '').toLowerCase()];
   if(!hit) return rawgName;
   try{
     const list = consoleList || await getConsoleList();
@@ -176,10 +188,10 @@ async function raConsoleNameFor(rawgName, consoleList){
   }catch(e){ return rawgName; }
 }
 
-// Renames custom games already saved under a RAWG name. Safe to run every load: a name that's
+// Renames custom games already saved under a platform name RA spells differently. Safe to run every load: a name that's
 // already RA's isn't in the table, so it comes back unchanged. Returns true if anything changed.
 async function normalizeCustomConsoleNames(games){
-  const needs = games.some(g => g.customConsole && RAWG_TO_RA_CONSOLE[String(g.ConsoleName || '').toLowerCase()]);
+  const needs = games.some(g => g.customConsole && PLATFORM_TO_RA_CONSOLE[String(g.ConsoleName || '').toLowerCase()]);
   if(!needs) return false;
   let list;
   try{ list = await getConsoleList(); }catch(e){ return false; }

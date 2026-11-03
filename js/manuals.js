@@ -66,7 +66,7 @@ function manualNorm(s){
   return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-// The site's system names that could match a console name from RetroAchievements or RAWG.
+// The site's system names that could match a console name from RetroAchievements or IGDB.
 function manualSystemsFor(consoleName){
   const key = String(consoleName || '').trim().toLowerCase();
   if(!key) return [];
@@ -277,7 +277,7 @@ function setupManualUI(body, ctx){
         <div class="gd-manual-actions">${btn('Try again', 'find')}<a class="gd-manual-btn" href="${MANUAL_LIST_URL}" target="_blank" rel="noopener">Browse site ↗</a></div>${extra || ''}`);
       return;
     }
-    set(`<div class="gd-manual-actions">${btn('Download manual', 'find', true)}</div>${note('From Games Database. Saved on this device so it works offline.')}${extra || ''}`);
+    set(`<div class="gd-manual-actions">${btn('Download manual', 'find', true)}</div>${extra || ''}`);
   }
 
   function showProgress(text, frac){

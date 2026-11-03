@@ -31,39 +31,32 @@ function findGameLocal(gameId){
   return libraryData.find(g => g.GameID === gameId) || recentGamesData.find(g => g.GameID === gameId) || null;
 }
 
-async function attachRawgLookup(gameId, title, card){
-  if(!rawgCreds) rawgCreds = await loadRawgCreds();
-  if(!rawgCreds){
-    const note = card.querySelector('.modal-note');
-    if(note) note.insertAdjacentHTML('afterend', `<p class="rawg-setup-note"><a id="rawg-setup-link">Set up RAWG</a> to show review scores here.</p>`);
-    const link = card.querySelector('#rawg-setup-link');
-    if(link) link.addEventListener('click', () => { closeGameModal(); openRawgModal(); });
-  }else{
-    const badge = card.querySelector('#rawg-badge');
-    if(badge) badge.innerHTML = `<span class="rawg-score tier-muted">…</span>`;
+// The review score badge: the average of IGDB's critic and user scores (see igdb.js).
+function attachRatingLookup(gameId, title, card){
+  const badge = card.querySelector('#rating-badge');
+  if(badge) badge.innerHTML = `<span class="rawg-score tier-muted">…</span>`;
 
-    const runRawgLookup = (force) => {
-      getRawgRating(title, force).then(rating => {
-        if(card.dataset.gameId !== String(gameId)) return; // modal moved on to another game
-        const badgeEl = card.querySelector('#rawg-badge');
-        if(!badgeEl) return;
+  const runLookup = (force) => {
+    getGameRating(title, force).then(rating => {
+      if(card.dataset.gameId !== String(gameId)) return; // another game was opened meanwhile
+      const badgeEl = card.querySelector('#rating-badge');
+      if(!badgeEl) return;
 
-        const label = rating ? String(rating.score) : 'NR'; // not rated
-        const tier = !rating ? 'tier-muted' : rating.score >= 80 ? 'tier-green' : rating.score >= 50 ? 'tier-yellow' : 'tier-red';
-        badgeEl.innerHTML = `<span class="rawg-score ${tier}" id="rawg-retry" title="Tap to look up again">${label}</span>`;
+      const label = rating ? String(rating.score) : 'NR'; // not rated
+      const tier = !rating ? 'tier-muted' : rating.score >= 80 ? 'tier-green' : rating.score >= 50 ? 'tier-yellow' : 'tier-red';
+      badgeEl.innerHTML = `<span class="rawg-score ${tier}" id="rating-retry" title="Tap to look up again">${label}</span>`;
 
-        const retryEl = card.querySelector('#rawg-retry');
-        if(retryEl){
-          retryEl.style.cursor = 'pointer';
-          retryEl.addEventListener('click', () => {
-            badgeEl.innerHTML = `<span class="rawg-score tier-muted">…</span>`;
-            runRawgLookup(true);
-          });
-        }
-      });
-    };
-    runRawgLookup(false);
-  }
+      const retryEl = card.querySelector('#rating-retry');
+      if(retryEl){
+        retryEl.style.cursor = 'pointer';
+        retryEl.addEventListener('click', () => {
+          badgeEl.innerHTML = `<span class="rawg-score tier-muted">…</span>`;
+          runLookup(true);
+        });
+      }
+    });
+  };
+  runLookup(false);
 }
 
 async function updateManualBeatenStatus(gameId, beaten, dateStr){
@@ -174,7 +167,7 @@ function renderCustomGameModal(gameId, local, card){
         <a href="https://howlongtobeat.com/?q=${encodeURIComponent(local.Title)}" target="_blank" rel="noopener">Search HowLongToBeat ↗</a>
       </div>
 
-      <p class="modal-note">Not on RetroAchievements — tracked manually, and not included in any RetroAchievements-based stats. Ratings via <a href="https://rawg.io" target="_blank" rel="noopener" style="color:var(--teal)">RAWG</a>.</p>
+      <p class="modal-note">Not on RetroAchievements — tracked manually, and not included in any RetroAchievements-based stats. Ratings via <a href="https://www.igdb.com" target="_blank" rel="noopener" style="color:var(--teal)">IGDB</a>.</p>
     `;
 
   const startedCheckbox = card.querySelector('#manual-started-checkbox');
@@ -225,7 +218,7 @@ function renderCustomGameModal(gameId, local, card){
     }
   });
 
-  attachRawgLookup(gameId, local.Title, card);
+  attachRatingLookup(gameId, local.Title, card);
   setupGameDetailsUI(gameId, local.Title, card, { aboutOnly: true, consoleName: local.ConsoleName });
   setupGameGuideUI(gameId, local.Title, card, local.ConsoleID);
   setupCheatsUI(gameId, local.Title, card, local.ConsoleName);
@@ -394,7 +387,7 @@ async function openGameModal(gameId, opts){
       <button class="modal-close" id="modal-close-btn">✕</button>
       <div class="modal-art-wrap">
         <img class="modal-art" src="" alt="">
-        <div class="rawg-badge-row"><span id="rawg-badge"></span></div>
+        <div class="rawg-badge-row"><span id="rating-badge"></span></div>
       </div>
       <div class="modal-body"><div class="loading">Loading game info</div></div>
     `;
@@ -494,7 +487,7 @@ async function openGameModal(gameId, opts){
         <a href="${hltbUrl}" target="_blank" rel="noopener">Search HowLongToBeat ↗</a>
       </div>
 
-      <p class="modal-note">Ratings via <a href="https://rawg.io" target="_blank" rel="noopener" style="color:var(--teal)">RAWG</a>.</p>
+      <p class="modal-note">Ratings via <a href="https://www.igdb.com" target="_blank" rel="noopener" style="color:var(--teal)">IGDB</a>.</p>
     `;
 
   const ptRefreshBtn = card.querySelector('#modal-playtime-refresh');
@@ -523,7 +516,7 @@ async function openGameModal(gameId, opts){
     });
   }
 
-  attachRawgLookup(gameId, title, card);
+  attachRatingLookup(gameId, title, card);
   setupGameDetailsUI(gameId, title, card, { consoleName: console_ });
   setupGameGuideUI(gameId, title, card, ext.ConsoleID || (local && local.ConsoleID));
   setupCheatsUI(gameId, title, card, console_);
@@ -721,5 +714,5 @@ $('#modal-backdrop').addEventListener('click', (e) => {
   if(e.target.id === 'modal-backdrop') closeGameModal();
 });
 document.addEventListener('keydown', (e) => {
-  if(e.key === 'Escape'){ closeGameModal(); closeAddGameModal(); closeRawgModal(); closeRaConnectModal(); closeDataModal(); closeAboutModal(); closeSocialModal(); closeDropdownMenu(); }
+  if(e.key === 'Escape'){ closeGameModal(); closeAddGameModal(); closeRaConnectModal(); closeDataModal(); closeAboutModal(); closeSocialModal(); closeDropdownMenu(); }
 });

@@ -2,6 +2,26 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.2.9
+
+Themes, IGDB and Social changes from the DS Launcher app (1.1.0 to 1.2.0).
+
+### Added
+- Themes, under Display Options: Retro (the original look), Nintendo, Playstation and Xbox. Each one has its own colours, font and header logo, and the choice is remembered.
+- Social: each person's last game shows how many achievements they have in it, and Recently beaten or mastered lists their latest awards.
+- Game Details: games not on RA now show IGDB's time to beat and 100% figures, and a description from IGDB.
+
+### Changed
+- RAWG is gone. Ratings, descriptions and Add a game searches now all use IGDB through my Worker, and the RAWG key screen is removed. Any saved RAWG key is deleted.
+- Add a game waits longer for a search and retries once, so a slow answer no longer ends in an error.
+- Game Details opens faster, and the Download manual note is gone.
+- Social: points follow the casual/hardcore switch, a person's details load only when you tap them, and recent unlocks show the latest 5.
+- Controller: in a game profile, Up and Down follow the left edge (Play, then Play port, and so on) instead of the buttons beside them.
+
+### Fixed
+- A rating lookup that failed is no longer remembered, so the badge tries again instead of staying empty.
+- Texts that still mentioned RAWG now say IGDB.
+
 ## v2.1.2.8
 
 Styles from the DS Launcher app (1.1.0 to 1.1.2).

@@ -1,6 +1,6 @@
 /* Game Log Tracker styles */
 
-  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&family=Metal+Mania&family=Rubik+Distressed&family=Comic+Neue:wght@700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&family=Metal+Mania&family=Rubik+Distressed&family=Comic+Neue:wght@700&family=Press+Start+2P&family=Nunito:wght@400;600;700;800&family=Exo+2:wght@400;600;700&family=Open+Sans:wght@400;600;700&display=swap');
 
   :root{
     --bg:#15121f;
@@ -1144,3 +1144,42 @@ body.pad-mode .tab-btn.pad-focus{outline-offset:-3px;}
 
 /* Keeps the strip above the pinned heading (clock and battery, or the notch) solid, so scrolled tiles never show through it. */
 body::before{content:'';position:fixed;top:0;left:0;right:0;height:calc(var(--status-h) + env(safe-area-inset-top, 0px));background:var(--bg);z-index:30;pointer-events:none;}
+
+/* ===== Themes (Display Options -> Theme). RETRO is the default look above. ===== */
+html[data-theme="nintendo"]{
+  --bg:#0d0d0d;--bg-alt:#1f1f1f;--panel:#2a2a2a;--panel-2:#333;--border:#6b6b6b;
+  --gold:#e60012;--gold-dim:#8f000b;--teal:#e8d0a0;--text:#f4f0e6;--muted:#a8a095;--danger:#ff7a5c;
+  --gold-rgb:230,0,18;--teal-rgb:232,208,160;--bg-rgb:13,13,13;--on-gold:#fff;
+  --radius:0px;--font-mono:'Press Start 2P',monospace;--font-ui:'Press Start 2P',monospace;--btn-shadow:3px 3px 0 #7a000a;
+}
+html[data-theme="playstation"]{
+  --bg:#0a0e1f;--bg-alt:#101731;--panel:#141d3d;--panel-2:#1a2650;--border:#26356b;
+  --gold:#4aa3ff;--gold-dim:#2c6aa8;--teal:#aebbd6;--text:#e8f0ff;--muted:#8a9bc8;--danger:#ff6b8a;
+  --gold-rgb:74,163,255;--teal-rgb:174,187,214;--bg-rgb:10,14,31;--on-gold:#021228;
+  --radius:6px;--font-mono:'Exo 2',sans-serif;--font-ui:'Exo 2',sans-serif;--btn-shadow:0 0 12px rgba(74,163,255,.5);
+}
+html[data-theme="xbox"]{
+  --bg:#000000;--bg-alt:#050805;--panel:#0b100b;--panel-2:#131a13;--border:#263326;
+  --gold:#88c050;--gold-dim:#5c8a34;--teal:#5fa83a;--text:#ecf3ec;--muted:#8fa08f;--danger:#ff7060;
+  --gold-rgb:136,192,80;--teal-rgb:95,168,58;--bg-rgb:0,0,0;--on-gold:#06130a;
+  --radius:4px;--font-mono:'Open Sans',sans-serif;--font-ui:'Open Sans',sans-serif;--btn-shadow:none;
+}
+html[data-theme="nintendo"] body{line-height:1.7;}
+html[data-theme="nintendo"] .card,html[data-theme="nintendo"] .chip.active,html[data-theme="nintendo"] .btn,html[data-theme="nintendo"] .btn-primary{box-shadow:var(--btn-shadow);}
+html[data-theme="playstation"] .chip.active{box-shadow:var(--btn-shadow);}
+html[data-theme="playstation"] .brand .name{letter-spacing:3px;text-transform:uppercase;}
+html[data-theme="xbox"] .brand .name{letter-spacing:2px;text-transform:uppercase;font-weight:700;}
+html[data-theme="playstation"] body,html[data-theme="xbox"] body{background-image:radial-gradient(circle at 20% 0%, rgba(var(--gold-rgb),0.07), transparent 40%),radial-gradient(circle at 80% 100%, rgba(var(--teal-rgb),0.06), transparent 40%);}
+.theme-btn.on{border-color:var(--gold);color:var(--gold);}
+.theme-col{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:9px 14px 9px 26px;background:var(--bg-alt);border-top:1px solid var(--border);}
+.theme-col .theme-btn{text-align:left;}
+.desc-btn.on{border-color:var(--gold);color:var(--gold);}
+
+/* the themes swap the Game Log Tracker mark for the console's own logo (files in logos/) */
+html[data-theme="nintendo"] .brand .mark{content:url("../logos/nintendo.png");}
+html[data-theme="playstation"] .brand .mark{content:url("../logos/playstation.png");}
+html[data-theme="xbox"] .brand .mark{content:url("../logos/xbox.png");}
+html[data-theme] .brand .mark{object-fit:contain;width:auto;max-width:150px;}
+/* theme picker: one name per row, the whole row lights up when chosen */
+.theme-col .theme-btn{display:block;width:100%;text-align:left;height:auto;padding:9px 12px;}
+.theme-col .theme-btn.on{background:rgba(var(--gold-rgb),0.18);border-color:var(--gold);color:var(--gold);}

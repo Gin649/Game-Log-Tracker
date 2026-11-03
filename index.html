@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=0.75, minimum-scale=0.3, maximum-scale=5, user-scalable=yes, viewport-fit=cover">
 <title>Game Log — Tracker</title>
+<script>try{var t=localStorage.getItem("glt-theme");t={nes:"nintendo",psx:"playstation",snes:"retro"}[t]||t;if(t&&t!=="retro")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#15121f">
@@ -40,7 +41,6 @@
           <button class="dropdown-item dropdown-subitem" id="btn-disconnect">Disconnect RA</button>
           <button class="dropdown-item dropdown-subitem" id="btn-hardcore-toggle">Switch to Hardcore Mode</button>
         </div>
-        <button class="dropdown-item" id="btn-rawg-settings">RAWG Ratings</button>
         <button class="dropdown-item" id="btn-social-open">Social</button>
         <button class="dropdown-item" id="btn-data-settings-open">Data</button>
         <button class="dropdown-item dropdown-heading" id="btn-display-heading">Display Options <span id="display-heading-arrow">▸</span></button>
@@ -51,6 +51,13 @@
             <span class="size-label" id="textsize-label">100%</span>
             <button class="textsize-btn" id="textsize-inc" aria-label="Larger text">A+</button>
             <button class="textsize-reset" id="textsize-reset">Reset</button>
+          </div>
+          <div class="theme-col">
+            <span class="display-note" style="margin:0 0 2px 0;">Theme</span>
+            <button class="textsize-btn theme-btn" data-theme-id="retro">Retro</button>
+            <button class="textsize-btn theme-btn" data-theme-id="nintendo">Nintendo</button>
+            <button class="textsize-btn theme-btn" data-theme-id="playstation">Playstation</button>
+            <button class="textsize-btn theme-btn" data-theme-id="xbox">Xbox</button>
           </div>
           <div class="textsize-row view-row">
             <span class="display-note" style="margin:0 4px 0 0;">Game view</span>
@@ -239,7 +246,7 @@
         <select id="addgame-system"><option>Loading systems…</option></select>
       </div>
       <div class="field" id="addgame-custom-console-field" style="display:none;">
-        <div class="hint">Not on RetroAchievements — pick the platform after you find a match below. Box art and details are pulled from RAWG, and this game won't count toward any RetroAchievements-based stats.</div>
+        <div class="hint">Not on RetroAchievements — pick the platform after you find a match below. Box art and details are pulled from IGDB, and this game won't count toward any RetroAchievements-based stats.</div>
       </div>
       <div class="field">
         <label>Game title</label>
@@ -257,33 +264,12 @@
   </div>
 </div>
 
-<div id="rawg-backdrop" class="modal-backdrop">
-  <div class="modal-card" id="rawg-card">
-    <button class="modal-close" id="rawg-close-btn">✕</button>
-    <div class="modal-body">
-      <h2 style="margin-bottom:4px;">RAWG ratings</h2>
-      <p class="sub" style="margin-bottom:18px;">Optional — shows a review-score badge on each game's detail view, pulled from RAWG (includes real Metacritic scores where RAWG has them).</p>
-
-      <div class="field">
-        <label>API Key</label>
-        <input id="rawg-api-key" type="text" autocomplete="off">
-        <div class="hint">Free — get a key at <a href="https://rawg.io/apidocs" target="_blank" rel="noopener">rawg.io/apidocs</a> (20,000 requests/month free, no OAuth, just this one key).</div>
-      </div>
-      <div style="display:flex; gap:8px;">
-        <button class="btn-primary" id="rawg-save-btn" style="flex:1;">Save</button>
-        <button id="rawg-remove-btn" style="flex:1; background: transparent; border: 1px solid var(--danger); color: var(--danger); border-radius: var(--radius); font-family: 'Space Mono', monospace; font-weight: 700; font-size:0.8125rem; cursor: pointer;">Remove key</button>
-      </div>
-      <div id="rawg-status"></div>
-    </div>
-  </div>
-</div>
-
 <div id="data-backdrop" class="modal-backdrop">
   <div class="modal-card" id="data-card">
     <button class="modal-close" id="data-close-btn">✕</button>
     <div class="modal-body">
       <h2 style="margin-bottom:4px;">Data</h2>
-      <p class="sub" style="margin-bottom:18px;">Everything — RA credentials, RAWG key, and your manually-added games — lives only on this device. Export a backup before switching devices, clearing browser data, or reinstalling, and import it wherever you want that data to show up next.</p>
+      <p class="sub" style="margin-bottom:18px;">Everything — RA credentials and your manually-added games — lives only on this device. Export a backup before switching devices, clearing browser data, or reinstalling, and import it wherever you want that data to show up next.</p>
 
       <div class="field">
         <label>Export</label>
@@ -326,7 +312,7 @@
       <div class="about-credits">
         <div class="about-credits-title">Credits</div>
         <p>Special thanks to <a href="https://www.joeysretrohandhelds.com/" target="_blank" rel="noopener">Joey</a> (<a href="https://www.joeysretrohandhelds.com/" target="_blank" rel="noopener">joeysretrohandhelds.com</a>) for helping make this app possible.</p>
-        <p>Achievement data from <a href="https://retroachievements.org" target="_blank" rel="noopener">RetroAchievements</a>. Ratings and box art from <a href="https://rawg.io" target="_blank" rel="noopener">RAWG</a>. Text guides from the GameFAQs archive on <a href="https://archive.org" target="_blank" rel="noopener">archive.org</a>, indexed by the Guide Watch project.</p>
+        <p>Achievement data from <a href="https://retroachievements.org" target="_blank" rel="noopener">RetroAchievements</a>. Ratings, game details and box art from <a href="https://www.igdb.com" target="_blank" rel="noopener">IGDB</a>. Text guides from the GameFAQs archive on <a href="https://archive.org" target="_blank" rel="noopener">archive.org</a>, indexed by the Guide Watch project.</p>
       </div>
     </div>
   </div>
@@ -345,7 +331,7 @@
 <script src="js/walkthroughs.js"></script>
 <script src="js/imported-files.js"></script>
 <script src="js/manual-games.js"></script>
-<script src="js/rawg.js"></script>
+<script src="js/igdb.js"></script>
 <script src="js/views.js"></script>
 <script src="js/manuals.js"></script>
 <script src="js/game-details.js"></script>

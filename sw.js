@@ -4,7 +4,7 @@
 // keeps serving its own files, so old and new code never mix.
 
 const CACHE_PREFIX = 'gl-tracker-';
-const CACHE_NAME = CACHE_PREFIX + 'v148';
+const CACHE_NAME = CACHE_PREFIX + 'v149';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -20,7 +20,7 @@ const ASSETS_TO_CACHE = [
   './js/walkthroughs.js',
   './js/imported-files.js',
   './js/manual-games.js',
-  './js/rawg.js',
+  './js/igdb.js',
   './js/views.js',
   './js/manuals.js',
   './js/game-details.js',
@@ -43,6 +43,9 @@ const ASSETS_TO_CACHE = [
   './icon-192.png',
   './icon-512.png',
   './icon-512-maskable.png',
+  './logos/nintendo.png',
+  './logos/playstation.png',
+  './logos/xbox.png',
   './apple-touch-icon.png'
 ];
 

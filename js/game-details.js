@@ -1,5 +1,5 @@
 // Game Details section in a game's profile: other players' typical playtime from
-// RetroAchievements (for the mode you're in), a write-up from RAWG and the game's manual (manuals.js).
+// RetroAchievements (for the mode you're in), a write-up from IGDB and the game's manual (manuals.js).
 
 const PLAYTIME_TTL = 7 * 24 * 60 * 60 * 1000; // medians barely move
 const PLAYTIME_MISS_TTL = 10 * 60 * 1000;
@@ -36,49 +36,16 @@ async function getPlaytimeStats(gameId){
   return stats;
 }
 
-// RAWG's description as plain text, or null when it has none for this game.
-async function getRawgDescription(title){
-  if(!rawgCreds) rawgCreds = await loadRawgCreds();
-  if(!rawgCreds || !rawgCreds.apiKey) return null;
-
-  const clean = String(title).replace(/^(?:~[^~]*~\s*)+/, '').trim(); // drop "~Hack~" style tags
-  const cacheKey = `rawg-desc:${clean.toLowerCase()}`;
-  try{
-    const r = await window.storage.get(cacheKey, false);
-    if(r && r.value){
-      const parsed = JSON.parse(r.value);
-      if(Date.now() - parsed.ts < (parsed.text ? DESCRIPTION_TTL : DESCRIPTION_MISS_TTL)) return parsed.text;
-    }
-  }catch(e){ /* not cached yet */ }
-
-  const key = encodeURIComponent(rawgCreds.apiKey);
-  const search = await rawgGetShared(`https://api.rawg.io/api/games?key=${key}&search=${encodeURIComponent(clean)}&page_size=5`);
-  const results = (search && search.results) || [];
-  const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const want = norm(clean);
-  // An exact title, or one that contains the other, so a similar sequel doesn't lend its text.
-  const match = results.find(g => norm(g.name) === want) ||
-    results.find(g => { const n = norm(g.name); return n.length >= 4 && want.length >= 4 && (n.includes(want) || want.includes(n)); });
-
-  let text = null;
-  if(match){
-    const detail = await rawgGet(`https://api.rawg.io/api/games/${match.id}?key=${key}`);
-    text = cleanDescription(detail && detail.description_raw);
-  }
-  try{ await window.storage.set(cacheKey, JSON.stringify({ text, ts: Date.now() }), false); }catch(e){ /* non-fatal */ }
-  return text;
-}
-
 function cleanDescription(raw){
   let text = String(raw || '').replace(/\r/g, '').trim();
-  // RAWG often adds a Spanish copy after the English text, started by a line that just says "Español".
+  // Text sources often add a Spanish copy after the English text, started by a line that just says "Español".
   const es = text.search(/\n\s*espa[ñn]ol\s*:?\s*(\n|$)/i);
   if(es > 0) text = text.slice(0, es).trim();
   text = tidyDescription(text);
   return text.length >= 40 ? text : null;
 }
 
-// RAWG text often has hard line breaks in the middle of sentences ("It's panic or" / "perish..."),
+// Write-ups often have hard line breaks in the middle of sentences ("It's panic or" / "perish..."),
 // which show up as stray short lines. A line break only stays when the line before it ends a
 // sentence and the next one starts a new one; every other break becomes a space.
 function tidyDescription(text){
@@ -234,12 +201,20 @@ function setupGameDetailsUI(gameId, title, card, opts){
   // there by the time the section is tapped. Everything is cached, so this only costs
   // requests the first time a game is opened.
   let pending = null;
-  const load = () => pending || (pending = Promise.allSettled([
+  let igdbPromise = null;
+  const igdbInfo = () => igdbPromise || (igdbPromise = getIgdbInfo(title).catch(() => null));
+  // The write-up is IGDB's summary.
+  const descP = () => igdbInfo().then(i => {
+    const t = i && i.summary ? tidyDescription(i.summary) : '';
+    return t.length >= 40 ? t : null;
+  }).catch(() => null);
+  let descPromise = null;
+  const load = () => pending || (pending = (descPromise = descP(), Promise.allSettled([
     aboutOnly ? Promise.resolve(null) : getPlaytimeStats(gameId),
-    getRawgDescription(title),
+    Promise.resolve(null),
     aboutOnly ? Promise.resolve(null) : getMyTimes(gameId),
-    aboutOnly ? getIgdbInfo(title) : Promise.resolve(null),
-  ]));
+    aboutOnly ? igdbInfo() : Promise.resolve(null),
+  ])));
   setTimeout(load, 400);
 
   let loaded = false;
@@ -251,17 +226,23 @@ function setupGameDetailsUI(gameId, title, card, opts){
 
     loaded = true;
     wrap.innerHTML = '<div class="achievements-list-loading">Loading details…</div>';
-    const [statsRes, descRes, mineRes, igdbRes] = await load();
+    const [statsRes, , mineRes, igdbRes] = await load();
+    // The write-up can come late: wait a moment for it, then show the rest and fill it in when it arrives.
+    const early = await Promise.race([descPromise, new Promise(r => setTimeout(() => r(undefined), 2500))]);
     if(card.dataset.gameId !== String(gameId)) return; // user moved on to another game
     if(statsRes.status === 'rejected') console.error('Playtime stats failed:', statsRes.reason && statsRes.reason.message);
-    if(descRes.status === 'rejected') console.error('RAWG description failed:', descRes.reason && descRes.reason.message);
 
     const stats = statsRes.status === 'fulfilled' ? statsRes.value : null;
-    const description = descRes.status === 'fulfilled' ? descRes.value : null;
     if(mineRes.status === 'rejected') console.error('Your times failed:', mineRes.reason && mineRes.reason.message);
     const mine = mineRes.status === 'fulfilled' ? mineRes.value : null;
     const igdb = igdbRes && igdbRes.status === 'fulfilled' ? igdbRes.value : null;
-    renderGameDetails(wrap, stats, description, aboutOnly, manualCtx, mine, igdb);
-    if(!stats && !description && !igdb){ loaded = false; pending = null; } // both failed: try again next time it's opened
+    const draw = (description) => renderGameDetails(wrap, stats, description, aboutOnly, manualCtx, mine, igdb);
+    draw(early || null);
+    if(early === undefined){
+      descPromise.then(text => {
+        if(text && card.dataset.gameId === String(gameId)) draw(text);
+        else if(!stats && !igdb){ loaded = false; pending = null; }
+      });
+    }else if(!stats && !early && !igdb){ loaded = false; pending = null; } // all failed: try again next time it's opened
   });
 }

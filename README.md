@@ -16,15 +16,15 @@ Play some games with us.
 
 **Beaten** groups everything you've beaten or mastered by the year you did it. Mastered games get a small pill on the bottom of the icon. Tap a tile to open the game, or hold it to see the title, since phones have no hover.
 
-**Backlog** is for games you plan to play. You can search RA's game list by system and tick several results to add them in one go. You can add several at once, and your ticks stay across new searches. You can also add games from systems RA doesn't track, using RAWG for box art and details. For those, you pick the platform from a dropdown of RAWG's data instead of typing it, and "Other system (not on RetroAchievements)" is at the top of the System list and selected by default, so a non-RA game only needs a title. Platforms RA names (RAWG's "NES" becomes "NES/Famicom") are renamed to match so they group under the same System chip as your RA games. Those games never count toward your RA stats. An RA game moves into the Library once RA shows progress on it. A non-RA game moves when you tick "Now Playing", and marking it complete puts it in Beaten. If a non-RA game shows up on RA later, you can link it to its RA entry.
+**Backlog** is for games you plan to play. You can search RA's game list by system and tick several results to add them in one go. You can add several at once, and your ticks stay across new searches. You can also add games from systems RA doesn't track, using IGDB for box art and details. For those, you pick the platform from a dropdown of IGDB's data instead of typing it, and "Other system (not on RetroAchievements)" is at the top of the System list and selected by default, so a non-RA game only needs a title. Platforms RA names (IGDB's "Nintendo Entertainment System" becomes "NES/Famicom") are renamed to match so they group under the same System chip as your RA games. Those games never count toward your RA stats. An RA game moves into the Library once RA shows progress on it. A non-RA game moves when you tick "Now Playing", and marking it complete puts it in Beaten. If a non-RA game shows up on RA later, you can link it to its RA entry.
 
 **Casual / Hardcore** is one switch in the menu that flips every stat, list and progress bar between casual and hardcore numbers. Beaten and Mastered are fully separate too: casual mode shows only casual awards, and hardcore mode only hardcore ones.
 
-**Social** shows the people you follow on RetroAchievements, who is playing right now, and what they've unlocked lately. It fills the whole screen. Tap someone to see their unlocks from the last 14 days and a link to their RA profile. The list is saved on your device, so it opens straight away and updates behind it, and the Refresh button re-checks everyone.
+**Social** shows the people you follow on RetroAchievements, who is playing right now, and what they've unlocked lately. It fills the whole screen. Each person's row shows their last game with how many achievements they have in it, and their points follow the casual/hardcore switch. Tap someone to load their five most recent unlocks from the last 14 days, a Recently beaten or mastered list and a link to their RA profile. Nothing is loaded for a person until you tap them. The list is saved on your device, so it opens straight away and updates behind it, and the Refresh button re-checks everyone.
 
 ### Inside a game
 
-- Game Details, above View Achievements, shows the average time other players take to beat and to master the game from RA, for the mode you're in, plus a write-up from RAWG with a Read more toggle. A section with nothing to show is left out, and games you added by hand get just the write-up. The profile also shows the date you beat the game next to the Beaten badge.
+- Game Details, above View Achievements, shows the average time other players take to beat and to master the game from RA, for the mode you're in, plus a write-up from IGDB with a Read more toggle. Games not on RA get IGDB's time to beat and 100% figures instead. A section with nothing to show is left out. The profile also shows the date you beat the game next to the Beaten badge.
 - Achievement list with points and unlock dates, a "!" badge on missable achievements, and a Missable Only filter. Unlocked achievements are listed with the latest unlock first, followed by the locked ones, unless you've saved your own order. A small RA button on each one opens its page on RetroAchievements, where the comments are.
 - Drag achievements (or use the arrow buttons) to put them in your own order. The order is saved per game. You can export it as a .json file and import one someone else made.
 - View Beaten Achievements shows the progression and win condition achievements RA uses to decide whether a game counts as beaten.
@@ -33,12 +33,13 @@ Play some games with us.
 - Game guides: search the GameFAQs text guide archive on archive.org, download an achievement guide from the RetroAchievements guides wiki, or import your own .txt, .md, .html or .pdf file. You can keep several guides per game, rename them, and see how far through each one you are. The reader has search (type a word, tap → or press Enter, then use Prev and Next to go through the results), bookmarks, text size, font and theme options, and a button that takes you back to where you were. Links in HTML guides scroll the reader or open in your browser, and imported HTML has scripts, iframes, objects, embeds, forms and `data:` links removed.
 - Need Cheats? opens the game's GameFAQs cheats page.
 - ROM Hacks lets you patch a ROM in the browser. It handles BPS, IPS, UPS, PPF, APS and xdelta patches, including ones inside a .zip. Give it your own base ROM and it searches the RetroAchievements RAPatches repo for patches whose checksum matches, applies the one you pick, and checks the result against RA's known hashes when it can. There's also a link to search romhack.ing, and "What does it do?" finds more details about a hack there. In Chrome and Edge, the app remembers the folder your ROM came from and the save dialog opens there. Your ROM stays on your device and you download the patched file yourself. I don't host or supply any ROMs.
-- A review score badge (optional) that averages RAWG's score with IGDB's critic and user ratings into one number out of 100. A game with only one source still shows that score, and games with none show "NR". There's also a link to search HowLongToBeat.
+- A review score badge (optional) that averages IGDB's critic and user ratings into one number out of 100. Games with no rating show "NR", and a lookup that failed isn't remembered, so it tries again next time. There's also a link to search HowLongToBeat.
 - Tap the box art to zoom in.
 
 ### Other things
 
 - Text size controls, under Display Options in the menu.
+- Themes, under Display Options: Retro (the original look), Nintendo, Playstation and Xbox. Each one changes the colours, the font and the logo in the header.
 - Controller support. Plug in or pair a gamepad and press a button: the D-pad or left stick moves a highlight, A confirms, B goes back, the right stick scrolls, Select opens the menu, Y (the left button) refreshes, L1 / R1 change console and L2 / R2 change tab. Past the last console or tab it wraps around to the first. Touch still works and hides the highlight. A and B can be swapped under Gamepad Config in the menu. It works with gamepads and with handhelds whose controls arrive as arrow keys, Enter and Esc, and the page has to be in front.
 - An optional clock and battery readout at the top of every screen, turned on under Display Options in the menu. The battery shows as four pixel hearts that empty as it drops to 75, 50, 25 and 5 percent, with the time next to them. It needs Chrome or Edge on Android or Linux, because other browsers don't let sites read the battery. It's off by default.
 - Standalone mode, under Display Options in the menu, keeps your phone's system bars visible instead of going fullscreen. It's off by default, so the app opens fullscreen on the first tap.
@@ -55,11 +56,11 @@ Play some games with us.
 
 Open the app, go to the menu and choose Connect RA. Enter your RetroAchievements username and Web API key. You can find the key on RA under Control Panel, then Keys.
 
-RAWG ratings and adding games from systems RA doesn't track both need a free RAWG key. Get one at https://rawg.io/apidocs and add it under Menu, then RAWG Ratings. The rest of the app works fine without it.
+Ratings, game details and adding games from systems RA doesn't track use IGDB through my Worker, so there's no key to enter.
 
 ## Your data
 
-Everything is stored in your browser using IndexedDB, and the app asks the browser to keep it from being cleared. Your RA login, RAWG key, added games, cached playtime, custom achievement orders, imported guides and saved videos all live there.
+Everything is stored in your browser using IndexedDB, and the app asks the browser to keep it from being cleared. Your RA login, added games, cached playtime, custom achievement orders, imported guides and saved videos all live there.
 
 Nothing syncs between devices. If you switch browsers or devices, or clear the site's data, it won't come with you unless you back it up first. Menu, then Data, then Export downloads a .json file, and Import loads it on another device. The backup includes your API keys, so treat the file like a password.
 
@@ -69,9 +70,9 @@ None of your data is stored by me. Your login, keys and games stay in your brows
 
 RetroAchievements doesn't let browsers call its API directly, so those requests go through a private proxy I run on Cloudflare Workers. It passes the request along and stores nothing. The only thing it keeps track of is how many different API keys have been used, and that is never shared with me. All I see is a counter. The app itself has no analytics or tracking scripts.
 
-RAWG lets browsers call it directly, so those requests go straight to RAWG. IGDB ratings go through the same Worker.
+IGDB doesn't allow browser calls either, so ratings, game details and game searches go through the same Worker, which holds the IGDB credentials.
 
-If a request fails, the app falls back to public proxy services as a last resort (allorigins, codetabs, corsproxy.io, thingproxy and cors.eu.org). That happens for RetroAchievements if my proxy is down or over its free quota, and for RAWG if the direct call fails. I don't run those proxies, and they can see the requests that pass through them, including your API key, because both services want the key in the request URL.
+If a request fails, the app falls back to public proxy services as a last resort (allorigins, codetabs, corsproxy.io, thingproxy and cors.eu.org). That happens for RetroAchievements if my proxy is down or over its free quota, for RA only. I don't run those proxies, and they can see the requests that pass through them, including your API key, because RA wants the key in the request URL.
 
 Other sites the app contacts, and why:
 
@@ -79,7 +80,7 @@ Other sites the app contacts, and why:
 - archive.org and the Guide Watch index (guides.retromodlab.com), for text guides.
 - Wikidata, to find a game's GameFAQs page.
 - GitHub, to search the RAPatches repo and to download guides from the RetroAchievements guides wiki.
-- media.retroachievements.org and RAWG, for images.
+- media.retroachievements.org and IGDB, for images, and Google Fonts, for the theme fonts.
 
 GameFAQs, HowLongToBeat and romhack.ing are only opened as links when you tap them.
 
@@ -115,7 +116,7 @@ The RA proxy address in `js/ra-api.js` is mine and is set up for this site. A co
 
 Joey (https://www.joeysretrohandhelds.com) helped make this possible. His JoeyOS app inspired the guide lookup and the ROM patcher, and I used his approach with his permission.
 
-Achievement data comes from RetroAchievements and ratings and box art from RAWG. Text guides come from the GameFAQs archive on archive.org, indexed by the Guide Watch project. Patches come from the RAPatches repo (https://github.com/RetroAchievements/RAPatches). I'm not affiliated with any of them.
+Achievement data comes from RetroAchievements and ratings, details and box art from IGDB. Text guides come from the GameFAQs archive on archive.org, indexed by the Guide Watch project. Patches come from the RAPatches repo (https://github.com/RetroAchievements/RAPatches). I'm not affiliated with any of them.
 
 ## Contact
 

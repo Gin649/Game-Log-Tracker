@@ -42,7 +42,7 @@ async function buildLibraryFromProgress(results){
   const realIds = new Set(libraryData.map(g => g.GameID));
   const manual = await loadManualGames();
   const stillManual = manual.filter(g => !realIds.has(g.GameID));
-  // Older custom games may still carry RAWG's platform name; use RA's so they group together.
+  // Older custom games may still carry another platform name; use RA's so they group together.
   const renamed = await normalizeCustomConsoleNames(stillManual);
   if(stillManual.length !== manual.length || renamed) await saveManualGames(stillManual);
   libraryData = [...libraryData, ...stillManual];

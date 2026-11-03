@@ -1,18 +1,6 @@
-// Settings modals: RAWG key, Data export/import, About.
+// Settings modals: Data export/import, About.
 
 // Settings modals & data export/import
-// RAWG settings modal
-async function openRawgModal(){
-  $('#rawg-backdrop').classList.add('open');
-  $('#rawg-status').innerHTML = '';
-  const existing = await loadRawgCreds();
-  $('#rawg-api-key').value = existing ? existing.apiKey : '';
-}
-
-function closeRawgModal(){
-  $('#rawg-backdrop').classList.remove('open');
-}
-
 // Data export/import
 function openDataModal(){
   $('#data-backdrop').classList.add('open');
@@ -24,7 +12,7 @@ function closeDataModal(){
 
 // About
 // Bump this every release, together with CACHE_NAME in sw.js.
-const APP_VERSION = '2.1.2.8';
+const APP_VERSION = '2.1.2.9';
 function openAboutModal(){
   $('#about-version').textContent = APP_VERSION;
   $('#about-backdrop').classList.add('open');
@@ -69,12 +57,6 @@ async function importLocalData(file){
   }
   await window.storage._putAllRaw(payload.entries);
 }
-
-$('#btn-rawg-settings').addEventListener('click', openRawgModal);
-$('#rawg-close-btn').addEventListener('click', closeRawgModal);
-$('#rawg-backdrop').addEventListener('click', (e) => {
-  if(e.target.id === 'rawg-backdrop') closeRawgModal();
-});
 
 $('#btn-social-open').addEventListener('click', openSocialModal);
 $('#social-close-btn').addEventListener('click', closeSocialModal);
@@ -123,37 +105,4 @@ $('#data-import-file').addEventListener('change', async (e) => {
   }finally{
     e.target.value = '';
   }
-});
-
-$('#rawg-save-btn').addEventListener('click', async () => {
-  const apiKey = $('#rawg-api-key').value.trim();
-  const statusEl = $('#rawg-status');
-  if(!apiKey){
-    statusEl.innerHTML = '<div class="error-box">Enter an API key.</div>';
-    return;
-  }
-
-  const btn = $('#rawg-save-btn');
-  btn.disabled = true; btn.textContent = 'Verifying…';
-  statusEl.innerHTML = '';
-
-  rawgCreds = { apiKey };
-  await saveRawgCreds(apiKey);
-
-  try{
-    // No token exchange to verify against, run a real lookup instead.
-    const result = await fetchRawgRatingLive('Super Mario Bros');
-    if(!result) throw new Error('Key saved, but a test lookup came back empty — double-check the key is correct');
-    statusEl.innerHTML = '<p style="color:var(--teal);font-size:0.7812rem;margin-top:10px;">Connected — ratings will show on game details from now on.</p>';
-  }catch(e){
-    statusEl.innerHTML = `<div class="error-box">Couldn't verify: ${e.message}</div>`;
-  }finally{
-    btn.disabled = false; btn.textContent = 'Save';
-  }
-});
-
-$('#rawg-remove-btn').addEventListener('click', async () => {
-  await removeRawgCreds();
-  $('#rawg-api-key').value = '';
-  $('#rawg-status').innerHTML = '<p style="color:var(--muted);font-size:0.7812rem;margin-top:10px;">RAWG key removed — ratings will stop showing until a new key is saved.</p>';
 });
