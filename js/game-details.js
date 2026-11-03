@@ -175,20 +175,26 @@ function playtimeBox(label, seconds, players, mine){
 }
 
 // aboutOnly: games tracked by hand (not on RA) have no playtime data, so only the write-up shows.
-function renderGameDetails(wrap, stats, description, aboutOnly, manualCtx, mine){
+function renderGameDetails(wrap, stats, description, aboutOnly, manualCtx, mine, igdb){
   if(description) description = tidyDescription(description); // also fixes write-ups saved before this was added
   const hard = statsMode === 'hardcore';
   const m = (!aboutOnly && stats) ? (hard ? stats.hardcore : stats.casual) : null;
   const my = (!aboutOnly && mine) ? (hard ? mine.hardcore : mine.casual) : null;
+  // Games RetroAchievements has no playtime for borrow IGDB's: a normal playthrough, and everything done.
+  const ib = (aboutOnly && igdb && igdb.beat && (igdb.beat.normally || igdb.beat.completely)) ? igdb.beat : null;
   const hasTimes = !!(m && (m.beat || m.master)) || !!(my && (my.beat || my.master));
 
-  if(!hasTimes && !description){
+  if(!hasTimes && !ib && !description){
     wrap.innerHTML = `<div class="gd-empty">${aboutOnly ? 'No write-up available for this game yet.' : 'No details available for this game yet.'}</div>`;
     addManualSection(wrap, manualCtx);
     return;
   }
 
   let html = '';
+  if(ib){
+    html += `<div class="gd-head"><span class="gd-label">AVERAGE PLAYTIME</span><span class="gd-mode">IGDB</span></div>`;
+    html += `<div class="gd-boxes">${playtimeBox('TIME TO BEAT', ib.normally, ib.count, null)}${playtimeBox('TIME TO 100%', ib.completely, ib.count, null)}</div>`;
+  }
   if(!aboutOnly){
     html += `<div class="gd-head"><span class="gd-label">AVERAGE PLAYTIME</span><span class="gd-mode">${hard ? 'Hardcore' : 'Casual'}</span></div>`;
     html += hasTimes
@@ -197,7 +203,7 @@ function renderGameDetails(wrap, stats, description, aboutOnly, manualCtx, mine)
   }
 
   if(description){
-    html += `<div class="gd-label${aboutOnly ? '' : ' gd-about-label'}">ABOUT</div><div class="gd-about"></div>`;
+    html += `<div class="gd-label${aboutOnly && !ib ? '' : ' gd-about-label'}">ABOUT</div><div class="gd-about"></div>`;
     if(description.length > 280) html += '<button class="gd-more">Read more</button>';
   }
   wrap.innerHTML = html;
@@ -232,6 +238,7 @@ function setupGameDetailsUI(gameId, title, card, opts){
     aboutOnly ? Promise.resolve(null) : getPlaytimeStats(gameId),
     getRawgDescription(title),
     aboutOnly ? Promise.resolve(null) : getMyTimes(gameId),
+    aboutOnly ? getIgdbInfo(title) : Promise.resolve(null),
   ]));
   setTimeout(load, 400);
 
@@ -244,7 +251,7 @@ function setupGameDetailsUI(gameId, title, card, opts){
 
     loaded = true;
     wrap.innerHTML = '<div class="achievements-list-loading">Loading details…</div>';
-    const [statsRes, descRes, mineRes] = await load();
+    const [statsRes, descRes, mineRes, igdbRes] = await load();
     if(card.dataset.gameId !== String(gameId)) return; // user moved on to another game
     if(statsRes.status === 'rejected') console.error('Playtime stats failed:', statsRes.reason && statsRes.reason.message);
     if(descRes.status === 'rejected') console.error('RAWG description failed:', descRes.reason && descRes.reason.message);
@@ -253,7 +260,8 @@ function setupGameDetailsUI(gameId, title, card, opts){
     const description = descRes.status === 'fulfilled' ? descRes.value : null;
     if(mineRes.status === 'rejected') console.error('Your times failed:', mineRes.reason && mineRes.reason.message);
     const mine = mineRes.status === 'fulfilled' ? mineRes.value : null;
-    renderGameDetails(wrap, stats, description, aboutOnly, manualCtx, mine);
-    if(!stats && !description){ loaded = false; pending = null; } // both failed: try again next time it's opened
+    const igdb = igdbRes && igdbRes.status === 'fulfilled' ? igdbRes.value : null;
+    renderGameDetails(wrap, stats, description, aboutOnly, manualCtx, mine, igdb);
+    if(!stats && !description && !igdb){ loaded = false; pending = null; } // both failed: try again next time it's opened
   });
 }
