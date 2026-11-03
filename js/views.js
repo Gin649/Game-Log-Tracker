@@ -471,7 +471,7 @@ function renderLibrary(){
                 <div class="bar">
                   <div class="progress-track"><div class="progress-fill ${pctForMode>=100?'complete':''} ${isHardcoreMode?'hardcore':''}" style="width:${pctForMode}%"></div></div>
                 </div>
-                <span style="font-family:'Space Mono',monospace;font-size:0.6875rem;color:var(--muted)">${awardedForMode}/${g.MaxPossible} · ${pctForMode}%</span>
+                <span style="font-family:var(--font-mono);font-size:0.6875rem;color:var(--muted)">${awardedForMode}/${g.MaxPossible} · ${pctForMode}%</span>
               `;
           const lastPlayedLabel = isCustom
             ? (g.manualBeatenDate ? new Date(g.manualBeatenDate).toLocaleDateString() : 'Never')
@@ -481,7 +481,7 @@ function renderLibrary(){
               <td><div class="g-title"><img src="${imgUrl(g.ImageIcon)}" alt=""><span>${g.Title}</span>${g.manual ? `<button class="manual-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : ''}</div></td>
               <td>${awardCell}</td>
               <td>${progressCell}</td>
-              <td style="font-family:'Space Mono',monospace;font-size:0.75rem;color:${hoursColor}">${hoursLabel}</td>
+              <td style="font-family:var(--font-mono);font-size:0.75rem;color:${hoursColor}">${hoursLabel}</td>
               <td style="color:var(--muted);font-size:0.75rem;">${lastPlayedLabel}</td>
             </tr>
           `;
@@ -602,7 +602,7 @@ function renderBacklog(){
             <tr data-game-id="${g.GameID}">
               <td><div class="g-title"><img src="${imgUrl(g.ImageIcon)}" alt=""><span>${g.Title}</span>${g.manual ? `<button class="manual-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : ''}</div></td>
               <td style="color:var(--muted);font-size:0.75rem;">${g.ConsoleName || '—'}</td>
-              <td style="font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--muted)">${g.customConsole ? 'Not on RA' : (Number(g.MaxPossible) || 0)}</td>
+              <td style="font-family:var(--font-mono);font-size:0.75rem;color:var(--muted)">${g.customConsole ? 'Not on RA' : (Number(g.MaxPossible) || 0)}</td>
             </tr>
           `).join('')}
         </tbody>

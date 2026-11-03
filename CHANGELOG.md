@@ -19,6 +19,7 @@ Themes, IGDB and Social changes from the DS Launcher app (1.1.0 to 1.2.0).
 - Controller: in a game profile, Up and Down follow the left edge (Play, then Play port, and so on) instead of the buttons beside them.
 
 ### Fixed
+- The theme fonts now apply everywhere. The Nintendo, Playstation and Xbox fonts were only reaching part of the app because many texts had their font fixed.
 - A rating lookup that failed is no longer remembered, so the badge tries again instead of staying empty.
 - Texts that still mentioned RAWG now say IGDB.
 

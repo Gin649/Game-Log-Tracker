@@ -3,6 +3,7 @@
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&family=Metal+Mania&family=Rubik+Distressed&family=Comic+Neue:wght@700&family=Press+Start+2P&family=Nunito:wght@400;600;700;800&family=Exo+2:wght@400;600;700&family=Open+Sans:wght@400;600;700&display=swap');
 
   :root{
+    --font-mono:'Space Mono',monospace;--font-ui:'Inter',sans-serif;
     --bg:#15121f;
     --bg-alt:#1b1729;
     --panel:#201a32;
@@ -23,7 +24,7 @@
   html{font-size:16px;} /* base for all the rem font sizes below, changed at runtime to scale app-wide text size */
   html,body{margin:0;padding:0;background:var(--bg);overscroll-behavior-y:contain;height:100%;}
   body{
-    font-family:'Inter',sans-serif;
+    font-family:var(--font-ui);
     color:var(--text);
     min-height:100vh;
     min-height:100dvh;
@@ -62,24 +63,24 @@
   .brand .mark{
     width:90px;height:90px;border-radius:8px;flex-shrink:0;display:block;
   }
-  .brand .name{font-family:'Space Mono',monospace;font-size:1.0625rem;color:var(--muted);}
+  .brand .name{font-family:var(--font-mono);font-size:1.0625rem;color:var(--muted);}
 
   .field{margin-bottom:16px;}
   .field label{
     display:block;font-size:0.75rem;color:var(--muted);
-    margin-bottom:6px;font-family:'Space Mono',monospace;
+    margin-bottom:6px;font-family:var(--font-mono);
   }
   .field input{
     width:100%;padding:10px 12px;background:var(--bg-alt);
     border:1px solid var(--border);border-radius:var(--radius);
-    color:var(--text);font-size:0.875rem;font-family:'Inter',sans-serif;
+    color:var(--text);font-size:0.875rem;font-family:var(--font-ui);
   }
   .field input:focus{outline:none;border-color:var(--gold);}
   .field .hint{font-size:0.75rem;color:var(--muted);margin-top:6px;}
   .field .hint a{color:var(--teal);}
 
   button{
-    font-family:'Space Mono',monospace;
+    font-family:var(--font-mono);
     cursor:pointer;border:none;border-radius:var(--radius);
     font-size:0.8125rem;font-weight:700;letter-spacing:0.3px;
   }
@@ -121,7 +122,7 @@
   .dropdown-menu.open{display:block;}
   .dropdown-item{
     display:block;width:100%;text-align:left;background:transparent;border:none;
-    color:var(--text);padding:11px 14px;font-family:'Space Mono',monospace;font-size:0.7812rem;
+    color:var(--text);padding:11px 14px;font-family:var(--font-mono);font-size:0.7812rem;
     cursor:pointer;
   }
   .dropdown-item:hover{background:var(--bg-alt);}
@@ -148,23 +149,23 @@
   .textsize-btn{
     width:26px;height:24px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
     background:var(--panel);border:1px solid var(--border);border-radius:4px;color:var(--text);
-    font-family:'Space Mono',monospace;font-size:0.6875rem;font-weight:700;cursor:pointer;padding:0;
+    font-family:var(--font-mono);font-size:0.6875rem;font-weight:700;cursor:pointer;padding:0;
   }
   .textsize-btn:hover{border-color:var(--muted);}
   .textsize-btn:disabled{opacity:0.4;cursor:default;}
   .textsize-row .size-label{
-    font-family:'Space Mono',monospace;font-size:0.7188rem;color:var(--text);min-width:34px;text-align:center;
+    font-family:var(--font-mono);font-size:0.7188rem;color:var(--text);min-width:34px;text-align:center;
   }
   .textsize-reset{
     margin-left:auto;background:transparent;border:none;color:var(--muted);
-    font-family:'Space Mono',monospace;font-size:0.65rem;text-decoration:underline;cursor:pointer;padding:0;flex-shrink:0;
+    font-family:var(--font-mono);font-size:0.65rem;text-decoration:underline;cursor:pointer;padding:0;flex-shrink:0;
   }
   .textsize-reset:hover{color:var(--text);}
 
   .display-row{
     display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 14px 9px 26px;
     background:var(--bg-alt);border-top:1px solid var(--border);
-    font-family:'Space Mono',monospace;font-size:0.7188rem;color:var(--text);
+    font-family:var(--font-mono);font-size:0.7188rem;color:var(--text);
   }
   .display-note{display:block;font-size:0.6562rem;color:var(--muted);margin-top:2px;}
   .display-switch{
@@ -200,7 +201,7 @@
   .device-status{
     display:none;position:fixed;top:env(safe-area-inset-top, 0px);right:calc(8px + env(safe-area-inset-right, 0px));
     height:22px;z-index:1000;align-items:center;gap:7px;pointer-events:none;
-    font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:var(--text);
+    font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text);
     text-shadow:0 1px 2px rgba(0,0,0,0.85);
   }
   body.show-status .device-status{display:flex;}
@@ -209,7 +210,7 @@
   .pull-refresh-indicator{
     position:fixed;top:0;left:0;right:0;height:0;overflow:hidden;
     display:flex;justify-content:center;align-items:center;
-    color:var(--gold);font-family:'Space Mono',monospace;font-size:0.7188rem;
+    color:var(--gold);font-family:var(--font-mono);font-size:0.7188rem;
     background:var(--bg);z-index:60;transition:height 0.15s ease-out;
   }
   /* While pulling inside the full-screen game profile (z-index 100), show the indicator above it. */
@@ -243,19 +244,19 @@
   }
   .profile-hero .who{flex:1;min-width:160px;}
   .profile-hero .who h2{
-    font-family:'Space Mono',monospace;margin:0 0 4px;font-size:1.25rem;
+    font-family:var(--font-mono);margin:0 0 4px;font-size:1.25rem;
   }
   .profile-hero .who .motto{color:var(--muted);font-size:0.8125rem;margin:0;}
   .stat-row{display:flex;gap:22px;flex-wrap:wrap;}
   .stat{text-align:right;}
   .stat .num{
-    font-family:'Space Mono',monospace;font-size:1.375rem;font-weight:700;color:var(--gold);
+    font-family:var(--font-mono);font-size:1.375rem;font-weight:700;color:var(--gold);
     line-height:1;
   }
   .stat .lbl{font-size:0.6875rem;color:var(--muted);margin-top:4px;}
 
   .section-title{
-    font-family:'Space Mono',monospace;font-size:0.875rem;color:var(--text);font-weight:700;
+    font-family:var(--font-mono);font-size:0.875rem;color:var(--text);font-weight:700;
     letter-spacing:0.5px;margin:32px 0 12px;
     display:flex;justify-content:space-between;align-items:center;
   }
@@ -295,10 +296,10 @@
   .progress-fill.hardcore{background:var(--gold);}
   .cart .prog-lbl{
     display:flex;justify-content:space-between;font-size:0.5938rem;color:var(--muted);
-    font-family:'Space Mono',monospace;
+    font-family:var(--font-mono);
   }
   .cart .hours{
-    font-size:0.5938rem;color:var(--muted);font-family:'Space Mono',monospace;margin-top:3px;
+    font-size:0.5938rem;color:var(--muted);font-family:var(--font-mono);margin-top:3px;
   }
   .cart .hours .val{color:var(--gold);}
   /* Small pulsing bar shown in place of a playtime that hasn't loaded yet. */
@@ -327,7 +328,7 @@
   .unlock .info .t{font-size:0.8438rem;font-weight:600;margin:0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .unlock .info .g{font-size:0.7188rem;color:var(--muted);margin:0;}
   .unlock .pts{
-    font-family:'Space Mono',monospace;color:var(--gold);font-size:0.8125rem;font-weight:700;
+    font-family:var(--font-mono);color:var(--gold);font-size:0.8125rem;font-weight:700;
     flex-shrink:0;
   }
   .unlock .when{font-size:0.6875rem;color:var(--muted);flex-shrink:0;width:70px;text-align:right;}
@@ -339,13 +340,13 @@
 
   .lib-search{
     width:100%;padding:9px 12px;background:var(--bg-alt);border:1px solid var(--border);
-    border-radius:var(--radius);color:var(--text);font-size:0.8125rem;margin-bottom:12px;font-family:'Inter',sans-serif;
+    border-radius:var(--radius);color:var(--text);font-size:0.8125rem;margin-bottom:12px;font-family:var(--font-ui);
   }
   .lib-search:focus{outline:none;border-color:var(--gold);}
 
   .lib-table{width:100%;border-collapse:collapse;font-size:0.8125rem;}
   .lib-table th{
-    text-align:left;font-family:'Space Mono',monospace;font-weight:400;
+    text-align:left;font-family:var(--font-mono);font-weight:400;
     color:var(--muted);font-size:0.6875rem;padding:6px 10px;border-bottom:1px solid var(--border);
     cursor:pointer;user-select:none;
   }
@@ -357,14 +358,14 @@
   /* RECENTLY PLAYED / ALL GAMES A-Z labels in the Library */
   .lib-table tbody tr.lib-sec{cursor:default;}
   .lib-table tbody tr.lib-sec:hover{background:transparent;}
-  .lib-table tr.lib-sec td{padding:12px 10px 6px;border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:0.6875rem;font-weight:700;letter-spacing:1px;color:var(--gold);}
+  .lib-table tr.lib-sec td{padding:12px 10px 6px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:0.6875rem;font-weight:700;letter-spacing:1px;color:var(--gold);}
   .lib-table tr.lib-sec.alt td{color:var(--muted);}
   .lib-table .g-title{display:flex;align-items:center;gap:8px;}
   .lib-table .g-title img{width:22px;height:22px;border-radius:2px;image-rendering:pixelated;}
   .lib-table .bar{width:90px;}
 
   .pill{
-    display:inline-block;font-family:'Space Mono',monospace;font-size:0.5938rem;
+    display:inline-block;font-family:var(--font-mono);font-size:0.5938rem;
     padding:2px 7px;border-radius:10px;white-space:nowrap;
   }
   .pill-teal{background:rgba(89,201,165,0.15);color:var(--teal);}
@@ -400,7 +401,7 @@
   .chip-row::-webkit-scrollbar{height:4px;}
   .chip{
     flex-shrink:0;background:var(--panel);border:1px solid var(--border);color:var(--muted);
-    font-family:'Space Mono',monospace;font-size:0.7188rem;padding:6px 12px;border-radius:20px;
+    font-family:var(--font-mono);font-size:0.7188rem;padding:6px 12px;border-radius:20px;
     white-space:nowrap;cursor:pointer;
   }
   .chip:hover{color:var(--text);border-color:var(--muted);}
@@ -480,17 +481,17 @@
   .game-profile-card .modal-links a{font-size:0.7937rem;}
   .game-profile-card .modal-note{font-size:0.7562rem;}
   .game-profile-card .rawg-setup-note{font-size:0.7562rem;}
-  .modal-body h2{font-family:'Space Mono',monospace;font-size:1.1875rem;margin:0 0 4px;overflow-wrap:anywhere;}
+  .modal-body h2{font-family:var(--font-mono);font-size:1.1875rem;margin:0 0 4px;overflow-wrap:anywhere;}
   .modal-body .sub{color:var(--muted);font-size:0.8125rem;margin:0 0 16px;}
   .modal-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-bottom:18px;}
-  .modal-meta .mi .k{font-size:0.725rem;color:var(--muted);font-family:'Space Mono',monospace;margin-bottom:2px;}
+  .modal-meta .mi .k{font-size:0.725rem;color:var(--muted);font-family:var(--font-mono);margin-bottom:2px;}
   .modal-meta .mi .v{font-size:0.8938rem;}
   .modal-progress{background:var(--bg-alt);border-radius:6px;padding:14px;margin-bottom:16px;}
   .modal-progress .row{display:flex;justify-content:space-between;font-size:0.8938rem;margin-bottom:8px;}
   .modal-progress .row:last-child{margin-bottom:0;}
   .modal-links{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
   .modal-links a{
-    font-family:'Space Mono',monospace;font-size:0.7188rem;color:var(--teal);
+    font-family:var(--font-mono);font-size:0.7188rem;color:var(--teal);
     border:1px solid var(--border);padding:6px 12px;border-radius:20px;text-decoration:none;
   }
   .modal-links a:hover{border-color:var(--teal);}
@@ -498,7 +499,7 @@
 
   .btn-view-achievements{
     width:100%;margin-top:14px;background:var(--bg-alt);border:1px solid var(--border);
-    color:var(--text);border-radius:6px;padding:10px;font-family:'Space Mono',monospace;
+    color:var(--text);border-radius:6px;padding:10px;font-family:var(--font-mono);
     font-size:0.8625rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;
   }
   .btn-view-achievements:hover{border-color:var(--gold);}
@@ -509,7 +510,7 @@
   /* Game Details section: average playtime and the RAWG write-up */
   .gd-wrap{margin-top:10px;background:var(--bg-alt);border:1px solid var(--border);border-radius:6px;padding:12px;}
   .gd-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
-  .gd-label{font-size:0.725rem;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:0.04em;}
+  .gd-label{font-size:0.725rem;color:var(--muted);font-family:var(--font-mono);letter-spacing:0.04em;}
   .gd-mode{font-size:0.6875rem;color:var(--muted);}
   .gd-boxes{display:flex;gap:8px;}
   .gd-box{flex:1;display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 8px;background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:10px;}
@@ -538,7 +539,7 @@
   .ach-row .info .d{font-size:0.7937rem;color:var(--muted);margin:0;line-height:1.4;}
   .ach-row .info .when{font-size:0.725rem;color:var(--teal);margin:3px 0 0;}
   .ach-row .pts{
-    font-family:'Space Mono',monospace;color:var(--gold);font-size:0.825rem;font-weight:700;flex-shrink:0;
+    font-family:var(--font-mono);color:var(--gold);font-size:0.825rem;font-weight:700;flex-shrink:0;
     min-width:3ch;text-align:right;
   }
   .ach-row.locked .pts{color:var(--muted);}
@@ -567,12 +568,12 @@
   .ach-filter-btn{
     display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
     background:transparent;border:1px solid var(--gold-dim);border-radius:999px;
-    color:var(--gold);font-family:'Inter',sans-serif;font-size:0.75rem;font-weight:600;cursor:pointer;
+    color:var(--gold);font-family:var(--font-ui);font-size:0.75rem;font-weight:600;cursor:pointer;
   }
   .ach-filter-btn:hover{border-color:var(--gold);}
   .ach-filter-btn.active{background:var(--gold);border-color:var(--gold);color:var(--bg);}
   .ach-filter-btn.active .ach-missable-badge{border-color:var(--bg);color:var(--bg);}
-  .ach-filter-count{font-family:'Space Mono',monospace;font-size:0.6875rem;opacity:0.85;}
+  .ach-filter-count{font-family:var(--font-mono);font-size:0.6875rem;opacity:0.85;}
 
   /* Share/import a saved achievement order, tucked below the achievement
      list itself and visually quiet, since it's a niche feature most people
@@ -583,7 +584,7 @@
   }
   .ach-share-footer-btn{
     background:transparent;border:none;color:var(--muted);
-    font-family:'Inter',sans-serif;font-size:0.6875rem;font-weight:600;
+    font-family:var(--font-ui);font-size:0.6875rem;font-weight:600;
     cursor:pointer;padding:4px 8px;opacity:0.75;
   }
   .ach-share-footer-btn:hover{color:var(--gold);opacity:1;}
@@ -592,7 +593,7 @@
   .subsets-list{margin-top:12px;display:none;flex-direction:column;gap:8px;}
   .subset-head{
     width:100%;display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-alt);
-    border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Space Mono',monospace;
+    border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);
     text-align:left;cursor:pointer;
   }
   .subset-head:hover{border-color:var(--gold);}
@@ -610,7 +611,7 @@
     border-radius:6px;padding:14px;
   }
   .guide-btn{
-    border-radius:6px;padding:9px;font-family:'Space Mono',monospace;font-weight:700;
+    border-radius:6px;padding:9px;font-family:var(--font-mono);font-weight:700;
     font-size:0.7812rem;cursor:pointer;text-align:center;text-decoration:none;display:block;
   }
   .guide-btn-primary{background:var(--gold);border:none;color:#1a1408;}
@@ -646,11 +647,11 @@
   .guide-list-item.renaming .guide-list-item-info{flex:1 1 100%;}
   .guide-rename-input{
     width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--teal);color:var(--text);
-    border-radius:4px;padding:7px 8px;font-family:'Space Mono',monospace;font-size:0.75rem;
+    border-radius:4px;padding:7px 8px;font-family:var(--font-mono);font-size:0.75rem;
   }
   .guide-list-item-btn{
     background:transparent;border:1px solid var(--teal);color:var(--teal);border-radius:4px;
-    padding:6px 10px;font-family:'Space Mono',monospace;font-size:0.6875rem;font-weight:700;
+    padding:6px 10px;font-family:var(--font-mono);font-size:0.6875rem;font-weight:700;
     cursor:pointer;
   }
   .guide-list-item-btn.danger{border-color:var(--danger);color:var(--danger);}
@@ -667,12 +668,12 @@
   .patch-result-row .info .pth{font-size:0.675rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .patch-result-row button{
     flex-shrink:0;background:transparent;border:1px solid var(--gold);color:var(--gold);
-    border-radius:5px;padding:6px 10px;font-family:'Space Mono',monospace;font-size:0.6875rem;font-weight:700;cursor:pointer;
+    border-radius:5px;padding:6px 10px;font-family:var(--font-mono);font-size:0.6875rem;font-weight:700;cursor:pointer;
   }
   .patch-info-link{
     flex-shrink:0;max-width:88px;box-sizing:border-box;text-align:center;text-decoration:none;
     border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 8px;
-    font-family:'Space Mono',monospace;font-size:0.625rem;font-weight:700;line-height:1.25;
+    font-family:var(--font-mono);font-size:0.625rem;font-weight:700;line-height:1.25;
   }
   .patch-info-link:hover{border-color:var(--gold);}
   .hash-status{font-size:0.725rem;border-radius:5px;padding:8px 10px;line-height:1.45;}
@@ -837,7 +838,7 @@
   }
   .img-zoom-hint{
     position:absolute;left:0;right:0;bottom:calc(18px + env(safe-area-inset-bottom));
-    text-align:center;font-family:'Space Mono',monospace;font-size:0.6875rem;color:var(--muted);
+    text-align:center;font-family:var(--font-mono);font-size:0.6875rem;color:var(--muted);
     pointer-events:none;transition:opacity 0.3s;
   }
   .img-zoom-hint.hidden{opacity:0;}
@@ -850,7 +851,7 @@
   #addgame-card select, .field select{
     width:100%;padding:10px 12px;background:var(--bg-alt);
     border:1px solid var(--border);border-radius:3px;color:var(--text);
-    font-size:0.875rem;font-family:'Inter',sans-serif;
+    font-size:0.875rem;font-family:var(--font-ui);
   }
   #addgame-card select:focus, .field select:focus{outline:none;border-color:var(--gold);}
 
@@ -867,7 +868,7 @@
   .ag-result.selected{background:var(--bg-alt);box-shadow:inset 2px 0 0 var(--gold);}
   .ag-result img{width:32px;height:32px;border-radius:2px;image-rendering:pixelated;flex-shrink:0;}
   .ag-result .t{font-size:0.8125rem;flex:1;}
-  .ag-result .n{font-size:0.6562rem;color:var(--muted);font-family:'Space Mono',monospace;}
+  .ag-result .n{font-size:0.6562rem;color:var(--muted);font-family:var(--font-mono);}
   .ag-checkbox{flex-shrink:0;width:16px;height:16px;accent-color:var(--gold);cursor:pointer;}
   .ag-empty{font-size:0.7812rem;color:var(--muted);margin-top:14px;}
 
@@ -887,7 +888,7 @@
   .ag-platform-select{
     flex:0 0 auto;max-width:150px;padding:6px 8px;background:var(--bg-alt);
     border:1px solid var(--border);border-radius:3px;color:var(--text);
-    font-size:0.75rem;font-family:'Inter',sans-serif;
+    font-size:0.75rem;font-family:var(--font-ui);
   }
   .ag-platform-select:focus{outline:none;border-color:var(--gold);}
   .ag-add-btn{
@@ -906,7 +907,7 @@
   /* By year */
   .year-group{margin-bottom:28px;}
   .year-heading{
-    font-family:'Space Mono',monospace;font-size:0.9375rem;color:var(--text);font-weight:700;
+    font-family:var(--font-mono);font-size:0.9375rem;color:var(--text);font-weight:700;
     margin:0 0 12px;display:flex;align-items:baseline;gap:8px;
   }
   .year-heading .n{font-size:0.6875rem;color:var(--muted);font-weight:400;}
@@ -963,7 +964,7 @@
   .yt-add-row{display:flex;gap:8px;}
   .yt-input{
     flex:1;min-width:0;padding:10px 12px;background:var(--bg-alt);border:1px solid var(--border);
-    border-radius:var(--radius);color:var(--text);font-size:0.875rem;font-family:'Inter',sans-serif;
+    border-radius:var(--radius);color:var(--text);font-size:0.875rem;font-family:var(--font-ui);
   }
   .yt-input:focus{outline:none;border-color:var(--gold);}
   .yt-save-btn{background:var(--gold);color:#1a1424;padding:10px 16px;flex-shrink:0;}
@@ -977,7 +978,7 @@
   .yt-item.playing{border-color:var(--gold);}
   .yt-item-main{
     flex:1;min-width:0;display:flex;align-items:center;gap:10px;background:none;color:var(--text);
-    padding:6px;text-align:left;font-family:'Inter',sans-serif;font-weight:600;font-size:0.8125rem;
+    padding:6px;text-align:left;font-family:var(--font-ui);font-weight:600;font-size:0.8125rem;
   }
   .yt-thumb{width:84px;aspect-ratio:16/9;object-fit:cover;border-radius:4px;background:#000;flex-shrink:0;}
   .yt-thumb-list{display:flex;align-items:center;justify-content:center;color:var(--gold);font-size:1.25rem;}
@@ -1002,7 +1003,7 @@
     display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;
     background:#0b0912;color:var(--text);font-size:0.75rem;flex-shrink:0;
   }
-  .yt-max-title{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-family:'Inter',sans-serif;}
+  .yt-max-title{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-family:var(--font-ui);}
   .yt-max-close{background:var(--gold);color:#1a1424;padding:7px 12px;flex-shrink:0;}
   .yt-player-wrap.yt-max .yt-player-box{flex:1;aspect-ratio:auto;border-radius:0;}
   .yt-player-wrap.yt-max .yt-player-tools{display:none !important;}
@@ -1044,9 +1045,9 @@
   .soc-av,.soc-av-fallback{
     width:100%;height:100%;border-radius:50%;border:1px solid var(--border);background:var(--panel-2);object-fit:cover;
   }
-  .soc-av-fallback{display:none;align-items:center;justify-content:center;color:var(--gold);font-size:0.75rem;font-weight:700;font-family:'Space Mono',monospace;}
+  .soc-av-fallback{display:none;align-items:center;justify-content:center;color:var(--gold);font-size:0.75rem;font-weight:700;font-family:var(--font-mono);}
   .soc-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
-  .soc-name{font-family:'Space Mono',monospace;font-size:0.8125rem;font-weight:700;color:var(--text);}
+  .soc-name{font-family:var(--font-mono);font-size:0.8125rem;font-weight:700;color:var(--text);}
   .soc-game{font-size:0.75rem;color:var(--text);margin:0;}
   .soc-console{color:var(--muted);}
   .soc-rp{font-size:0.6875rem;color:var(--muted);margin:2px 0 0;line-height:1.4;}
@@ -1058,7 +1059,7 @@
   .soc-refresh{width:100%;margin-top:14px;}
   .soc-find{font-size:0.75rem;color:var(--muted);line-height:1.5;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--border);}
   .soc-find a,.soc-back{color:var(--teal);text-decoration:none;}
-  .soc-back{background:transparent;border:none;font-family:'Space Mono',monospace;font-size:0.8125rem;padding:0;margin:0 0 12px;cursor:pointer;}
+  .soc-back{background:transparent;border:none;font-family:var(--font-mono);font-size:0.8125rem;padding:0;margin:0 0 12px;cursor:pointer;}
   .soc-head{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
   .soc-now{background:var(--bg-alt);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:12px;}
   .soc-now .soc-game{font-size:0.8125rem;font-weight:600;}
@@ -1069,7 +1070,7 @@
   .gd-manual-actions{display:flex;gap:8px;flex-wrap:wrap;}
   .gd-manual-btn{
     background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 14px;
-    font-family:'Space Mono',monospace;font-size:0.75rem;font-weight:700;cursor:pointer;text-decoration:none;
+    font-family:var(--font-mono);font-size:0.75rem;font-weight:700;cursor:pointer;text-decoration:none;
     display:inline-flex;align-items:center;
   }
   .gd-manual-btn:hover{border-color:var(--gold);}
@@ -1089,23 +1090,23 @@
     display:flex;align-items:center;gap:8px;flex-shrink:0;padding:10px 12px;background:var(--bg);border-bottom:1px solid var(--border);
   }
   .manual-reader-title{
-    flex:1;min-width:0;font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--muted);
+    flex:1;min-width:0;font-family:var(--font-mono);font-size:0.75rem;color:var(--muted);
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
-  .manual-reader-pages{font-family:'Space Mono',monospace;font-size:0.7rem;color:var(--gold);flex-shrink:0;}
+  .manual-reader-pages{font-family:var(--font-mono);font-size:0.7rem;color:var(--gold);flex-shrink:0;}
   .manual-reader-btn{
     background:transparent;border:1px solid var(--border);color:var(--text);border-radius:4px;flex-shrink:0;
-    padding:5px 11px;font-family:'Space Mono',monospace;font-size:0.78rem;cursor:pointer;
+    padding:5px 11px;font-family:var(--font-mono);font-size:0.78rem;cursor:pointer;
   }
   .manual-reader-body{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px;background:#2a2a2a;}
   .manual-page{margin:0 auto 8px;background:#fff;}
   .manual-page canvas{display:block;}
-  .manual-reader-msg{color:#ddd;font-family:'Space Mono',monospace;font-size:0.8rem;text-align:center;padding:40px 20px;line-height:1.5;}
+  .manual-reader-msg{color:#ddd;font-family:var(--font-mono);font-size:0.8rem;text-align:center;padding:40px 20px;line-height:1.5;}
 
 .textsize-btn.on{border-color:var(--gold-dim);color:var(--gold);}
 /* Tile view for Game Library and Backlog: the same cards as the Last Played tab. */
 .tile-grid{display:grid;grid-template-columns:repeat(var(--tile-cols,4),minmax(0,1fr));gap:10px;}
-.tile-sec{font-family:'Space Mono',monospace;font-size:0.6875rem;letter-spacing:0.5px;color:var(--gold);margin:14px 0 8px;}
+.tile-sec{font-family:var(--font-mono);font-size:0.6875rem;letter-spacing:0.5px;color:var(--gold);margin:14px 0 8px;}
 .tile-sec.alt{color:var(--text);margin-top:20px;}
 .tile-grid .cart{position:relative;}
 .tile-grid.cols-5 .cart .title,.tile-grid.cols-5 .cart .console,.tile-grid.cols-5 .cart .prog-lbl,.tile-grid.cols-5 .cart .hours{font-size:0.5rem;}
