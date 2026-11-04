@@ -190,6 +190,37 @@ function renderGameDetails(wrap, stats, description, aboutOnly, manualCtx, mine,
   addManualSection(wrap, manualCtx);
 }
 
+// ScreenScraper's write-up, asked through the app's Worker (which holds the ScreenScraper login). Inside the launcher the
+// app asks and remembers it; in the browser the answer is kept in storage, a month for a game found and a day for a miss.
+const SS_WORKER = 'https://ra-proxy.gin649.workers.dev';
+function getScreenScraperDescription(title, consoleName){
+  if(!consoleName) return Promise.resolve(null);
+  const clean = String(title).replace(/^(?:~[^~]*~\s*)+/, '').trim();
+  const done = text => { const t = tidyDescription(text || ''); return t.length >= 40 ? t : null; };
+  if(typeof thorBridge !== 'undefined' && thorBridge && thorBridge.screenscraperDescription){
+    return new Promise(resolve => setTimeout(() => {
+      try{ resolve(done(thorBridge.screenscraperDescription(clean, consoleName))); }catch(e){ resolve(null); }
+    }, 0));
+  }
+  return (async () => {
+    const key = `ss-info:${String(consoleName).toLowerCase()}:${clean.toLowerCase()}`;
+    try{
+      const r = await window.storage.get(key, false);
+      if(r && r.value){
+        const p = JSON.parse(r.value);
+        if(Date.now() - p.ts < (p.found ? 30 : 1) * 24 * 60 * 60 * 1000) return p.found ? done(p.synopsis) : null;
+      }
+    }catch(e){}
+    try{
+      const res = await fetchWithTimeout(`${SS_WORKER}/ss/info?title=${encodeURIComponent(clean)}&system=${encodeURIComponent(consoleName)}`, 15000);
+      if(!res.ok) return null; // busy or not set up: nothing is kept, so it is tried again next time
+      const j = await res.json();
+      try{ await window.storage.set(key, JSON.stringify({ found: !!j.found, synopsis: j.synopsis || '', ts: Date.now() }), false); }catch(e){}
+      return j.found ? done(j.synopsis) : null;
+    }catch(e){ return null; }
+  })();
+}
+
 function setupGameDetailsUI(gameId, title, card, opts){
   const aboutOnly = !!(opts && opts.aboutOnly); // manual games: no RA playtime to fetch
   const manualCtx = { gameId, title, consoleName: opts && opts.consoleName };
@@ -203,11 +234,14 @@ function setupGameDetailsUI(gameId, title, card, opts){
   let pending = null;
   let igdbPromise = null;
   const igdbInfo = () => igdbPromise || (igdbPromise = getIgdbInfo(title).catch(() => null));
-  // The write-up is IGDB's summary.
-  const descP = () => igdbInfo().then(i => {
+  // The write-up comes from ScreenScraper first, then IGDB's summary.
+  const igdbText = () => igdbInfo().then(i => {
     const t = i && i.summary ? tidyDescription(i.summary) : '';
     return t.length >= 40 ? t : null;
   }).catch(() => null);
+  const descP = () => getScreenScraperDescription(title, opts && opts.consoleName)
+    .then(d => d || igdbText())
+    .catch(() => null);
   let descPromise = null;
   const load = () => pending || (pending = (descPromise = descP(), Promise.allSettled([
     aboutOnly ? Promise.resolve(null) : getPlaytimeStats(gameId),

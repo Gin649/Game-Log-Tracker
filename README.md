@@ -24,7 +24,7 @@ Play some games with us.
 
 ### Inside a game
 
-- Game Details, above View Achievements, shows the average time other players take to beat and to master the game from RA, for the mode you're in, plus a write-up from IGDB with a Read more toggle. Games not on RA get IGDB's time to beat and 100% figures instead. A section with nothing to show is left out. The profile also shows the date you beat the game next to the Beaten badge.
+- Game Details, above View Achievements, shows the average time other players take to beat and to master the game from RA, for the mode you're in, plus a write-up from ScreenScraper (or IGDB when ScreenScraper has none) with a Read more toggle. Games not on RA get IGDB's time to beat and 100% figures instead. A section with nothing to show is left out. The profile also shows the date you beat the game next to the Beaten badge.
 - Achievement list with points and unlock dates, a "!" badge on missable achievements, and a Missable Only filter. Unlocked achievements are listed with the latest unlock first, followed by the locked ones, unless you've saved your own order. A small RA button on each one opens its page on RetroAchievements, where the comments are.
 - Drag achievements (or use the arrow buttons) to put them in your own order. The order is saved per game. You can export it as a .json file and import one someone else made.
 - View Beaten Achievements shows the progression and win condition achievements RA uses to decide whether a game counts as beaten.
@@ -70,7 +70,7 @@ None of your data is stored by me. Your login, keys and games stay in your brows
 
 RetroAchievements doesn't let browsers call its API directly, so those requests go through a private proxy I run on Cloudflare Workers. It passes the request along and stores nothing. The only thing it keeps track of is how many different API keys have been used, and that is never shared with me. All I see is a counter. The app itself has no analytics or tracking scripts.
 
-IGDB doesn't allow browser calls either, so ratings, game details and game searches go through the same Worker, which holds the IGDB credentials.
+IGDB and ScreenScraper don't allow browser calls either, so ratings, game details, game searches and ScreenScraper write-ups go through the same Worker, which holds their logins. The Worker keeps what it finds for a while, so a game is only asked of ScreenScraper once.
 
 If a request fails, the app falls back to public proxy services as a last resort (allorigins, codetabs, corsproxy.io, thingproxy and cors.eu.org). That happens for RetroAchievements if my proxy is down or over its free quota, for RA only. I don't run those proxies, and they can see the requests that pass through them, including your API key, because RA wants the key in the request URL.
 
@@ -80,7 +80,7 @@ Other sites the app contacts, and why:
 - archive.org and the Guide Watch index (guides.retromodlab.com), for text guides.
 - Wikidata, to find a game's GameFAQs page.
 - GitHub, to search the RAPatches repo and to download guides from the RetroAchievements guides wiki.
-- media.retroachievements.org and IGDB, for images, and Google Fonts, for the theme fonts.
+- media.retroachievements.org and IGDB, for images, ScreenScraper (through the Worker) for descriptions, and Google Fonts, for the theme fonts.
 
 GameFAQs, HowLongToBeat and romhack.ing are only opened as links when you tap them.
 
