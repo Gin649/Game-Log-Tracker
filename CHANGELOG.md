@@ -8,6 +8,7 @@ ScreenScraper and new logos.
 
 ### Added
 - Game descriptions now come from ScreenScraper first, then IGDB. They are asked through my Worker, which holds the ScreenScraper account, and remembered on your device, so a game is only looked up once.
+- Box art in a game's profile now comes from ScreenScraper first, then the picture RetroAchievements or IGDB gave it. Games ScreenScraper doesn't have, and ROM hacks, keep their own picture. The same lookup also supplies the description, so each game is only asked for once.
 - New Nintendo, Playstation and Xbox theme logos in the header.
 
 ### Changed

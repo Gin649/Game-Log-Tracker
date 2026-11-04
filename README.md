@@ -34,7 +34,7 @@ Play some games with us.
 - Need Cheats? opens the game's GameFAQs cheats page.
 - ROM Hacks lets you patch a ROM in the browser. It handles BPS, IPS, UPS, PPF, APS and xdelta patches, including ones inside a .zip. Give it your own base ROM and it searches the RetroAchievements RAPatches repo for patches whose checksum matches, applies the one you pick, and checks the result against RA's known hashes when it can. There's also a link to search romhack.ing, and "What does it do?" finds more details about a hack there. In Chrome and Edge, the app remembers the folder your ROM came from and the save dialog opens there. Your ROM stays on your device and you download the patched file yourself. I don't host or supply any ROMs.
 - A review score badge (optional) that averages IGDB's critic and user ratings into one number out of 100. Games with no rating show "NR", and a lookup that failed isn't remembered, so it tries again next time. There's also a link to search HowLongToBeat.
-- Tap the box art to zoom in.
+- Box art comes from ScreenScraper when it has the game, otherwise from RetroAchievements or IGDB. Tap the box art to zoom in.
 
 ### Other things
 

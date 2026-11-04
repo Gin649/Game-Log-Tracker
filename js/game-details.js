@@ -190,35 +190,58 @@ function renderGameDetails(wrap, stats, description, aboutOnly, manualCtx, mine,
   addManualSection(wrap, manualCtx);
 }
 
-// ScreenScraper's write-up, asked through the app's Worker (which holds the ScreenScraper login). Inside the launcher the
-// app asks and remembers it; in the browser the answer is kept in storage, a month for a game found and a day for a miss.
+// ScreenScraper, asked through the app's Worker (which holds the ScreenScraper login). The answer for a game is kept in
+// storage, a month when it was found and a day when it wasn't, so each game is only looked up once.
 const SS_WORKER = 'https://ra-proxy.gin649.workers.dev';
-function getScreenScraperDescription(title, consoleName){
+const ssInfoPending = new Map(); // one lookup at a time per game, however many places ask
+function getScreenScraperInfo(title, consoleName){
   if(!consoleName) return Promise.resolve(null);
   const clean = String(title).replace(/^(?:~[^~]*~\s*)+/, '').trim();
-  const done = text => { const t = tidyDescription(text || ''); return t.length >= 40 ? t : null; };
-  if(typeof thorBridge !== 'undefined' && thorBridge && thorBridge.screenscraperDescription){
-    return new Promise(resolve => setTimeout(() => {
-      try{ resolve(done(thorBridge.screenscraperDescription(clean, consoleName))); }catch(e){ resolve(null); }
-    }, 0));
-  }
-  return (async () => {
-    const key = `ss-info:${String(consoleName).toLowerCase()}:${clean.toLowerCase()}`;
+  const key = `ss2-info:${String(consoleName).toLowerCase()}:${clean.toLowerCase()}`;
+  if(ssInfoPending.has(key)) return ssInfoPending.get(key);
+  const p = (async () => {
     try{
       const r = await window.storage.get(key, false);
       if(r && r.value){
-        const p = JSON.parse(r.value);
-        if(Date.now() - p.ts < (p.found ? 30 : 1) * 24 * 60 * 60 * 1000) return p.found ? done(p.synopsis) : null;
+        const c = JSON.parse(r.value);
+        if(Date.now() - c.ts < (c.data ? 30 : 1) * 24 * 60 * 60 * 1000) return c.data;
       }
     }catch(e){}
     try{
       const res = await fetchWithTimeout(`${SS_WORKER}/ss/info?title=${encodeURIComponent(clean)}&system=${encodeURIComponent(consoleName)}`, 15000);
       if(!res.ok) return null; // busy or not set up: nothing is kept, so it is tried again next time
       const j = await res.json();
-      try{ await window.storage.set(key, JSON.stringify({ found: !!j.found, synopsis: j.synopsis || '', ts: Date.now() }), false); }catch(e){}
-      return j.found ? done(j.synopsis) : null;
+      const data = j && j.found ? { synopsis: j.synopsis || '', box: j.box || null } : null;
+      try{ await window.storage.set(key, JSON.stringify({ data, ts: Date.now() }), false); }catch(e){}
+      return data;
     }catch(e){ return null; }
   })();
+  ssInfoPending.set(key, p);
+  p.finally(() => ssInfoPending.delete(key));
+  return p;
+}
+
+function getScreenScraperDescription(title, consoleName){
+  return getScreenScraperInfo(title, consoleName).then(d => {
+    const t = tidyDescription((d && d.synopsis) || '');
+    return t.length >= 40 ? t : null;
+  }).catch(() => null);
+}
+
+// Box art from ScreenScraper goes in place of the one the profile opened with, once it has loaded. Games that have none
+// keep their own picture. A hack's art would be the original game's, so hacks keep theirs too.
+function upgradeBoxArt(card, gameId, title, consoleName){
+  if(/^\s*~hack~/i.test(String(title || ''))) return;
+  getScreenScraperInfo(title, consoleName).then(d => {
+    if(!d || !d.box) return;
+    const img = new Image();
+    img.onload = () => {
+      if(card.dataset.gameId !== String(gameId)) return; // the profile moved on to another game
+      const art = card.querySelector('.modal-art');
+      if(art) art.src = d.box;
+    };
+    img.src = d.box;
+  }).catch(() => {});
 }
 
 function setupGameDetailsUI(gameId, title, card, opts){

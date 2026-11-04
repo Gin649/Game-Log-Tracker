@@ -103,6 +103,8 @@ async function updateManualStartedStatus(gameId, started){
 function renderCustomGameModal(gameId, local, card){
   const boxArt = imgUrl(local.ImageBoxArt || local.ImageIcon || '');
   card.querySelector('.modal-art').src = boxArt;
+  card.dataset.gameId = gameId;
+  upgradeBoxArt(card, gameId, local.Title, local.ConsoleName);
 
   let releasedLabel = '—';
   if(local.released){
@@ -434,6 +436,7 @@ async function openGameModal(gameId, opts){
 
   card.querySelector('.modal-art').src = boxArt;
   card.dataset.gameId = gameId;
+  upgradeBoxArt(card, gameId, title, console_);
   card.querySelector('.modal-body').innerHTML = `
       <h2>${title}</h2>
       <p class="sub">${console_}</p>
