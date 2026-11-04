@@ -39,7 +39,7 @@ Play some games with us.
 ### Other things
 
 - Text size controls, under Display Options in the menu.
-- Themes, under Display Options: Retro (the original look), Nintendo, Playstation and Xbox. Each one changes the colours, the font and the logo in the header.
+- Themes, under Display Options: Retro (the original look), Nintendo, Playstation and Xbox. Each one changes the colours, the font and the logo in the header. The Game Log Tracker logo is drawn larger in Retro so it matches the console logos.
 - Controller support. Plug in or pair a gamepad and press a button: the D-pad or left stick moves a highlight, A confirms, B goes back, the right stick scrolls, Select opens the menu, Y (the left button) refreshes, L1 / R1 change console and L2 / R2 change tab. Past the last console or tab it wraps around to the first. Touch still works and hides the highlight. A and B can be swapped under Gamepad Config in the menu. It works with gamepads and with handhelds whose controls arrive as arrow keys, Enter and Esc, and the page has to be in front.
 - An optional clock and battery readout at the top of every screen, turned on under Display Options in the menu. The battery shows as four pixel hearts that empty as it drops to 75, 50, 25 and 5 percent, with the time next to them. It needs Chrome or Edge on Android or Linux, because other browsers don't let sites read the battery. It's off by default.
 - Standalone mode, under Display Options in the menu, keeps your phone's system bars visible instead of going fullscreen. It's off by default, so the app opens fullscreen on the first tap.

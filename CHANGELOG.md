@@ -2,12 +2,23 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.3.0
+
+ScreenScraper and new logos.
+
+### Added
+- Game descriptions now come from ScreenScraper first, then IGDB. They are asked through my Worker, which holds the ScreenScraper account, and remembered on your device, so a game is only looked up once.
+- New Nintendo, Playstation and Xbox theme logos in the header.
+
+### Changed
+- The Game Log Tracker logo in the Retro theme is bigger, so it looks as large as the console logos.
+- The tabs (Last Played, Game Library, Backlog, Beaten) have more room, so the controller's square no longer covers the words.
+
 ## v2.1.2.9
 
 Themes, IGDB and Social changes from the DS Launcher app (1.1.0 to 1.2.0).
 
 ### Added
-- Game descriptions now come from ScreenScraper first, then IGDB. They are asked through my Worker and remembered on your device, so a game is only looked up once.
 - Themes, under Display Options: Retro (the original look), Nintendo, Playstation and Xbox. Each one has its own colours, font and header logo, and the choice is remembered.
 - Social: each person's last game shows how many achievements they have in it, and Recently beaten or mastered lists their latest awards.
 - Game Details: games not on RA now show IGDB's time to beat and 100% figures, and a description from IGDB.
