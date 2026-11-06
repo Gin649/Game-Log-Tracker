@@ -197,7 +197,7 @@ const ssInfoPending = new Map(); // one lookup at a time per game, however many 
 function getScreenScraperInfo(title, consoleName){
   if(!consoleName) return Promise.resolve(null);
   const clean = String(title).replace(/^(?:~[^~]*~\s*)+/, '').trim();
-  const key = `ss2-info:${String(consoleName).toLowerCase()}:${clean.toLowerCase()}`;
+  const key = `ss3-info:${String(consoleName).toLowerCase()}:${clean.toLowerCase()}`;
   if(ssInfoPending.has(key)) return ssInfoPending.get(key);
   const p = (async () => {
     try{

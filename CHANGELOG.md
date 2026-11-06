@@ -11,6 +11,9 @@ ScreenScraper and new logos.
 - Box art in a game's profile now comes from ScreenScraper first, then the picture RetroAchievements or IGDB gave it. Games ScreenScraper doesn't have, and ROM hacks, keep their own picture. The same lookup also supplies the description, so each game is only asked for once.
 - New Nintendo, Playstation and Xbox theme logos in the header.
 
+### Fixed
+- A game could show the box art of the same title on another system (Dr. Mario on NES showed the Game Boy box). The lookup now only accepts a match on the same system, and any earlier saved lookups are discarded.
+
 ### Changed
 - The Game Log Tracker logo in the Retro theme is bigger, so it looks as large as the console logos.
 - The tabs (Last Played, Game Library, Backlog, Beaten) have more room, so the controller's square no longer covers the words.
