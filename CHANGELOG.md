@@ -7,7 +7,7 @@ Notable changes to Game Log Tracker, newest first.
 Bigger icons on Beaten and a scroll hint on the console row.
 
 ### Changed
-- Beaten: the game icons are bigger (64 instead of 48) and sit closer together, so you can see more of your games at once.
+- Beaten: the game icons are bigger (72 instead of 48) and sit closer together, so you can see more of your games at once.
 
 ### Added
 - A small arrow appears at the right of the console row (Library, Beaten and Backlog) when there are more consoles to scroll to, and goes away once you reach the end.
