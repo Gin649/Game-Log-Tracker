@@ -181,9 +181,28 @@ function renderGameDetails(wrap, stats, description, aboutOnly, manualCtx, mine,
     const more = wrap.querySelector('.gd-more');
     if(more){
       aboutEl.classList.add('clamp');
+      let shotEl = null, shotAsked = false;
       more.addEventListener('click', () => {
         const collapsed = aboutEl.classList.toggle('clamp');
         more.textContent = collapsed ? 'Read more' : 'Show less';
+        if(shotEl) shotEl.style.display = collapsed ? 'none' : '';
+        // A ScreenScraper screenshot goes under the text, looked up only the first time the text is opened.
+        if(!collapsed && !shotAsked && manualCtx && manualCtx.consoleName && !/^\s*~hack~/i.test(String(manualCtx.title || ''))){
+          shotAsked = true;
+          getScreenScraperInfo(manualCtx.title, manualCtx.consoleName, true).then(d => {
+            if(!d || !d.shot || !aboutEl.isConnected) return;
+            const img = new Image();
+            img.className = 'gd-shot';
+            img.alt = 'Screenshot';
+            img.onload = () => {
+              if(!aboutEl.isConnected) return;
+              shotEl = img;
+              if(aboutEl.classList.contains('clamp')) img.style.display = 'none'; // closed again while it loaded
+              aboutEl.insertAdjacentElement('afterend', img);
+            };
+            img.src = d.shot;
+          }).catch(() => {});
+        }
       });
     }
   }
@@ -194,30 +213,33 @@ function renderGameDetails(wrap, stats, description, aboutOnly, manualCtx, mine,
 // storage, a month when it was found and a day when it wasn't, so each game is only looked up once.
 const SS_WORKER = 'https://ra-proxy.gin649.workers.dev';
 const ssInfoPending = new Map(); // one lookup at a time per game, however many places ask
-function getScreenScraperInfo(title, consoleName){
+function getScreenScraperInfo(title, consoleName, needShot){
   if(!consoleName) return Promise.resolve(null);
   const clean = String(title).replace(/^(?:~[^~]*~\s*)+/, '').trim();
   const key = `ss3-info:${String(consoleName).toLowerCase()}:${clean.toLowerCase()}`;
-  if(ssInfoPending.has(key)) return ssInfoPending.get(key);
+  const pkey = needShot ? key + '|shot' : key;
+  if(ssInfoPending.has(pkey)) return ssInfoPending.get(pkey);
   const p = (async () => {
     try{
       const r = await window.storage.get(key, false);
       if(r && r.value){
         const c = JSON.parse(r.value);
-        if(Date.now() - c.ts < (c.data ? 30 : 1) * 24 * 60 * 60 * 1000) return c.data;
+        // answers kept before screenshots were added are asked again, but only when a screenshot is wanted
+        const stale = needShot && c.data && !('shot' in c.data);
+        if(!stale && Date.now() - c.ts < (c.data ? 30 : 1) * 24 * 60 * 60 * 1000) return c.data;
       }
     }catch(e){}
     try{
       const res = await fetchWithTimeout(`${SS_WORKER}/ss/info?title=${encodeURIComponent(clean)}&system=${encodeURIComponent(consoleName)}`, 15000);
       if(!res.ok) return null; // busy or not set up: nothing is kept, so it is tried again next time
       const j = await res.json();
-      const data = j && j.found ? { synopsis: j.synopsis || '', box: j.box || null } : null;
+      const data = j && j.found ? { synopsis: j.synopsis || '', box: j.box || null, shot: j.screenshot || null } : null;
       try{ await window.storage.set(key, JSON.stringify({ data, ts: Date.now() }), false); }catch(e){}
       return data;
     }catch(e){ return null; }
   })();
-  ssInfoPending.set(key, p);
-  p.finally(() => ssInfoPending.delete(key));
+  ssInfoPending.set(pkey, p);
+  p.finally(() => ssInfoPending.delete(pkey));
   return p;
 }
 

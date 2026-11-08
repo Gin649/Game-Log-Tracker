@@ -2,6 +2,13 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.3.4
+
+A screenshot in the game's About.
+
+### Added
+- In a game's profile, tapping Read more on the About text now also shows a ScreenScraper screenshot of the game under the text. It is only looked up the first time you tap Read more, never when the profile opens.
+
 ## v2.1.3.3
 
 Choose your own box art.
