@@ -7,7 +7,7 @@ Notable changes to Game Log Tracker, newest first.
 A screenshot in the game's About.
 
 ### Added
-- In a game's profile, tapping Read more on the About text now also shows a ScreenScraper screenshot of the game under the text. It is only looked up the first time you tap Read more, never when the profile opens.
+- In a game's profile, the About section now always has a See more button (it used to be Read more, and only on long write-ups). Tapping it opens the rest of a long write-up and shows a ScreenScraper screenshot of the game under the text. Games with a short write-up, or none, get the button too. The screenshot is only looked up the first time you tap See more, never when the profile opens.
 
 ## v2.1.3.3
 
