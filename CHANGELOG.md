@@ -7,7 +7,7 @@ Notable changes to Game Log Tracker, newest first.
 A play log for consoles with no emulator.
 
 ### Added
-- Play log for games on PlayStation 5, Xbox Series X|S and Nintendo Switch 2, which have no emulator to count your time. In the game's profile, open Play log and add each session with the date you played and the time in hours and minutes. Edit or delete a session at any time. The total becomes the game's Playtime, and the newest session date puts the game in Last Played, so an older session doesn't push it above games you played more recently. Logging your first session ticks Now Playing for you, which moves the game from the Backlog to the Library.
+- Play log for games on PlayStation 5, Xbox Series X|S, Nintendo Switch 2 and PC, which have no emulator to count your time. In the game's profile, open Play log and add each session with the date you played and the time in hours and minutes. Edit or delete a session at any time. The total becomes the game's Playtime, and the newest session date puts the game in Last Played, so an older session doesn't push it above games you played more recently. Logging your first session ticks Now Playing for you, which moves the game from the Backlog to the Library.
 
 ## v2.1.3.1
 
