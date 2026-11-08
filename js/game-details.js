@@ -231,6 +231,24 @@ function getScreenScraperDescription(title, consoleName){
 // Box art from ScreenScraper goes in place of the one the profile opened with, once it has loaded. Games that have none
 // keep their own picture. A hack's art would be the original game's, so hacks keep theirs too.
 function upgradeBoxArt(card, gameId, title, consoleName){
+  const artEl = card.querySelector('.modal-art');
+  if(artEl){ // what the picker needs when the cover is tapped
+    card.dataset.boxTitle = title || '';
+    card.dataset.boxConsole = consoleName || '';
+    card.dataset.boxOriginal = artEl.getAttribute('src') || '';
+  }
+  // a cover you chose yourself always wins
+  getBoxPick(gameId).then(url => {
+    if(!url) return null;
+    const art = card.querySelector('.modal-art');
+    if(art && card.dataset.gameId === String(gameId)) art.src = url;
+    return url;
+  }).catch(() => null).then(picked => {
+    if(picked) return;
+    autoBoxArt(card, gameId, title, consoleName);
+  });
+}
+function autoBoxArt(card, gameId, title, consoleName){
   if(/^\s*~hack~/i.test(String(title || ''))) return;
   getScreenScraperInfo(title, consoleName).then(d => {
     if(!d || !d.box) return;

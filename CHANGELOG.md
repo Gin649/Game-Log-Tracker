@@ -2,6 +2,13 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.3.3
+
+Choose your own box art.
+
+### Added
+- In a game's profile, tap the cover to see it full screen, then swipe left or right (or use the arrows) to browse other covers for that game: ScreenScraper's regional covers (USA, Europe, Japan and so on), IGDB's cover, and the one the app picked. Press Use this one to keep it. Automatic goes back to the app's own choice. It works for every game, RetroAchievements or not, and your choice is saved on your device and in your backup. The other covers are only looked up when you first swipe, never when a profile opens. Pinch and double-tap zoom work as before, and swiping is off while zoomed in.
+
 ## v2.1.3.2
 
 A play log for consoles with no emulator.

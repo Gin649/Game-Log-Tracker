@@ -12,7 +12,7 @@ function closeDataModal(){
 
 // About
 // Bump this every release, together with CACHE_NAME in sw.js.
-const APP_VERSION = '2.1.3.2';
+const APP_VERSION = '2.1.3.3';
 function openAboutModal(){
   $('#about-version').textContent = APP_VERSION;
   $('#about-backdrop').classList.add('open');
@@ -22,7 +22,7 @@ function closeAboutModal(){
 }
 
 // Cached RA data is refetched on demand, so it would only make backup files bigger.
-const REBUILDABLE_CACHE_PREFIXES = ['ra-hours:', 'ra-gameinfo:', 'ra-ach:', 'ra-dash:'];
+const REBUILDABLE_CACHE_PREFIXES = ['ra-hours:', 'ra-gameinfo:', 'ra-ach:', 'ra-dash:', 'boxcand:'];
 function isRebuildableCache(rawKey){
   return REBUILDABLE_CACHE_PREFIXES.some(p => rawKey.startsWith('priv:' + p) || rawKey.startsWith('shared:' + p));
 }
