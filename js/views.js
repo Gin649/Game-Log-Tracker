@@ -88,9 +88,26 @@ function awardPill(kind){
   return `<span class="pill ${info.cls}">${info.label}</span>`;
 }
 
+// RetroAchievements' recent games plus the games with a play log (PS5, Xbox Series X|S, Switch 2) that were logged by hand, newest first.
+function recentWithPlayLog(games){
+  const list = (games || []).slice();
+  const have = new Set(list.map(g => String(g.GameID)));
+  libraryData.forEach(g => {
+    if(have.has(String(g.GameID)) || !g.manual || !g.customConsole || !g.lastPlayed || !usesPlayLog(g.ConsoleName)) return;
+    list.push({
+      GameID: g.GameID, Title: g.Title, ConsoleName: g.ConsoleName,
+      ImageIcon: g.ImageIcon || g.ImageBoxArt || '',
+      NumPossibleAchievements: 0, NumAchieved: 0, NumAchievedHardcore: 0,
+      LastPlayed: g.lastPlayed, _custom: true,
+    });
+  });
+  const t = g => { const d = parseRADate(g.LastPlayed); return d ? d.getTime() : 0; };
+  return list.sort((a, b) => t(b) - t(a));
+}
+
 function renderRecentGames(games){
   const el = $('#recent-games');
-  const shown = (games || []).filter(g => !isSubsetGame(g)); // subsets live in their base game's profile
+  const shown = recentWithPlayLog(games).filter(g => !isSubsetGame(g)); // subsets live in their base game's profile
   if(shown.length === 0){ el.innerHTML = '<div class="empty">No recently played games found.</div>'; return; }
   const libById = new Map(libraryData.map(x => [x.GameID, x]));
   el.innerHTML = shown.slice(0, 12).map(g => {
@@ -98,7 +115,10 @@ function renderRecentGames(games){
     const earned = statsMode === 'hardcore' ? Number(g.NumAchievedHardcore || 0) : Number(g.NumAchieved || 0);
     const pct = total ? Math.round((earned/total)*100) : 0;
     const est = estHoursCache[g.GameID];
-    const hoursHtml = est
+    const logMin = g._custom ? playLogMinutes(libById.get(g.GameID)) : 0;
+    const hoursHtml = g._custom
+      ? (logMin ? `<span class="val" style="color:var(--gold)">${playLogTime(logMin)}</span>` : '')
+      : est
       ? `<span class="val" style="color:var(--gold)">${est.real ? '' : '≈ '}${formatDuration(est)}</span>`
       : '<span class="pt-pending" title="Loading playtime…"></span>';
     // Beaten / Mastered label on the corner of the box art

@@ -75,7 +75,7 @@ function renderLibraryViews(){
   }
 
   // Redraw Overview now that the library is known, so award labels and hidden subsets apply right away.
-  try{ if(recentGamesData.length) renderRecentGames(recentGamesData); }
+  try{ if(recentGamesData.length || libraryData.some(g => g.customConsole && g.lastPlayed)) renderRecentGames(recentGamesData); }
   catch(e){ console.error('renderRecentGames failed:', e); }
 
   try{ renderByYear(); }
