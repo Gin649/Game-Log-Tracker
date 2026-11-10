@@ -108,18 +108,18 @@ function renderCustomGameModal(gameId, local, card){
 
   let releasedLabel = '—';
   if(local.released){
-    const d = new Date(local.released);
-    releasedLabel = isNaN(d.getTime()) ? local.released : d.toLocaleDateString();
+    const d = parseLocalDay(local.released);
+    releasedLabel = d ? d.toLocaleDateString() : local.released;
   }
   const beatenDateValue = local.manualBeatenDate || '';
 
   card.querySelector('.modal-body').innerHTML = `
-      <h2>${local.Title}</h2>
-      <p class="sub">${local.ConsoleName}</p>
+      <h2>${esc(local.Title)}</h2>
+      <p class="sub">${esc(local.ConsoleName)}</p>
 
       <div class="modal-meta">
-        <div class="mi"><div class="k">GENRE</div><div class="v">${local.genre || '—'}</div></div>
-        <div class="mi"><div class="k">RELEASED</div><div class="v">${releasedLabel}</div></div>
+        <div class="mi"><div class="k">GENRE</div><div class="v">${esc(local.genre || '—')}</div></div>
+        <div class="mi"><div class="k">RELEASED</div><div class="v">${esc(releasedLabel)}</div></div>
       </div>
 
       <div class="modal-progress">
@@ -231,7 +231,7 @@ function renderCustomGameModal(gameId, local, card){
   checkbox.addEventListener('change', async () => {
     dateWrap.style.display = checkbox.checked ? 'block' : 'none';
     if(checkbox.checked && !dateInput.value){
-      dateInput.value = new Date().toISOString().slice(0, 10);
+      dateInput.value = playLogToday(); // today here, not in UTC
     }
     // Being beaten implies having been played, start it too if it wasn't already.
     if(checkbox.checked && !startedCheckbox.checked){
@@ -296,7 +296,7 @@ function setupLinkRaUI(gameId, local, card){
         .map(c => ({ id: c.ID ?? c.id, name: c.Name ?? c.name }))
         .filter(c => c.id != null && c.name)
         .sort((a, b) => a.name.localeCompare(b.name));
-      sel.innerHTML = sorted.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      sel.innerHTML = sorted.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
     }catch(e){
       sel.innerHTML = '<option value="">Could not load systems</option>';
     }
@@ -326,7 +326,7 @@ function setupLinkRaUI(gameId, local, card){
           return `
               <div class="ag-result" data-game-id="${id}">
                 <img src="${imgUrl(icon)}" alt="">
-                <span class="t">${title}</span>
+                <span class="t">${esc(title)}</span>
                 <span class="n">${numAch} ach.</span>
               </div>
             `;
@@ -447,7 +447,7 @@ async function openGameModal(gameId, opts){
   const developer = ext.Developer || '—';
   const publisher = ext.Publisher || '—';
   const released = ext.Released ? parseRADate(ext.Released) : null;
-  const releasedLabel = released ? released.toLocaleDateString(undefined, { year:'numeric', month:'long', day: ext.ReleasedAtGranularity === 'year' ? undefined : 'numeric' }) : '—';
+  const releasedLabel = released ? released.toLocaleDateString(undefined, { timeZone: 'UTC', year:'numeric', month:'long', day: ext.ReleasedAtGranularity === 'year' ? undefined : 'numeric' }) : '—';
   const boxArt = imgUrl(ext.ImageBoxArt || (local && local.ImageIcon));
 
   const totalAch = Number(ext.NumAchievements || (local && (local.MaxPossible || local.NumPossibleAchievements)) || 0);
@@ -462,6 +462,7 @@ async function openGameModal(gameId, opts){
   const raBeatenDateLabel = (local && local.HighestAwardDate && awardCountsInMode(awardKind))
     ? formatBeatenDate(parseRADate(local.HighestAwardDate)) : '';
 
+  const preRa = preRaFor(gameId); // what it had while it was tracked by hand, if it ever was
   const raUrl = `https://retroachievements.org/game/${gameId}`;
   const hltbUrl = `https://howlongtobeat.com/?q=${encodeURIComponent(title)}`;
 
@@ -469,19 +470,21 @@ async function openGameModal(gameId, opts){
   card.dataset.gameId = gameId;
   upgradeBoxArt(card, gameId, title, console_);
   card.querySelector('.modal-body').innerHTML = `
-      <h2>${title}</h2>
-      <p class="sub">${console_}</p>
+      <h2>${esc(title)}</h2>
+      <p class="sub">${esc(console_)}</p>
 
       <div class="modal-meta">
-        <div class="mi"><div class="k">GENRE</div><div class="v">${genre}</div></div>
-        <div class="mi"><div class="k">RELEASED</div><div class="v">${releasedLabel}</div></div>
-        <div class="mi"><div class="k">DEVELOPER</div><div class="v">${developer}</div></div>
-        <div class="mi"><div class="k">PUBLISHER</div><div class="v">${publisher}</div></div>
+        <div class="mi"><div class="k">GENRE</div><div class="v">${esc(genre)}</div></div>
+        <div class="mi"><div class="k">RELEASED</div><div class="v">${esc(releasedLabel)}</div></div>
+        <div class="mi"><div class="k">DEVELOPER</div><div class="v">${esc(developer)}</div></div>
+        <div class="mi"><div class="k">PUBLISHER</div><div class="v">${esc(publisher)}</div></div>
       </div>
 
       <div class="modal-progress">
         <div class="row"><span>Your progress</span><span style="color:var(--gold)">${earned}/${totalAch || '?'} · ${pct}%</span></div>
-        <div class="row"><span>Status</span><span class="status-val">${awardPill(awardKind)}${beatenDateHtml(raBeatenDateLabel)}</span></div>
+        <div class="row"><span>Status</span><span class="status-val">${awardPill(awardKind)}${beatenDateHtml(raBeatenDateLabel)}${preRaStar(gameId)}</span></div>
+        ${preRa && preRa.minutes ? `<div class="row"><span>Playtime before RetroAchievements</span><span style="color:var(--gold)">${playLogTime(preRa.minutes)}</span></div>` : ''}
+        ${preRa && preRa.beaten ? `<div class="row pre-ra-note"><span>* Beaten${formatManualBeatenDate(preRa.beatenDate) ? ' on ' + formatManualBeatenDate(preRa.beatenDate) : ''}, before it was tracked on RetroAchievements.</span></div>` : ''}
         <div class="row">
           <span id="modal-playtime-label">${est && est.real ? 'Playtime' : (est && est.beaten ? 'Time to beat' : 'Est. playtime')}</span>
           <span style="display:flex;align-items:center;gap:8px;">

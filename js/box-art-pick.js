@@ -45,6 +45,7 @@ async function loadBoxCandidates(ctx){
   const list = [];
   const seen = new Set();
   const add = (label, url) => { if(url && !seen.has(url)){ seen.add(url); list.push({ label, url }); } };
+  let complete = true;
   if(ctx.original) add('Original', ctx.original);
   if(clean && !hack){
     const ss = ctx.consoleName
@@ -59,8 +60,9 @@ async function loadBoxCandidates(ctx){
         .forEach(b => add('ScreenScraper · ' + b.label, b.url));
     }
     if(g && g.cover) add('IGDB', g.cover);
+    if(!g || (ctx.consoleName && !s)) complete = false; // a source couldn't be reached: this list isn't kept, so the next look asks again
   }
-  if(list.length > 1){
+  if(list.length > 1 && complete){
     try{ await window.storage.set(ckey, JSON.stringify({ list, ts: Date.now() }), false); }catch(e){}
   }
   return list;

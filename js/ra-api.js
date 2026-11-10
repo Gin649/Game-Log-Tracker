@@ -98,6 +98,18 @@ async function raFetch(endpoint, params){
   }
 }
 
+// A user's completion progress. RetroAchievements hands the list over 500 games at a time.
+async function raCompletionProgress(params){
+  const results = [];
+  for(let page = 0; page < 40; page++){
+    const progress = await raFetch('API_GetUserCompletionProgress.php', { ...(params || {}), c: 500, o: results.length });
+    const got = (progress && progress.Results) || [];
+    results.push(...got);
+    if(got.length < 500 || results.length >= Number((progress && progress.Total) || 0)) break;
+  }
+  return results;
+}
+
 function imgUrl(path){
   if(!path) return '';
   return path.startsWith('http') ? path : MEDIA + path;
@@ -273,7 +285,7 @@ async function saveSnap(gameId, existing, slots, hours){
 async function getEstimatedHours(gameId, force){
   if(!force && estHoursCache[gameId] !== undefined) return estHoursCache[gameId];
 
-  const localGame = libraryIndex[gameId];
+  const localGame = findLibraryGame(gameId);
   const officialAward = !!(localGame && localGame.HighestAwardKind);
   // RA only assigns an official "beaten" award when the achievement set's
   // author tagged specific win-condition achievements, many sets never
@@ -297,7 +309,9 @@ async function getEstimatedHours(gameId, force){
       // yet, and we don't want that temporary gap sticking around for the
       // full 12h once RA does have it.
       const ttl = parsed.hours == null ? 5 * 60 * 1000 : cachedDataTtl(gameId);
-      if(Date.now() - parsed.ts < ttl && !awardedCountChanged(parsed, gameId) && missingSlots.length === 0){
+      // An estimate saved while the game counted as unbeaten (or the other way round) was worked out the other way.
+      const sameMethod = !!parsed.real || (parsed.beaten === undefined ? !beaten : parsed.beaten === beaten);
+      if(Date.now() - parsed.ts < ttl && !awardedCountChanged(parsed, gameId) && missingSlots.length === 0 && sameMethod){
         estHoursCache[gameId] = { hours: parsed.hours, beaten, real: !!parsed.real };
         if(!achievementsListCache[gameId]){
           const stored = await readStoredAchList(gameId);
@@ -349,7 +363,7 @@ async function getEstimatedHours(gameId, force){
   }catch(e){ hours = null; }
 
   estHoursCache[gameId] = { hours, beaten, real };
-  try{ await window.storage.set(cacheKey, JSON.stringify({ hours, real, ts: Date.now(), libAwarded: libraryAwardedFor(gameId) }), false); }catch(e){ /* non-fatal */ }
+  try{ await window.storage.set(cacheKey, JSON.stringify({ hours, real, beaten, ts: Date.now(), libAwarded: libraryAwardedFor(gameId) }), false); }catch(e){ /* non-fatal */ }
   return estHoursCache[gameId];
 }
 

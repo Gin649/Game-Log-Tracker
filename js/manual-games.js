@@ -35,6 +35,45 @@ async function saveManualGames(list){
   catch(e){ /* non-fatal */ }
 }
 
+// What a game you tracked by hand had before it became a RetroAchievements entry: the time in its play log, and whether
+// it was beaten. Kept on its own, by RetroAchievements GameID, because the entry itself is replaced by RetroAchievements'
+// own once it shows progress there. Shown in the game's profile, and as an asterisk beside a game beaten beforehand.
+let preRaInfo = {}; // GameID -> { minutes, beaten, beatenDate }
+function preRaKey(){
+  return `pre-ra:${creds.username.trim().toLowerCase()}`;
+}
+async function loadPreRaInfo(){
+  try{
+    const r = await window.storage.get(preRaKey(), false);
+    const parsed = r && r.value ? JSON.parse(r.value) : null;
+    preRaInfo = parsed && typeof parsed === 'object' ? parsed : {};
+  }catch(e){ preRaInfo = {}; }
+  return preRaInfo;
+}
+function preRaFor(gameId){
+  return preRaInfo[String(gameId)] || null;
+}
+// Call before the hand-tracked entry g is replaced by the RetroAchievements game raGameId.
+async function rememberPreRa(raGameId, g){
+  if(!g) return;
+  const minutes = (typeof usesPlayLog === 'function' && usesPlayLog(g.ConsoleName)) ? playLogMinutes(g) : 0;
+  const beaten = !!g.manualBeaten;
+  if(!minutes && !beaten) return;
+  await loadPreRaInfo();
+  const old = preRaInfo[String(raGameId)] || {};
+  preRaInfo[String(raGameId)] = {
+    minutes: Math.max(minutes, Number(old.minutes) || 0),
+    beaten: beaten || !!old.beaten,
+    beatenDate: g.manualBeatenDate || old.beatenDate || null,
+  };
+  try{ await window.storage.set(preRaKey(), JSON.stringify(preRaInfo), false); }catch(e){}
+}
+// The asterisk shown beside a game that was beaten before it was tracked on RetroAchievements.
+function preRaStar(gameId){
+  const p = preRaFor(gameId);
+  return p && p.beaten ? '<span class="pre-ra-star" title="Beaten before it was tracked on RetroAchievements">*</span>' : '';
+}
+
 // Games the per-game endpoint has confirmed progress on but the bulk
 // API_GetUserCompletionProgress has not caught up to yet. Keeps them out of the
 // Backlog across reloads; loadAll() drops an entry once the bulk fetch agrees.

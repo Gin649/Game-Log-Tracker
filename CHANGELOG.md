@@ -2,6 +2,44 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.3.5
+
+The console row becomes a ring of blades, the tables sort and fit better, and a round of fixes from the launcher.
+
+### Added
+- Backlog table: the Game and Achievements headings now sort (Achievements is most points first, then least). Achievements shows the set's points as well, as in 37 / 450 pts. The System column only shows under All.
+- When a game you track by hand becomes a RetroAchievements entry, it keeps what it had: its profile shows Playtime before RetroAchievements (from its play log), and a game you had already beaten gets an asterisk beside its name with the date you beat it.
+
+### Changed
+- The console row in the Library, Backlog and Beaten by Year is now a ring of blades. The console you are on sits in the middle with its full name, the two on each side show a short name, and the rest are slivers, so every console fits without scrolling. Tap a blade, drag the row sideways or use L1 and R1, and it wraps from the last console back to All. Holding a console still opens reorder and rename.
+- Game Library table: the headings now sort in a set order. Game goes A to Z, then Z to A, then back to the usual order with recently played on top. Award goes mastered, beaten, in progress, then the reverse. Playtime goes shortest first, then longest. Last played goes newest first, then oldest. Games with nothing to sort by (never played, no playtime yet) stay at the bottom.
+- Game Library table: dates are shorter (Nov 7/26), only a game's name runs onto a second line, and the Award column is left out while Hide Beaten is on.
+- Games on a console with a play log show that time in the Playtime column and on their tile.
+- The Library and Backlog open and scroll faster. Covers load as they come into view, not all at once, and a list that is already on screen is no longer rebuilt after every sync.
+- Searching the Library or Backlog redraws the list a moment after you stop typing, not on every letter.
+- Backups are smaller: lists that can be downloaded again are left out, and so are base ROMs remembered for the ROM patcher (pick the ROM again after restoring). Older backups still restore.
+- Controller: moving up and down through your games no longer lands on a game's ✕ (remove) button, so pressing confirm opens the game. In a list, press right on a game to reach its ✕ and left to go back. In tile view the ✕ is now for touch only.
+
+### Fixed
+- Libraries with more than 500 games on RetroAchievements now load in full. Games past the first 500 were missing from the Game Library and Beaten. The Social tab shows all of a friend's beaten games as well.
+- Beaten games with no playtime from RetroAchievements now show Time to beat (first unlock to last), as intended. They were being estimated as if still in progress.
+- Mark as beaten fills in today's date, and the backup file is named with today's date. In the evening both could carry tomorrow's.
+- Beaten dates and release dates no longer show a day early, and a game beaten on January 1 no longer lands in the year before on Beaten.
+- The Backlog no longer stays on Loading when the library can't be reached.
+- Game and achievement names with characters such as quotes, & or < now show correctly in the lists and profiles, and nothing written into one can run inside the app.
+- An IPS patch that changes the byte at one particular spot (offset 0x454F46) is now applied in full. The rest of the patch was skipped before. An IPS patch whose download was cut short is refused, not applied in part.
+- A patched ROM is no longer reported as not matching RetroAchievements when it does. SNES ROMs with a copier header, and Famicom Disk System, Nintendo DS, Atari Lynx, Atari 7800 and PC Engine games, are now checked the way RetroAchievements checks them.
+- Opening a very large file in ROM Hacks (a 3DS game, for example) no longer stalls or closes the tracker. A file over 1 GB is not read in, and a message says so.
+- A patch packed in an archive that has no download address no longer offers a Download button that goes nowhere.
+- Reading a long manual no longer uses more memory with every page. Pages you have scrolled well past are let go and drawn again when you come back.
+- A manual that has moved on Games Database is looked up again. Download manual kept failing.
+- The guide reader keeps your place when you close it right after scrolling.
+- A game title with & or < now shows correctly in the Game Guide panel's GameFAQs link.
+- Social: a person's page no longer jumps back to the top when the rest of it loads.
+- Box art picker: when a cover source can't be reached, the covers are looked up again next time. The shorter list was kept for a month.
+- Pulling to refresh a game you track by hand no longer asks RetroAchievements about a game it has never heard of.
+- Controller: sorting by a heading keeps the highlight on that heading, left and right step along the headings, and moving down into a grid of tiles lands on the first tile at the left.
+
 ## v2.1.3.4
 
 A screenshot in the game's About.

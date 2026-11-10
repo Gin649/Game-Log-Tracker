@@ -187,6 +187,7 @@ function buildManualRaEntry(g, consoleId, consoleName){
     ConsoleName: g.ConsoleName ?? g.consoleName ?? consoleName,
     ImageIcon: g.ImageIcon ?? g.imageIcon,
     MaxPossible: g.NumAchievements ?? g.numAchievements ?? 0,
+    Points: g.Points ?? g.points ?? null, // the set's total points, for the Backlog (filled in later when not known here)
     NumAwarded: 0,
     NumAwardedHardcore: 0,
     HighestAwardKind: null,
@@ -273,6 +274,7 @@ async function addManualGameFromSearch(found, customConsole){
 async function convertCustomToRaGame(oldGameId, g, consoleId, consoleName){
   return enqueueTask(async () => {
     const gameId = Number(g.ID ?? g.id);
+    await rememberPreRa(gameId, libraryData.find(x => x.GameID === oldGameId));
     libraryData = libraryData.filter(x => x.GameID !== oldGameId);
     let manual = (await loadManualGames()).filter(x => x.GameID !== oldGameId);
 

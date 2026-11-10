@@ -14,7 +14,7 @@ function enableDragToScroll(el){
 
   el.addEventListener('mousedown', (e) => {
     if(e.button !== 0) return; // left button only
-    if(el.classList.contains('editing')) return; // reordering console tabs uses its own drag
+    if(el.classList.contains('editing') || el.classList.contains('blades')) return; // reordering console tabs, and the console blades, use their own drag
     isDown = true;
     moved = false;
     startX = e.pageX;
@@ -72,8 +72,15 @@ enableDragToScroll($('#system-chips')); // the console-name chips above the libr
     if(hit) return hit.GameID;
     return /^\d+$/.test(idText) ? Number(idText) : idText;
   };
+  // A game tracked by hand has an id of its own that RetroAchievements has never heard of, so there is nothing to ask.
+  const onRa = (gameId) => {
+    const g = libraryData.find(x => x.GameID === gameId);
+    return typeof gameId === 'number' && gameId > 0 && !(g && g.customConsole);
+  };
+
   async function refreshOpenGameProfile(idText){
     const gameId = resolveGameId(idText);
+    if(!onRa(gameId)) return;
     let fresh;
     try{
       // One call for just this game: current progress, award status, achievement list and playtime.

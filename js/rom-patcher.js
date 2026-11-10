@@ -71,21 +71,50 @@
     return toHexLE(a0) + toHexLE(b0) + toHexLE(c0) + toHexLE(d0);
   }
 
-  // RA hashes some consoles differently from a plain whole-file MD5: it strips copier/dump
-  // headers so a headered and a headerless dump of the same game match. Handles NES (iNES
-  // header), SNES (512-byte copier header) and N64 (normalize to big-endian .z64).
-  // Everything else is hashed as-is, like RA does.
+  // A Nintendo DS game is hashed from its header, its two programs and its icon, not the whole file.
+  // Returns null when the header doesn't describe a DS game.
+  function ndsRomHash(bytes){
+    let base = 0;
+    // some dumps carry a 512-byte flash cart header in front of the real one
+    if(bytes.length > 0x400 && bytes[0] === 0x2E && bytes[1] === 0 && bytes[2] === 0 && bytes[3] === 0xEA
+       && bytes[0xB0] === 0x44 && bytes[0xB1] === 0x46 && bytes[0xB2] === 0x96 && bytes[0xB3] === 0) base = 0x200;
+    if(bytes.length < base + 0x200) return null;
+    const at = (off) => readU32LEAt(bytes, base + off);
+    const arm9Addr = at(0x20), arm9Size = at(0x2C), arm7Addr = at(0x30), arm7Size = at(0x3C), iconAddr = at(0x68);
+    if(arm9Size + arm7Size > 16 * 1024 * 1024) return null;
+    if(base + arm9Addr + arm9Size > bytes.length || base + arm7Addr + arm7Size > bytes.length) return null;
+    const buf = new Uint8Array(0x160 + arm9Size + arm7Size + 0xA00); // an icon cut short by the end of the file is filled with zeros
+    let o = 0;
+    buf.set(bytes.subarray(base, base + 0x160), o); o += 0x160;
+    buf.set(bytes.subarray(base + arm9Addr, base + arm9Addr + arm9Size), o); o += arm9Size;
+    buf.set(bytes.subarray(base + arm7Addr, base + arm7Addr + arm7Size), o); o += arm7Size;
+    if(base + iconAddr < bytes.length) buf.set(bytes.subarray(base + iconAddr, Math.min(bytes.length, base + iconAddr + 0xA00)), o);
+    return md5Hex(buf);
+  }
+
+  // RA's hash for a ROM. Dumps that carry a header (NES, Famicom Disk System, SNES, PC Engine, Lynx, 7800) are hashed
+  // without it, N64 in .z64 order, Nintendo DS from its header and programs, anything else as is.
   function raRomHash(consoleName, bytes){
-    const norm = normalizeForMatch(consoleName);
-    if(norm.includes('nintendo entertainment system') || norm.includes('famicom') || /(^| )nes( |$)/.test(norm)){
-      if(bytes.length > 16 && bytes[0] === 0x4E && bytes[1] === 0x45 && bytes[2] === 0x53 && bytes[3] === 0x1A){
-        return md5Hex(bytes.subarray(16));
-      }
-    }else if(norm.includes('super nintendo') || norm.includes('super famicom') || /(^| )snes( |$)/.test(norm)){
-      if(bytes.length % 0x8000 === 512){
-        return md5Hex(bytes.subarray(512));
-      }
-    }else if(norm.includes('nintendo 64') || /(^| )n64( |$)/.test(norm)){
+    const norm = ' ' + normalizeForMatch(consoleName) + ' ';
+    const has = (...names) => names.some(n => norm.includes(' ' + n + ' '));
+    const starts = (off, codes) => bytes.length > off + codes.length && codes.every((c, k) => bytes[off + k] === c);
+    // SNES is checked before NES: "Super Famicom" has "famicom" in it
+    if(has('super nintendo', 'super nintendo entertainment system', 'super famicom', 'snes')){
+      if(bytes.length % 0x8000 === 512) return md5Hex(bytes.subarray(512));
+    }else if(has('famicom disk system')){
+      if(starts(0, [0x46, 0x44, 0x53, 0x1A])) return md5Hex(bytes.subarray(16)); // "FDS" header
+    }else if(has('nintendo entertainment system', 'famicom', 'nes')){
+      if(starts(0, [0x4E, 0x45, 0x53, 0x1A])) return md5Hex(bytes.subarray(16)); // "NES" header
+    }else if(has('nintendo ds', 'nintendo dsi')){
+      const h = ndsRomHash(bytes);
+      if(h) return h;
+    }else if(has('atari lynx', 'lynx')){
+      if(starts(0, [0x4C, 0x59, 0x4E, 0x58, 0])) return md5Hex(bytes.subarray(64)); // "LYNX" header
+    }else if(has('atari 7800')){
+      if(starts(1, [0x41, 0x54, 0x41, 0x52, 0x49, 0x37, 0x38, 0x30, 0x30])) return md5Hex(bytes.subarray(128)); // "ATARI7800" header
+    }else if(norm.includes(' pc engine ') && !norm.includes(' cd ')){
+      if(bytes.length % 0x20000 === 512) return md5Hex(bytes.subarray(512));
+    }else if(has('nintendo 64', 'n64')){
       if(bytes.length >= 4){
         // Normalize to big-endian (.z64) byte order before hashing.
         if(bytes[0] === 0x37 && bytes[1] === 0x80 && bytes[2] === 0x40 && bytes[3] === 0x12){
@@ -244,9 +273,12 @@
     }
     let target = new Uint8Array(sourceBytes); // IPS only overwrites/extends a copy of the source
     let i = 5;
+    let ended = false;
     while(i + 3 <= p.length){
       const b0 = p[i], b1 = p[i+1], b2 = p[i+2];
-      if(b0 === 0x45 && b1 === 0x4F && b2 === 0x46){ i += 3; break; } // "EOF"
+      // "EOF" ends the patch only where the patch itself ends (with or without the new length after it).
+      // The same three bytes in the middle are a change at offset 0x454F46, and stopping there dropped the rest.
+      if(b0 === 0x45 && b1 === 0x4F && b2 === 0x46 && (i + 3 === p.length || i + 6 === p.length)){ i += 3; ended = true; break; }
       const offset = (b0 << 16) | (b1 << 8) | b2;
       i += 3;
       if(i + 2 > p.length) throw new Error('This patch is malformed (truncated record).');
@@ -269,6 +301,7 @@
         i += length;
       }
     }
+    if(!ended) throw new Error('This patch is cut short (its end marker is missing). Download it again and retry.');
     if(i + 3 === p.length){ // optional trailing truncation length, rare, but part of the spec
       const truncTo = (p[i] << 16) | (p[i+1] << 8) | p[i+2];
       if(truncTo <= target.length) target = target.subarray(0, truncTo);
@@ -912,6 +945,7 @@
     if(!patchBtn || !patchWrap) return;
 
     let opened = false;
+    let patchedUrl = null;
     let branch = null;
     let romBytes = null;
     let romFilename = null;
@@ -919,6 +953,9 @@
     let romConvertedFrom = null; // 'v64' | 'n64' when an N64 dump was converted to .z64 order on load
     let romUnzippedFrom = null;  // zip file name when the ROM was unpacked from a zip
     let romLoadError = null;
+    // The ROM is patched in the page's memory, so a file past this size (a 3DS game, say) is never read in.
+    const ROM_PAGE_LIMIT = 1024 * 1024 * 1024;
+    const tooBig = (size) => `This game's file is ${(size / ROM_PAGE_LIMIT).toFixed(1)} GB, which is too big to patch here. ROMs up to 1 GB can be patched.`;
     // Every way of loading a ROM goes through here: unzips it if it's a zip (the checksum has to be of
     // the ROM inside, not of the zip file), then converts N64 dumps to .z64 byte order.
     async function setRom(bytes, filename){
@@ -975,6 +1012,7 @@
             try{
               const [handle] = await window.showOpenFilePicker({ excludeAcceptAllOption: false });
               const file = await handle.getFile();
+              if(file.size > ROM_PAGE_LIMIT){ romLoadError = tooBig(file.size); renderRomStage(); return; }
               await setRom(new Uint8Array(await file.arrayBuffer()), file.name);
               romFromStorage = false;
               romFileHandle = romBytes ? handle : null;
@@ -989,6 +1027,7 @@
         input.addEventListener('change', async () => {
           const file = input.files && input.files[0];
           if(!file) return;
+          if(file.size > ROM_PAGE_LIMIT){ romLoadError = tooBig(file.size); renderRomStage(); return; }
           await setRom(new Uint8Array(await file.arrayBuffer()), file.name);
           romFromStorage = false;
           romFileHandle = null;
@@ -1298,7 +1337,7 @@
       patchWrap.innerHTML = `
         <button class="guide-btn guide-btn-ghost" id="patch-back-btn">‹ Back to results</button>
         <p style="font-size:0.7688rem;color:var(--muted);margin:10px 0 0;line-height:1.55;">${reason} Only BPS, IPS, UPS, PPF, APS and xdelta patches are applied automatically here. You'll need a separate tool for this one.</p>
-        <a class="guide-btn guide-btn-primary" style="margin-top:10px;" href="${entry.url}" download="${entry.label}">Download patch file</a>
+        ${entry.url ? `<a class="guide-btn guide-btn-primary" style="margin-top:10px;" href="${esc(entry.url)}" download="${esc(entry.label)}">Download patch file</a>` : ''}
       `;
       patchWrap.querySelector('#patch-back-btn').addEventListener('click', renderResults);
     }
@@ -1390,7 +1429,8 @@
         }
 
         const blob = new Blob([target], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
+        if(patchedUrl) URL.revokeObjectURL(patchedUrl); // the last patched ROM is no longer on offer
+        const url = patchedUrl = URL.createObjectURL(blob);
         const romExtMatch = /\.[^./\\]+$/.exec(romFilename || '');
         const romExt = romExtMatch ? romExtMatch[0] : '';
         const outName = (label.replace(PATCH_FILE_RE, '') || 'patched-rom') + romExt;

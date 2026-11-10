@@ -155,14 +155,14 @@ function renderUnlocks(list){
         <div class="unlock-row">
           <img src="${imgUrl('/Badge/' + a.BadgeName + '.png')}" alt="">
           <div class="info">
-            <p class="t">${a.Title}</p>
-            <p class="g">${a.GameTitle}</p>
+            <p class="t">${esc(a.Title)}</p>
+            <p class="g">${esc(a.GameTitle)}</p>
           </div>
           ${isHardcore ? '<span class="pill pill-muted">HC</span>' : ''}
           <div class="pts" style="color:${isHardcore ? 'var(--muted)' : 'var(--teal)'}">${a.Points}</div>
           <div class="when">${timeAgo(a.Date)}</div>
         </div>
-        <p class="unlock-desc">${a.Description || 'No description available.'}</p>
+        <p class="unlock-desc">${esc(a.Description || 'No description available.')}</p>
       </div>
     `;
   }).join('');
@@ -225,10 +225,18 @@ function applyConsoleOrder(arrangement){
 // Drag a tab to a new place: hold it for a moment to pick it up (moving sooner scrolls the row), slide it, let go.
 // A quick tap renames it instead.
 let chipClickBlockedUntil = 0;
+function dropChipDragTouch(chipRow){
+  if(chipRow._dragTouchMove) chipRow.removeEventListener('touchmove', chipRow._dragTouchMove);
+  chipRow._dragTouchMove = null;
+}
 function wireChipDrag(chipRow, systems){
   const chips = Array.from(chipRow.querySelectorAll('.chip.edit'));
   let drag = null;
-  chipRow.addEventListener('touchmove', (e) => { if(drag && drag.lifted) e.preventDefault(); }, { passive: false });
+  // This listener makes the browser check with the page before it scrolls the row, so there is only ever one
+  // and it is taken off again when reorder mode ends (see dropChipDragTouch).
+  dropChipDragTouch(chipRow);
+  chipRow._dragTouchMove = (e) => { if(drag && drag.lifted) e.preventDefault(); };
+  chipRow.addEventListener('touchmove', chipRow._dragTouchMove, { passive: false });
   chips.forEach((chip, idx) => {
     const place = () => {
       if(!drag || !drag.lifted) return;
@@ -328,11 +336,12 @@ function renderSystemChips(){
   const yearTab = activeTab === 'year';
   const systems = yearTab ? Object.keys(counts).sort((a, b) => counts[b] - counts[a]) : orderedSystems(counts);
 
-  if(systems.length === 0){ chipRow.innerHTML = ''; chipRow.classList.remove('editing'); return; }
+  if(systems.length === 0){ chipRow.innerHTML = ''; chipRow.classList.remove('editing', 'blades'); dropChipDragTouch(chipRow); return; }
 
   if(chipEdit){
     // Reorder / rename mode: drag a tab to move it, tap its name to rename it, OK finishes.
     chipRow.classList.add('editing');
+    chipRow.classList.remove('blades');
     chipRow.innerHTML = `<button class="chip chip-ok" id="chip-ok">OK</button>
       <span class="chip chip-all-off">All</span>` + systems.map(sys => `
       <button class="chip edit" data-sys="${chipEsc(sys)}">${chipEsc(consoleLabel(sys))}</button>`).join('');
@@ -341,35 +350,141 @@ function renderSystemChips(){
     return;
   }
   chipRow.classList.remove('editing');
+  dropChipDragTouch(chipRow);
 
+  // The consoles are a ring of blades. The one you are on sits in the middle with its whole name, the two on
+  // each side show a short name, and the rest are thin slivers.
   const chips = ['All', ...systems];
-  chipRow.innerHTML = chips.map(sys => `
-      <button class="chip ${sys === systemFilter ? 'active' : ''}" data-sys="${chipEsc(sys)}">
-        ${sys === 'All' ? 'All' : chipEsc(consoleLabel(sys))}${sys === 'All' || !yearTab ? '' : ` (${counts[sys]})`}
-      </button>
-    `).join('');
+  const at = chips.indexOf(systemFilter);
+  chipRow.classList.add('blades');
+  chipRow._blades = {
+    chips, attr: chipEsc, yearTab,
+    at: Math.max(0, at),
+    known: at !== -1,
+    full: sys => sys === 'All' ? 'All' : chipEsc(consoleLabel(sys)) + (yearTab ? ` (${counts[sys]})` : '')
+  };
+  wireBlades(chipRow);
+  drawBlades(chipRow, chipRow._blades.at);
+}
 
-  chipRow.querySelectorAll('.chip').forEach(chip => {
-    // Holding a console tab (Library and Backlog) opens reorder / rename mode.
-    let timer = null, startX = 0, startY = 0, held = false;
-    const cancel = () => { clearTimeout(timer); timer = null; };
-    chip.addEventListener('pointerdown', (e) => {
-      held = false;
-      if(chip.getAttribute('data-sys') === 'All' || yearTab) return;
-      startX = e.clientX; startY = e.clientY;
-      timer = setTimeout(() => { held = true; chipEdit = true; chipEditTab = activeTab; renderSystemChips(); }, 600);
-    });
-    chip.addEventListener('pointermove', (e) => { if(timer && Math.hypot(e.clientX - startX, e.clientY - startY) > 10) cancel(); });
-    ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => chip.addEventListener(ev, cancel));
-    chip.addEventListener('contextmenu', (e) => e.preventDefault());
-    chip.addEventListener('click', () => {
-      if(held){ held = false; return; } // the press that opened reorder mode isn't a tap
-      systemFilter = chip.getAttribute('data-sys');
-      renderSystemChips();
-      renderBacklog();
-      renderLibrary();
-      renderByYear();
-    });
+// Short names for the narrow blades beside the console you are on.
+const BLADE_CODES = {
+  nesfamicom:'NES', nes:'NES', famicomdisksystem:'FDS', snessuperfamicom:'SNES', snes:'SNES', supernintendo:'SNES',
+  nintendo64:'N64', gamecube:'GCN', wii:'WII', wiiu:'WIIU', gameboy:'GB', gameboycolor:'GBC', gameboyadvance:'GBA',
+  nintendods:'NDS', nintendodsi:'DSI', nintendo3ds:'3DS', virtualboy:'VB', pokemonmini:'PKMN', nintendoswitch:'NSW',
+  genesismegadrive:'GEN', genesis:'GEN', megadrive:'MD', mastersystem:'SMS', gamegear:'GG', segacd:'SCD', '32x':'32X',
+  saturn:'SAT', dreamcast:'DC', sg1000:'SG1K', playstation:'PS1', playstation2:'PS2', playstation3:'PS3',
+  playstationportable:'PSP', playstationvita:'VITA', pcengineturbografx16:'PCE', pcengine:'PCE', turbografx16:'TG16',
+  pcenginecdturbografxcd:'PCCD', pcfx:'PCFX', neogeopocket:'NGP', neogeocd:'NGCD', neogeo:'NEO', atari2600:'2600',
+  atari5200:'5200', atari7800:'7800', atarilynx:'LYNX', atarijaguar:'JAG', atarijaguarcd:'JCD', arcade:'ARC',
+  '3dointeractivemultiplayer':'3DO', colecovision:'CV', intellivision:'INTV', msx:'MSX', wonderswan:'WS',
+  magnavoxodyssey2:'ODY2', vectrex:'VEC', appleii:'APL2', pc80008800:'PC88', amstradcpc:'CPC', fairchildchannelf:'CHF',
+  arduboy:'ARDU', wasm4:'WASM', watarasupervision:'SV', megaduck:'DUCK', uzebox:'UZE', arcadia2001:'2001',
+  intertonvc4000:'VC4K', elektortvgamescomputer:'TVGC', standalone:'SOLO', xbox:'XBOX', xbox360:'X360', pc:'PC',
+  windows:'WIN', dos:'DOS', commodore64:'C64', amiga:'AMI', zxspectrum:'ZX', ports:'PORT', android:'AND'
+};
+const bladeNorm = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '');
+function bladeCode(sys){
+  if(sys === 'All') return 'ALL';
+  const yours = consoleNames[sys];
+  if(yours && yours.length <= 5) return yours.toUpperCase(); // a short name of your own is used as it is
+  const known = BLADE_CODES[bladeNorm(sys)] || (yours && BLADE_CODES[bladeNorm(yours)]);
+  if(known) return known;
+  const name = String(yours || sys);
+  if(name.length <= 5) return name.toUpperCase();
+  const words = name.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  if(words.length > 1) return words.map(w => /^\d+$/.test(w) ? w : w[0]).join('').slice(0, 5).toUpperCase();
+  return name.slice(0, 4).toUpperCase();
+}
+
+// Draws the ring with the console at place `at` in the middle. The blades run in the consoles' own order from
+// left to right, wrapping past the last one back to All.
+function drawBlades(chipRow, at){
+  const b = chipRow._blades;
+  const n = b.chips.length;
+  const right = Math.ceil((n - 1) / 2), left = n - 1 - right;
+  const blade = (off) => {
+    const sys = b.chips[((at + off) % n + n) % n];
+    const d = Math.abs(off);
+    const cls = d === 0 ? 'centre' + (b.known ? ' active' : '') : d === 1 ? 'near' : d === 2 ? 'near far' : 'sliver';
+    const name = b.full(sys);
+    // All keeps an outline wherever it is, so you can see where the list starts
+    return `<button class="chip ${cls}${sys === 'All' && d ? ' first' : ''}" data-sys="${b.attr(sys)}" aria-label="${name}">${d === 0 ? name : d <= 2 ? b.attr(bladeCode(sys)) : ''}</button>`;
+  };
+  let l = '', r = '';
+  for(let off = -left; off < 0; off++) l += blade(off);
+  for(let off = 1; off <= right; off++) r += blade(off);
+  chipRow.innerHTML = `<div class="blade-side left">${l}</div>${blade(0)}<div class="blade-side">${r}</div>`;
+}
+
+function pickSystem(sys){
+  systemFilter = sys;
+  renderSystemChips();
+  renderBacklog();
+  renderLibrary();
+  renderByYear();
+}
+
+// Touch on the blades: a tap picks that console, a sideways drag turns the ring a console at a time, and holding
+// one opens reorder mode. The row is redrawn while you drag, so the row itself follows your finger, not the blades.
+let bladeTouchAt = 0;
+function wireBlades(chipRow){
+  if(chipRow._bladesWired) return;
+  chipRow._bladesWired = true;
+  const STEP = 34; // how far a finger moves to turn the ring by one console
+  let drag = null;
+  const finish = (e, cancelled) => {
+    if(!drag || e.pointerId !== drag.id) return;
+    const d = drag;
+    drag = null;
+    clearTimeout(d.timer);
+    try{ chipRow.releasePointerCapture(d.id); }catch(_){}
+    if(!chipRow.classList.contains('blades')) return;
+    bladeTouchAt = Date.now();
+    if(d.moved){
+      const sys = chipRow._blades.chips[d.at];
+      if(sys !== systemFilter) pickSystem(sys); else renderSystemChips();
+      return;
+    }
+    if(cancelled || d.held) return;
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    const chip = hit && hit.closest ? hit.closest('#system-chips .chip') : null;
+    if(chip && chip.getAttribute('data-sys') !== systemFilter) pickSystem(chip.getAttribute('data-sys'));
+  };
+  chipRow.addEventListener('pointerdown', (e) => {
+    if(!chipRow.classList.contains('blades') || drag) return;
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    const b = chipRow._blades;
+    const chip = e.target.closest ? e.target.closest('.chip') : null;
+    drag = { id: e.pointerId, x: e.clientX, x0: e.clientX, y0: e.clientY, at: b.at, moved: false, held: false, timer: null };
+    try{ chipRow.setPointerCapture(e.pointerId); }catch(_){}
+    if(chip && chip.getAttribute('data-sys') !== 'All' && !b.yearTab){
+      const d = drag;
+      d.timer = setTimeout(() => {
+        if(drag !== d || d.moved) return;
+        d.held = true; chipEdit = true; chipEditTab = activeTab; renderSystemChips();
+      }, 600);
+    }
+  });
+  chipRow.addEventListener('pointermove', (e) => {
+    if(!drag || e.pointerId !== drag.id || drag.held) return;
+    if(Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 10) clearTimeout(drag.timer);
+    const steps = Math.trunc((e.clientX - drag.x) / STEP);
+    if(!steps) return;
+    const n = chipRow._blades.chips.length;
+    drag.x += steps * STEP;
+    drag.moved = true;
+    drag.at = ((drag.at - steps) % n + n) % n; // dragging left brings the next console in
+    drawBlades(chipRow, drag.at);
+  });
+  chipRow.addEventListener('pointerup', (e) => finish(e, false));
+  chipRow.addEventListener('pointercancel', (e) => finish(e, true));
+  chipRow.addEventListener('contextmenu', (e) => { if(chipRow.classList.contains('blades')) e.preventDefault(); });
+  // The controller (and a mouse) picks a blade with a plain click. A touch was already dealt with above.
+  chipRow.addEventListener('click', (e) => {
+    if(!chipRow.classList.contains('blades') || Date.now() - bladeTouchAt < 500) return;
+    const chip = e.target.closest ? e.target.closest('.chip') : null;
+    if(chip) pickSystem(chip.getAttribute('data-sys'));
   });
 }
 
@@ -406,6 +521,44 @@ function isBacklogGame(g){
   return !started;
 }
 
+// Where a game falls in the Award column: 0 mastered, 1 beaten, 2 in progress.
+function awardRank(g){
+  if(g.customConsole) return g.manualBeaten ? 1 : 2;
+  const info = awardInfo(g.HighestAwardKind);
+  return !info ? 2 : (info.label === 'Mastered' ? 0 : 1);
+}
+
+// The first press on a Library heading sorts this way, the next press the other way. Game has a third press
+// that goes back to the usual order.
+const LIBRARY_SORT_FIRST = { Title: 'asc', HighestAwardKind: 'asc', pct: 'desc', estHours: 'asc', lastPlayed: 'desc' };
+function pressLibrarySort(k){
+  if(k === 'Title'){
+    if(librarySort.key !== 'Title'){ librarySort.key = 'Title'; librarySort.dir = 'asc'; }
+    else if(librarySort.dir === 'asc') librarySort.dir = 'desc';
+    else{ librarySort.key = ''; librarySort.dir = 'asc'; }
+  }else if(librarySort.key === k){
+    librarySort.dir = librarySort.dir === 'asc' ? 'desc' : 'asc';
+  }else{
+    librarySort.key = k;
+    librarySort.dir = LIBRARY_SORT_FIRST[k] || 'desc';
+  }
+}
+// The Backlog starts A to Z, so the first press on Game turns it round. Achievements is most points first.
+function pressBacklogSort(k){
+  if(backlogSort.key === k) backlogSort.dir = backlogSort.dir === 'asc' ? 'desc' : 'asc';
+  else{ backlogSort.key = k; backlogSort.dir = k === 'Title' ? 'asc' : 'desc'; }
+}
+
+// A game RetroAchievements doesn't track has no playtime of its own. One on a console with a play log shows that.
+function customPlaySeconds(g){
+  if(typeof usesPlayLog !== 'function' || !usesPlayLog(g.ConsoleName)) return 0;
+  return (playLogMinutes(libraryData.find(x => x.GameID === g.GameID) || g) || 0) * 60;
+}
+function customPlaytimeHtml(g){
+  const mins = Math.round(customPlaySeconds(g) / 60);
+  return mins ? `<span class="val" style="color:var(--gold)">${playLogTime(mins)}</span>` : '';
+}
+
 function renderLibrary(){
   const wrap = $('#lib-table-wrap');
   libraryData.forEach(g => { g.estHours = (estHoursCache[g.GameID] && estHoursCache[g.GameID].hours) ?? -1; });
@@ -419,26 +572,32 @@ function renderLibrary(){
   );
 
   const { key, dir } = librarySort;
-  rows = rows.slice().sort((a,b) => {
-    if(key === 'HighestAwardKind'){
-      const aRank = isGameAwarded(a) ? 0 : 1;
-      const bRank = isGameAwarded(b) ? 0 : 1;
-      const rankDiff = dir === 'desc' ? (aRank - bRank) : (bRank - aRank);
-      if(rankDiff !== 0) return rankDiff;
-      return sortableTitle(a.Title).localeCompare(sortableTitle(b.Title)); // beaten-then-in-progress, alphabetical within each group either way
-    }
-    let av = a[key], bv = b[key];
-    if(key === 'Title'){ av = sortableTitle(av); bv = sortableTitle(bv); }
-    else if(typeof av === 'string'){ av = av.toLowerCase(); bv = bv.toLowerCase(); }
-    if(av < bv) return dir === 'asc' ? -1 : 1;
-    if(av > bv) return dir === 'asc' ? 1 : -1;
-    return 0;
-  });
+  const byTitle = (a, b) => sortableTitle(a.Title).localeCompare(sortableTitle(b.Title));
+  if(!key || key === 'Title'){
+    rows = rows.slice().sort((a, b) => (key && dir === 'desc' ? -1 : 1) * byTitle(a, b));
+  }else{
+    // What a game is sorted by in this column, or null when it has nothing (never played, no playtime yet).
+    // Those stay at the bottom whichever way the column is sorted.
+    const value = (g) => {
+      if(key === 'HighestAwardKind') return awardRank(g);
+      if(key === 'lastPlayed'){ const d = parseRADate(g.lastPlayed); return d ? d.getTime() : null; }
+      if(key === 'estHours'){
+        if(g.customConsole){ const sec = customPlaySeconds(g); return sec >= 30 ? sec / 3600 : null; }
+        return g.estHours >= 0 ? g.estHours : null;
+      }
+      return Number(g[key]) || 0;
+    };
+    const sign = dir === 'asc' ? 1 : -1;
+    rows = rows.map(g => ({ g, v: value(g) })).sort((a, b) => {
+      if((a.v === null) !== (b.v === null)) return a.v === null ? 1 : -1;
+      if(a.v !== b.v) return (a.v < b.v ? -1 : 1) * sign;
+      return byTitle(a.g, b.g);
+    }).map(x => x.g);
+  }
 
-  // Default order (A to Z, no search): the three most recently played (on the picked console, if any) come
-  // first under their own heading, then everything else by name.
+  // Default order: the three most recently played (on the picked console, if any), then by name.
   let recentSet = null; // the games shown first, with a label over them
-  if(key === 'Title' && dir === 'asc' && !searchVal){
+  if(!key && !searchVal){
     const recent = rows
       .filter(g => parseRADate(g.lastPlayed))
       .sort((a, b) => parseRADate(b.lastPlayed) - parseRADate(a.lastPlayed))
@@ -459,11 +618,13 @@ function renderLibrary(){
 
   if(gameView === 'tile'){ renderTiles(wrap, rows, recentSet, false); return; }
 
-  wrap.innerHTML = `
+  const showAward = !libraryHideDone; // with beaten games hidden, every game left is in progress
+  const cols = showAward ? 5 : 4;
+  setGamesHtml(wrap, `
       <table class="lib-table">
         <thead><tr>
           <th data-key="Title">Game</th>
-          <th data-key="HighestAwardKind">Award</th>
+          ${showAward ? '<th data-key="HighestAwardKind">Award</th>' : ''}
           <th data-key="pct">Progress</th>
           <th data-key="estHours" title="In-progress games: estimated active playtime. Beaten/completed games: time from first unlock to the award.">Playtime</th>
           <th data-key="lastPlayed">Last played</th>
@@ -471,14 +632,12 @@ function renderLibrary(){
         <tbody>
           ${rows.map((g, i) => {
           const label = recentSet
-            ? (i === 0 ? '<tr class="lib-sec"><td colspan="5">RECENTLY PLAYED</td></tr>'
-              : (i === recentSet.size ? '<tr class="lib-sec alt"><td colspan="5">ALL GAMES A\u2013Z</td></tr>' : ''))
+            ? (i === 0 ? `<tr class="lib-sec"><td colspan="${cols}">RECENTLY PLAYED</td></tr>`
+              : (i === recentSet.size ? `<tr class="lib-sec alt"><td colspan="${cols}">ALL GAMES A\u2013Z</td></tr>` : ''))
             : '';
           const isCustom = g.customConsole === true;
           const est = estHoursCache[g.GameID];
-          const earned = Number(g.NumAwarded || 0);
-          const hoursLabel = isCustom ? '—' : (est ? formatDuration(est, true) : '<span class="pt-pending" title="Loading playtime…"></span>');
-          const hoursColor = 'var(--gold)';
+          const hoursLabel = isCustom ? (customPlaytimeHtml(g) || '—') : (est ? formatDuration(est, true) : '<span class="pt-pending" title="Loading playtime…"></span>');
           const awardCell = isCustom
             ? (g.manualBeaten ? '<span class="pill pill-teal">Beaten</span>' : '<span class="pill pill-muted">In progress</span>')
             : awardPill(g.HighestAwardKind);
@@ -494,33 +653,24 @@ function renderLibrary(){
                 <span style="font-family:var(--font-mono);font-size:0.6875rem;color:var(--muted)">${awardedForMode}/${g.MaxPossible} · ${pctForMode}%</span>
               `;
           const lastPlayedLabel = isCustom
-            ? (g.manualBeatenDate ? new Date(g.manualBeatenDate).toLocaleDateString() : 'Never')
-            : (g.lastPlayed ? timeAgo(g.lastPlayed) : 'Never');
+            ? (g.lastPlayed ? timeAgoShort(g.lastPlayed) : (parseLocalDay(g.manualBeatenDate) ? shortDay(parseLocalDay(g.manualBeatenDate)) : 'Never'))
+            : (g.lastPlayed ? timeAgoShort(g.lastPlayed) : 'Never');
           return label + `
             <tr data-game-id="${g.GameID}">
-              <td><div class="g-title"><img src="${imgUrl(g.ImageIcon)}" alt=""><span>${g.Title}</span>${g.manual ? `<button class="manual-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : ''}</div></td>
-              <td>${awardCell}</td>
+              <td><div class="g-title"><img src="${imgUrl(g.ImageIcon)}" alt="" loading="lazy" decoding="async"><span>${esc(g.Title)}${preRaStar(g.GameID)}</span>${g.manual ? `<button class="manual-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : ''}</div></td>
+              ${showAward ? `<td>${awardCell}</td>` : ''}
               <td>${progressCell}</td>
-              <td style="font-family:var(--font-mono);font-size:0.75rem;color:${hoursColor}">${hoursLabel}</td>
+              <td style="font-family:var(--font-mono);font-size:0.75rem;color:var(--gold)">${hoursLabel}</td>
               <td style="color:var(--muted);font-size:0.75rem;">${lastPlayedLabel}</td>
             </tr>
           `;
         }).join('')}
         </tbody>
       </table>
-    `;
-
-  wrap.querySelectorAll('th[data-key]').forEach(th => {
-    th.addEventListener('click', () => {
-      const k = th.getAttribute('data-key');
-      librarySort.dir = (librarySort.key === k && librarySort.dir === 'desc') ? 'asc' : 'desc';
-      librarySort.key = k;
-      renderLibrary();
-    });
-  });
-  wireGameRows(wrap);
+    `);
 }
 
+// Tile view (Display Options): the Last Played cards, in a grid with 3 to 5 tiles per row.
 function tileHtml(g, backlog){
   const isCustom = g.customConsole === true;
   const remove = g.manual ? `<button class="manual-remove tile-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : '';
@@ -529,7 +679,9 @@ function tileHtml(g, backlog){
     const n = isCustom ? 'Not on RA' : (Number(g.MaxPossible) || 0) + ' achievements';
     foot = `<div class="cart-progress-group"><div class="prog-lbl"><span>${n}</span></div></div>`;
   }else if(isCustom){
-    foot = `<div class="cart-progress-group"><div class="prog-lbl"><span>${g.manualBeaten ? 'Beaten' : 'In progress'}</span></div></div>`;
+    // a game RetroAchievements doesn't track: the time counted on this device (or its play log), when there is any
+    const played = customPlaytimeHtml(g);
+    foot = `<div class="cart-progress-group"><div class="prog-lbl"><span>${g.manualBeaten ? 'Beaten' : 'In progress'}</span></div>${played ? `<div class="hours">${played}</div>` : ''}</div>`;
   }else{
     const hard = statsMode === 'hardcore';
     const total = Number(g.MaxPossible) || 0;
@@ -548,8 +700,8 @@ function tileHtml(g, backlog){
             </div>`;
   }
   return `<div class="cart" data-game-id="${g.GameID}">
-      <div class="art-wrap"><img class="art" src="${imgUrl(g.ImageIcon)}" alt="${g.Title}">${badge}${remove}</div>
-      <div class="body"><p class="title">${g.Title}</p><p class="console">${g.ConsoleName || ''}</p>${foot}</div>
+      <div class="art-wrap"><img class="art" src="${imgUrl(g.ImageIcon)}" alt="${esc(g.Title)}" loading="lazy" decoding="async">${badge}${remove}</div>
+      <div class="body"><p class="title">${esc(g.Title)}${preRaStar(g.GameID)}</p><p class="console">${esc(g.ConsoleName || '')}</p>${foot}</div>
     </div>`;
 }
 
@@ -564,30 +716,98 @@ function renderTiles(wrap, rows, recentSet, backlog){
     html += '<div class="tile-sec alt">ALL GAMES A\u2013Z</div>';
   }
   html += `<div class="tile-grid cols-${cols}" style="--tile-cols:${cols}">${rest.map(g => tileHtml(g, backlog)).join('')}</div>`;
+  setGamesHtml(wrap, html);
+}
+
+// Puts a game list (tiles or table) on the page. A sync or a tab switch often asks for the list that is already
+// showing, and building hundreds of tiles again for nothing is the slow part, so that case is skipped.
+function setGamesHtml(wrap, html){
+  wireGames(wrap);
+  if(wrap.gamesHtml === html && wrap.querySelector('.tile-grid, .lib-table')) return;
+  wrap.gamesHtml = html;
   wrap.innerHTML = html;
-  wrap.querySelectorAll('.cart').forEach(card => {
-    card.addEventListener('click', () => openGameModal(Number(card.getAttribute('data-game-id'))));
-  });
-  wireGameRows(wrap);
 }
 
-// Opens a game from a table row (not the section label rows); the ✕ removes a manually added game.
-function wireGameRows(wrap){
-  wrap.querySelectorAll('tbody tr:not(.lib-sec)').forEach(row => {
-    row.addEventListener('click', () => openGameModal(Number(row.getAttribute('data-game-id'))));
-  });
-  wrap.querySelectorAll('.manual-remove').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+// One click handler for the whole list, set up once: a tile or table row opens the game, ✕ removes a manually
+// added game, and a column heading in the Library table sorts by it.
+function wireGames(wrap){
+  if(wrap.gamesWired) return;
+  wrap.gamesWired = true;
+  wrap.addEventListener('click', (e) => {
+    const hit = (sel) => { const el = e.target.closest(sel); return el && wrap.contains(el) ? el : null; };
+    const remove = hit('.manual-remove');
+    if(remove){
       e.stopPropagation();
-      removeManualGame(Number(btn.getAttribute('data-remove-id')));
-    });
+      removeManualGame(Number(remove.getAttribute('data-remove-id')));
+      return;
+    }
+    const th = hit('th[data-key]');
+    if(th){
+      const k = th.getAttribute('data-key');
+      if(wrap.id === 'backlog-table-wrap'){ pressBacklogSort(k); renderBacklog(); }
+      else{ pressLibrarySort(k); renderLibrary(); }
+      return;
+    }
+    const game = hit('.cart, .lib-table tbody tr:not(.lib-sec)');
+    if(game) openGameModal(Number(game.getAttribute('data-game-id')));
   });
 }
 
-// Games that have been added but never actually played: manually-added RA
-// games RA hasn't seen progress on yet, and customConsole games the user
-// hasn't checked "Now Playing" on. No award/progress/playtime columns here
-// since none of that exists yet for any of these.
+// A backlog game's total points come from RetroAchievements' list for its console (kept for a week, so this is
+// one request per console at most). They are kept in their own saved list, by game. Keeping them on the games
+// themselves lost them: a sync reads the backlog from storage again and puts fresh copies in the library.
+const BACKLOG_POINTS_KEY = 'backlog-points';
+let backlogPoints = null; // game id -> points, null until the saved list has been read
+let backlogPointsReading = false;
+const backlogPointsAsked = new Set();
+function backlogPointsOf(g){
+  if(g.customConsole) return null;
+  if(g.Points != null) return Number(g.Points);
+  const p = backlogPoints ? backlogPoints[g.GameID] : null;
+  return p != null ? Number(p) : null;
+}
+function fillBacklogPoints(rows){
+  if(backlogPoints === null){
+    if(backlogPointsReading) return;
+    backlogPointsReading = true;
+    (async () => {
+      let saved = {};
+      try{
+        const r = await window.storage.get(BACKLOG_POINTS_KEY, false);
+        const v = r && r.value ? JSON.parse(r.value) : null;
+        if(v && typeof v === 'object') saved = v;
+      }catch(e){}
+      backlogPoints = saved;
+      renderBacklog(); // draws what was saved, and asks for the rest
+    })();
+    return;
+  }
+  const need = rows.filter(g => !g.customConsole && g.ConsoleID && backlogPointsOf(g) === null && !backlogPointsAsked.has(g.GameID));
+  if(!need.length || typeof getGameListForConsole !== 'function') return;
+  need.forEach(g => backlogPointsAsked.add(g.GameID));
+  const consoles = [...new Set(need.map(g => Number(g.ConsoleID)))];
+  (async () => {
+    let found = 0;
+    for(const cid of consoles){
+      try{
+        const list = await getGameListForConsole(cid);
+        const byId = new Map((list || []).map(x => [Number(x.ID ?? x.id), x]));
+        need.forEach(g => {
+          const hit = Number(g.ConsoleID) === cid ? byId.get(Number(g.GameID)) : null;
+          const pts = hit ? (hit.Points ?? hit.points) : null;
+          if(pts != null){ backlogPoints[g.GameID] = Number(pts); found++; }
+        });
+      }catch(e){
+        need.forEach(g => { if(Number(g.ConsoleID) === cid) backlogPointsAsked.delete(g.GameID); }); // offline: ask again later
+      }
+    }
+    if(!found) return;
+    try{ await window.storage.set(BACKLOG_POINTS_KEY, JSON.stringify(backlogPoints), false); }catch(e){}
+    renderBacklog();
+  })();
+}
+
+// Games added but not played yet.
 function renderBacklog(){
   const wrap = $('#backlog-table-wrap');
   if(!wrap) return;
@@ -598,38 +818,51 @@ function renderBacklog(){
     foldText(g.Title).includes(searchVal) &&
     (systemFilter === 'All' || g.ConsoleName === systemFilter)
   );
-  rows = rows.slice().sort((a, b) => sortableTitle(a.Title).localeCompare(sortableTitle(b.Title)));
+  fillBacklogPoints(rows);
+  const byTitle = (a, b) => sortableTitle(a.Title).localeCompare(sortableTitle(b.Title));
+  const sign = backlogSort.dir === 'asc' ? 1 : -1;
+  if(backlogSort.key === 'points'){
+    // games with no points to show (not on RetroAchievements, or not looked up yet) stay at the bottom either way
+    const pts = backlogPointsOf;
+    rows = rows.slice().sort((a, b) => {
+      const av = pts(a), bv = pts(b);
+      if((av === null) !== (bv === null)) return av === null ? 1 : -1;
+      if(av !== bv) return (av < bv ? -1 : 1) * sign;
+      return byTitle(a, b);
+    });
+  }else{
+    rows = rows.slice().sort((a, b) => sign * byTitle(a, b));
+  }
 
   const countEl = $('#backlog-count');
   if(countEl) countEl.textContent = rows.length ? `(${rows.length} ${rows.length === 1 ? 'game' : 'games'})` : '';
 
   if(rows.length === 0){
-    wrap.innerHTML = '<div class="empty">Nothing in your backlog — add a game to start tracking it.</div>';
+    wrap.innerHTML = '<div class="empty">Nothing in your backlog. Add a game to start tracking it.</div>';
     return;
   }
 
   if(gameView === 'tile'){ renderTiles(wrap, rows, null, true); return; }
 
-  wrap.innerHTML = `
+  const showSystem = systemFilter === 'All'; // on one console's list every row would say the same thing
+  setGamesHtml(wrap, `
       <table class="lib-table">
         <thead><tr>
-          <th>Game</th>
-          <th>System</th>
-          <th>Achievements</th>
+          <th data-key="Title">Game</th>
+          ${showSystem ? '<th>System</th>' : ''}
+          <th data-key="points">Achievements</th>
         </tr></thead>
         <tbody>
           ${rows.map(g => `
             <tr data-game-id="${g.GameID}">
-              <td><div class="g-title"><img src="${imgUrl(g.ImageIcon)}" alt=""><span>${g.Title}</span>${g.manual ? `<button class="manual-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : ''}</div></td>
-              <td style="color:var(--muted);font-size:0.75rem;">${g.ConsoleName || '—'}</td>
-              <td style="font-family:var(--font-mono);font-size:0.75rem;color:var(--muted)">${g.customConsole ? 'Not on RA' : (Number(g.MaxPossible) || 0)}</td>
+              <td><div class="g-title"><img src="${imgUrl(g.ImageIcon)}" alt="" loading="lazy" decoding="async"><span>${esc(g.Title)}${preRaStar(g.GameID)}</span>${g.manual ? `<button class="manual-remove" data-remove-id="${g.GameID}" title="Remove">✕</button>` : ''}</div></td>
+              ${showSystem ? `<td style="color:var(--muted);font-size:0.75rem;">${esc(g.ConsoleName || '—')}</td>` : ''}
+              <td style="font-family:var(--font-mono);font-size:0.75rem;color:var(--muted)">${g.customConsole ? 'Not on RA' : (Number(g.MaxPossible) || 0) + (backlogPointsOf(g) != null ? ' / ' + backlogPointsOf(g) + ' pts' : '')}</td>
             </tr>
           `).join('')}
         </tbody>
       </table>
-    `;
-
-  wireGameRows(wrap);
+    `);
 }
 
 // Small floating label with a game's title, used when a Beaten by Year tile is held.
@@ -678,8 +911,8 @@ function renderByYear(){
   done.forEach(g => {
     let year;
     if(g.customConsole){
-      const d = new Date(g.manualBeatenDate);
-      if(isNaN(d.getTime())) return;
+      const d = parseLocalDay(g.manualBeatenDate);
+      if(!d) return;
       year = d.getFullYear();
     }else{
       const parsed = parseRADate(g.HighestAwardDate);
@@ -705,8 +938,8 @@ function renderByYear(){
               const pill = award && award.label === 'Mastered'
                 ? `<span class="pill pill-year ${award.cls}">Mastered</span>` : '';
               return `
-              <div class="year-item" data-game-id="${g.GameID}" title="${g.Title}">
-                <img src="${imgUrl(g.ImageIcon)}" alt="${g.Title}">
+              <div class="year-item" data-game-id="${g.GameID}" title="${esc(g.Title)}">
+                <img src="${imgUrl(g.ImageIcon)}" alt="${esc(g.Title)}">
                 ${pill}
               </div>
             `;

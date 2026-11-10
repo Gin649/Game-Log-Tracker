@@ -90,6 +90,7 @@ async function loadAll(opts){
   await enqueueTask(async () => {
   // Show the last saved copy right away while the fresh data loads. An explicit
   // refresh skips this since the screens are already filled in.
+  await loadPreRaInfo();
   const cached = forcePlaytimeRefresh ? null : await loadDashCache();
   const dash = cached ? { ...cached } : {};
   const fromCache = {};
@@ -157,8 +158,7 @@ async function loadAll(opts){
   }
 
   try{
-    const progress = await raFetch('API_GetUserCompletionProgress.php', { c: 500 });
-    const results = (progress && progress.Results) || [];
+    const results = await raCompletionProgress();
     dash.progress = results; gotFresh = true;
     await buildLibraryFromProgress(results);
 
@@ -176,6 +176,7 @@ async function loadAll(opts){
       }
       if(libraryData.length === 0){
         $('#lib-table-wrap').innerHTML = `<div class="error-box">Could not load your library: ${e.message}</div>`;
+        $('#backlog-table-wrap').innerHTML = `<div class="error-box">Could not load your backlog: ${e.message}</div>`;
         $('#year-wrap').innerHTML = `<div class="error-box">Could not load completions: ${e.message}</div>`;
         return;
       }
@@ -304,7 +305,12 @@ $('#btn-hardcore-toggle').addEventListener('click', () => {
   }
   refreshOpenSubsetPanels();
 });
-$('#lib-search').addEventListener('input', renderLibrary);
+// Searching redraws the list a moment after the last key, not once for every letter typed.
+function afterTyping(fn){
+  let timer = 0;
+  return () => { clearTimeout(timer); timer = setTimeout(fn, 120); };
+}
+$('#lib-search').addEventListener('input', afterTyping(renderLibrary));
 
 // Game Library: Hide Beaten / Show Beaten. Remembered between visits.
 function syncHideDoneButton(){
@@ -332,4 +338,4 @@ $('#btn-hide-done').addEventListener('click', async () => {
     }
   }catch(e){ /* nothing saved yet */ }
 })();
-$('#backlog-search').addEventListener('input', renderBacklog);
+$('#backlog-search').addEventListener('input', afterTyping(renderBacklog));

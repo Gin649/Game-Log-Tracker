@@ -23,7 +23,7 @@
     'a[href]', 'button', 'input', 'select', 'textarea', 'summary',
     '[tabindex]', '[role="button"]', '[role="switch"]',
     '.cart', '.unlock', '.year-item', '.subset-head', '.ag-result', '.soc-row',
-    '.lib-table th', '.lib-table tbody tr:not(.lib-sec)', '.modal-art',
+    '.lib-table th[data-key]', '.lib-table tbody tr:not(.lib-sec)', '.modal-art',
   ].join(',');
 
   let swapAB = false;
@@ -107,6 +107,7 @@
       if(el.disabled || el.getAttribute('aria-disabled') === 'true') return;
       if(el.getAttribute('tabindex') === '-1') return;
       if(el.tagName === 'INPUT' && /^(hidden|file)$/.test(el.type)) return;
+      if(el.matches('.tile-remove')) return; // a tile's ✕ is for touch only
       const r = el.getBoundingClientRect();
       if(r.width <= 0 || r.height <= 0) return;
       out.push({ el, r });
@@ -116,8 +117,12 @@
 
   // ---- the highlight -------------------------------------------------------------------------
 
+  const TILE = '.cart, .year-item';
+
   const cls = (el) => el.className.replace(/\bpad-focus\b/, '').trim();
-  const signature = (el) => ({ id: el.id, gid: el.getAttribute('data-game-id'), tag: el.tagName, cls: cls(el) });
+  // key: what else names an element that is drawn again in place. A column heading has its column.
+  const keyOf = (el) => el.getAttribute('data-key') || '';
+  const signature = (el) => ({ id: el.id, gid: el.getAttribute('data-game-id'), key: keyOf(el), tag: el.tagName, cls: cls(el) });
 
   function refind(list, sig){
     if(sig.id){
@@ -126,6 +131,11 @@
     }
     if(sig.gid){
       const hit = list.find(i => i.el.tagName === sig.tag && i.el.getAttribute('data-game-id') === sig.gid && cls(i.el) === sig.cls);
+      if(hit) return hit.el;
+    }
+    if(sig.key){
+      // sorting by a heading draws the table again: stay where you were
+      const hit = list.find(i => i.el.tagName === sig.tag && keyOf(i.el) === sig.key);
       if(hit) return hit.el;
     }
     return null;
@@ -251,17 +261,42 @@
       switchSystem(dir === 'right' ? 1 : -1, true); // on the console row, left and right change console at once, like L1 / R1
       return;
     }
-    let next = pick(cur, dir, candidates(getRoot()));
+    // The small ✕ that removes a game is only reached on purpose. In a list that is right from its game (left
+    // goes back to the game), and nothing else lands on it. On a tile it is for touch only (see candidates).
+    let from = cur;
+    if(cur.matches('.manual-remove')){
+      const game = cur.closest('.lib-table tbody tr');
+      if(game){
+        if(dir === 'left'){ setFocus(game); return; }
+        if(dir === 'right') return;
+        from = game; // up and down step to the next game as if the highlight were on this one
+      }
+    }else if(dir === 'right' && cur.matches('.lib-table tbody tr')){
+      const x = cur.querySelector('.manual-remove');
+      if(x && isVisible(x)){ setFocus(x); return; }
+    }
+    if(cur.matches('.lib-table th') && (dir === 'left' || dir === 'right')){
+      // Left and right on a heading step along the headings that sort, and stop at the ends. Without this the
+      // row of games underneath, which is as wide as the table, counted as "to the right".
+      let th = cur;
+      do{ th = dir === 'right' ? th.nextElementSibling : th.previousElementSibling; }while(th && !th.matches('th[data-key]'));
+      if(th) setFocus(th);
+      return;
+    }
+    const list = candidates(getRoot()).filter(i => !i.el.matches('.manual-remove'));
+    let next = pick(from, dir, list);
     if(next && (dir === 'up' || dir === 'down')){
       // Entering a row of headings or filters lands on the one you are on: the Game heading, the current
       // console, the current tab.
-      if(next.closest('.tile-grid') && next.matches('.cart')){
-        // In tile view, up and down step through the rows on the leftmost tile of each.
+      const grid = next.matches(TILE) ? next.closest('.tile-grid, .cart-grid, .year-icons') : null;
+      if(grid && (grid.matches('.tile-grid') || !grid.contains(cur))){
+        // Coming into any grid of tiles lands on the first tile of the row, at the left. In the Library and Backlog
+        // tile view, up and down then keep to the leftmost tile of each row.
         const top = next.getBoundingClientRect().top;
         let left = next, l = next.getBoundingClientRect().left;
-        next.closest('.tile-grid').querySelectorAll('.cart').forEach(t => {
+        grid.querySelectorAll(TILE).forEach(t => {
           const r = t.getBoundingClientRect();
-          if(Math.abs(r.top - top) <= 12 && r.left < l){ l = r.left; left = t; }
+          if(r.width > 0 && Math.abs(r.top - top) <= 12 && r.left < l){ l = r.left; left = t; }
         });
         next = left;
       }else if(next.matches('.lib-table th') && !cur.matches('.lib-table th')){
@@ -365,6 +400,7 @@
   // Centres the chosen console in the row, then makes sure the chip at the left edge shows its whole name
   // instead of a cut-off piece.
   function revealChip(row, active){
+    if(row.classList.contains('blades')) return; // the blades turn to put the chosen console in the middle, nothing scrolls
     row.scrollLeft = chipScrollTarget(row, active); // "All" stays pinned; the others scroll in whole chips beside it
   }
 
@@ -394,7 +430,18 @@
       if(!wasShowing) ensureFocus(); // first press just shows where the highlight is
       else move(name);
     }else if(name === confirmKey){
-      if(!wasShowing) ensureFocus(); else confirm();
+      if(!wasShowing) ensureFocus();
+      else{
+        const el = ensureFocus();
+        if(el && el.hasAttribute('data-hold')){
+          // A button with something behind a long press: a short press is the usual click, sent when the button
+          // is let go, and holding it sends "padhold" to the button.
+          holdKey = name;
+          holdEl = el;
+          clearTimeout(holdTimer);
+          holdTimer = setTimeout(() => { holdTimer = null; el.dispatchEvent(new CustomEvent('padhold')); }, HOLD_MS);
+        }else confirm();
+      }
     }else if(name === 'a' || name === 'b'){
       goBack();
     }else if(name === 'select'){
@@ -411,6 +458,9 @@
       switchTab(1);
     }
   }
+
+  const HOLD_MS = 550;
+  let holdKey = null, holdEl = null, holdTimer = null;
 
   // Called by the app for every button change. Directions repeat while held.
   function b(name, down){
@@ -429,6 +479,15 @@
     }else{
       held[name] = false;
       clearTimeout(timers[name]);
+      if(name === holdKey){
+        holdKey = null;
+        if(holdTimer){ // let go before it counted as a hold
+          clearTimeout(holdTimer);
+          holdTimer = null;
+          if(holdEl && holdEl.isConnected && !holdEl.disabled) holdEl.click();
+        }
+        holdEl = null;
+      }
     }
   }
 
@@ -449,6 +508,7 @@
 
   function reset(){
     Object.keys(held).forEach(k => { held[k] = false; clearTimeout(timers[k]); });
+    clearTimeout(holdTimer); holdTimer = null; holdKey = null; holdEl = null;
     setRightStick(0);
   }
 

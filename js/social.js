@@ -255,7 +255,7 @@ function socialPointsText(f){
   return Number(f.points || sum.TotalPoints || 0).toLocaleString() + ' hardcore points';
 }
 
-function renderSocialDetail(f, unlocks, unlocksError, awards, awardsError){
+function renderSocialDetail(f, unlocks, unlocksError, awards, awardsError, keepScroll){
   const body = $('#social-body');
   const info = socialInfo(f);
   const profileUrl = 'https://retroachievements.org/user/' + encodeURIComponent(f.name);
@@ -326,7 +326,7 @@ function renderSocialDetail(f, unlocks, unlocksError, awards, awardsError){
   body.querySelectorAll('.unlock').forEach(row => {
     row.addEventListener('click', () => row.classList.toggle('expanded'));
   });
-  $('#social-backdrop').scrollTop = 0;
+  if(!keepScroll) $('#social-backdrop').scrollTop = 0; // a list that fills in later leaves the page where you scrolled it
 }
 
 async function openSocialDetail(name){
@@ -340,9 +340,11 @@ async function openSocialDetail(name){
     return;
   }
   const entry = { at: Date.now(), list: null, awards: null, listErr: '', awardsErr: '' };
+  let drawn = false;
   const show = () => {
     if(socialView.mode === 'detail' && socialView.name === name){
-      renderSocialDetail(f, entry.list, entry.listErr, entry.awards, entry.awardsErr);
+      renderSocialDetail(f, entry.list, entry.listErr, entry.awards, entry.awardsErr, drawn);
+      drawn = true;
     }
   };
   show();
@@ -352,8 +354,7 @@ async function openSocialDetail(name){
     raFetch('API_GetUserRecentAchievements.php', { u: name, m: SOCIAL_UNLOCK_DAYS * 1440 }).then(data => {
       entry.list = (Array.isArray(data) ? data : []).slice().sort((a, b) => time(b.Date) - time(a.Date)).slice(0, SOCIAL_UNLOCK_SHOWN);
     }).catch(e => { entry.listErr = msg(e); entry.list = []; }).then(show),
-    raFetch('API_GetUserCompletionProgress.php', { u: name, c: 500 }).then(data => {
-      const results = (data && data.Results) || [];
+    raCompletionProgress({ u: name }).then(results => {
       entry.awards = results.filter(g => g.HighestAwardKind && g.HighestAwardDate && !isSubsetGame(g))
         .sort((a, b) => time(b.HighestAwardDate) - time(a.HighestAwardDate));
     }).catch(e => { entry.awardsErr = msg(e); entry.awards = []; }).then(show)

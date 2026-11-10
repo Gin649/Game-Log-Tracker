@@ -8,7 +8,8 @@ let lastProfile = null; // re-used to recompute profile stats once library data 
 let userPoints = null; // { Points (hardcore), SoftcorePoints } from API_GetUserPoints.php, these are disjoint, not overlapping subsets
 let statsMode = 'casual'; // 'casual' | 'hardcore', toggled from the menu
 let libraryIndex = {}; // GameID -> library entry, for looking up beaten status
-let librarySort = { key: 'Title', dir: 'asc' };
+let librarySort = { key: '', dir: 'asc' }; // no key: the usual order, recently played first and then A to Z
+let backlogSort = { key: 'Title', dir: 'asc' };
 const estHoursCache = {}; // in-memory, keyed by GameID, for this session, { hours, beaten }
 const achievementsListCache = {}; // in-memory, keyed by GameID, full per-achievement list with earn dates, opportunistically filled by getEstimatedHours()
 let systemFilter = 'All';
@@ -36,6 +37,10 @@ const gameExtendedCache = {}; // in-memory, keyed by GameID
 
 const $ = (sel) => document.querySelector(sel);
 
+function esc(v){
+  return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function parseRADate(dateStr){
   if(!dateStr) return null;
   let s = String(dateStr).trim();
@@ -58,6 +63,13 @@ function formatManualBeatenDate(str){
   if(!m) return '';
   return formatBeatenDate(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
 }
+// A saved day ("YYYY-MM-DD", or a longer date that starts that way) as that day here, not the day it is in UTC.
+function parseLocalDay(str){
+  if(!str) return null;
+  const m =String(str || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
 function beatenDateHtml(text){
   return text ? `<span class="beaten-date">${text}</span>` : '';
 }
@@ -66,6 +78,17 @@ function manualStatusHtml(local){
     return '<span class="pill pill-teal">Beaten</span>' + beatenDateHtml(formatManualBeatenDate(local.manualBeatenDate));
   }
   return local.manualStarted ? '<span class="pill pill-muted">In progress</span>' : '<span class="pill pill-muted">Not started</span>';
+}
+
+// A day as short as it goes, for table columns: "Nov 7/26".
+function shortDay(d){
+  return d.toLocaleDateString(undefined, { month: 'short' }) + ' ' + d.getDate() + '/' + String(d.getFullYear()).slice(-2);
+}
+// timeAgo for a narrow column: the same for today, a short day after that.
+function timeAgoShort(dateStr){
+  const d = parseRADate(dateStr);
+  if(!d) return '—';
+  return (Date.now() - d.getTime()) / 1000 < 86400 ? timeAgo(dateStr) : shortDay(d);
 }
 
 function timeAgo(dateStr){
