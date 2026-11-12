@@ -2,6 +2,23 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.3.6
+
+Console logos, pinch to resize and an Achievement Tracker, brought over from the launcher.
+
+### Added
+- Console logos: the console row now shows each console's logo in place of its name, and the row is taller to fit them. A console with no logo keeps its name. Display Options has a new Console bar choice to go back to names.
+- Pinch to resize: on a touch screen, pinch anywhere on the Library or Backlog in tile view to change the tiles per row. On Beaten by Year the covers go from 2 to 10 per row. Spread two fingers for bigger, pinch them together for smaller. Your choice is remembered.
+- Last Played has an Achievement Tracker: the points you earned and the achievements you unlocked in the last 24 hours, 3 days, week and month, and in the current year. It follows the mode you are in, casual or hardcore. The first time, it takes a moment to fill in.
+
+### Changed
+- Tiles per row in Display Options now goes from 2 to 6.
+- Pinching on the tabs no longer zooms the whole page. Game details, guides and manuals still zoom.
+- Last Played: Recent unlocks now shows your last 10.
+
+### Fixed
+- Games added by hand for Xbox Series X|S were split over two console tabs when the console's name had been saved two ways. They now share one tab.
+
 ## v2.1.3.5
 
 The console row becomes a ring of blades, the tables sort and fit better, and a round of fixes from the launcher.

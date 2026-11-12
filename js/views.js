@@ -148,7 +148,7 @@ function renderRecentGames(games){
 function renderUnlocks(list){
   const el = $('#recent-unlocks');
   if(!list || list.length === 0){ el.innerHTML = '<div class="empty">No unlocks in the last few days. Go play something!</div>'; return; }
-  el.innerHTML = list.slice(0, 20).map(a => {
+  el.innerHTML = list.slice(0, 10).map(a => {
     const isHardcore = Number(a.HardcoreMode) === 1;
     return `
       <div class="unlock">
@@ -336,12 +336,12 @@ function renderSystemChips(){
   const yearTab = activeTab === 'year';
   const systems = yearTab ? Object.keys(counts).sort((a, b) => counts[b] - counts[a]) : orderedSystems(counts);
 
-  if(systems.length === 0){ chipRow.innerHTML = ''; chipRow.classList.remove('editing', 'blades'); dropChipDragTouch(chipRow); return; }
+  if(systems.length === 0){ chipRow.innerHTML = ''; chipRow.classList.remove('editing', 'blades', 'logos'); dropChipDragTouch(chipRow); return; }
 
   if(chipEdit){
     // Reorder / rename mode: drag a tab to move it, tap its name to rename it, OK finishes.
     chipRow.classList.add('editing');
-    chipRow.classList.remove('blades');
+    chipRow.classList.remove('blades', 'logos');
     chipRow.innerHTML = `<button class="chip chip-ok" id="chip-ok">OK</button>
       <span class="chip chip-all-off">All</span>` + systems.map(sys => `
       <button class="chip edit" data-sys="${chipEsc(sys)}">${chipEsc(consoleLabel(sys))}</button>`).join('');
@@ -357,11 +357,13 @@ function renderSystemChips(){
   const chips = ['All', ...systems];
   const at = chips.indexOf(systemFilter);
   chipRow.classList.add('blades');
+  chipRow.classList.toggle('logos', consoleBar === 'logos');
   chipRow._blades = {
     chips, attr: chipEsc, yearTab,
     at: Math.max(0, at),
     known: at !== -1,
-    full: sys => sys === 'All' ? 'All' : chipEsc(consoleLabel(sys)) + (yearTab ? ` (${counts[sys]})` : '')
+    full: sys => sys === 'All' ? 'All' : chipEsc(consoleLabel(sys)) + (yearTab ? ` (${counts[sys]})` : ''),
+    count: sys => yearTab && sys !== 'All' ? counts[sys] : 0
   };
   wireBlades(chipRow);
   drawBlades(chipRow, chipRow._blades.at);
@@ -397,19 +399,32 @@ function bladeCode(sys){
   return name.slice(0, 4).toUpperCase();
 }
 
+// The console's logo for the console bar (Display Options, Console bar, Logos), or '' when there is none and the
+// name is shown as before. A name of your own is tried first, so a tab renamed Mega Drive gets the Mega Drive logo.
+function consoleLogo(sys){
+  if(typeof CONSOLE_LOGOS === 'undefined' || sys === 'All') return '';
+  const yours = consoleNames[sys];
+  const file = (yours && CONSOLE_LOGOS[bladeNorm(yours)]) || CONSOLE_LOGOS[bladeNorm(sys)];
+  return file ? `logos/consoles/${file}.webp` : '';
+}
+
 // Draws the ring with the console at place `at` in the middle. The blades run in the consoles' own order from
 // left to right, wrapping past the last one back to All.
 function drawBlades(chipRow, at){
   const b = chipRow._blades;
   const n = b.chips.length;
   const right = Math.ceil((n - 1) / 2), left = n - 1 - right;
+  const logos = chipRow.classList.contains('logos');
   const blade = (off) => {
     const sys = b.chips[((at + off) % n + n) % n];
     const d = Math.abs(off);
     const cls = d === 0 ? 'centre' + (b.known ? ' active' : '') : d === 1 ? 'near' : d === 2 ? 'near far' : 'sliver';
     const name = b.full(sys);
     // All keeps an outline wherever it is, so you can see where the list starts
-    return `<button class="chip ${cls}${sys === 'All' && d ? ' first' : ''}" data-sys="${b.attr(sys)}" aria-label="${name}">${d === 0 ? name : d <= 2 ? b.attr(bladeCode(sys)) : ''}</button>`;
+    const logo = logos && d <= 2 ? consoleLogo(sys) : '';
+    const count = logo && d === 0 && b.count(sys) ? `<span class="blade-count">(${b.count(sys)})</span>` : '';
+    const inside = logo ? `<img src="${logo}" alt="" draggable="false">${count}` : d === 0 ? name : d <= 2 ? b.attr(bladeCode(sys)) : '';
+    return `<button class="chip ${cls}${sys === 'All' && d ? ' first' : ''}" data-sys="${b.attr(sys)}" aria-label="${name}">${inside}</button>`;
   };
   let l = '', r = '';
   for(let off = -left; off < 0; off++) l += blade(off);
@@ -707,7 +722,7 @@ function tileHtml(g, backlog){
 
 // rows: games in order. recentSet: the games to show first under a "Recently played" label, or null.
 function renderTiles(wrap, rows, recentSet, backlog){
-  const cols = Math.min(5, Math.max(3, tileCols));
+  const cols = Math.min(6, Math.max(2, tileCols));
   const first = recentSet ? rows.filter(g => recentSet.has(g)) : [];
   const rest = recentSet ? rows.filter(g => !recentSet.has(g)) : rows;
   let html = '';

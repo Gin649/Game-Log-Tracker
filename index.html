@@ -64,11 +64,18 @@
             <button class="textsize-btn view-btn" id="view-list" data-view="list">List View</button>
             <button class="textsize-btn view-btn" id="view-tile" data-view="tile">Tile View</button>
           </div>
+          <div class="textsize-row view-row">
+            <span class="display-note" style="margin:0 4px 0 0;">Console bar</span>
+            <button class="textsize-btn bar-btn" data-bar="logos">Logos</button>
+            <button class="textsize-btn bar-btn" data-bar="names">Names</button>
+          </div>
           <div class="textsize-row" id="tile-cols-row" style="display:none;">
             <span class="display-note" style="margin:0 4px 0 0;">Tiles per row</span>
+            <button class="textsize-btn cols-btn" data-cols="2">2</button>
             <button class="textsize-btn cols-btn" data-cols="3">3</button>
             <button class="textsize-btn cols-btn" data-cols="4">4</button>
             <button class="textsize-btn cols-btn" data-cols="5">5</button>
+            <button class="textsize-btn cols-btn" data-cols="6">6</button>
           </div>
           <div class="display-row">
             <span>Clock and battery<span class="display-note" id="display-status-note">Android and Linux only</span></span>
@@ -134,6 +141,9 @@
     <div id="tab-overview" class="tab-panel active">
       <div class="section-title">Recently played</div>
       <div id="recent-games" class="cart-grid"><div class="loading">Loading</div></div>
+
+      <div class="section-title">Achievement Tracker</div>
+      <div id="ach-tracker" class="at-row"></div>
 
       <div class="section-title">Recent unlocks</div>
       <div id="recent-unlocks" class="unlock-list"><div class="loading">Loading</div></div>
@@ -341,6 +351,7 @@
 <script src="js/imported-files.js"></script>
 <script src="js/manual-games.js"></script>
 <script src="js/igdb.js"></script>
+<script src="js/console-logos.js"></script>
 <script src="js/views.js"></script>
 <script src="js/manuals.js"></script>
 <script src="js/game-details.js"></script>
@@ -350,11 +361,13 @@
 <script src="js/add-game.js"></script>
 <script src="js/social.js"></script>
 <script src="js/settings.js"></script>
+<script src="js/ach-tracker.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/gestures.js"></script>
 <script src="js/device-status.js"></script>
 <script src="js/display-mode.js"></script>
 <script src="js/menu.js"></script>
+<script src="js/pinch-tiles.js"></script>
 <script src="js/gamepad.js"></script>
 <script src="js/gamepad-browser.js"></script>
 <script src="js/startup.js"></script>
