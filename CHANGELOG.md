@@ -2,6 +2,12 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.3.7
+
+### Added
+- On Android, a one-time pop-up introduces the Android app, Game Log Tracker DS Launcher, with its main features and a download link. It shows once and doesn't come back after you close it. It never shows inside the Android app.
+- About now has a link to the Android app.
+
 ## v2.1.3.6
 
 Console logos, pinch to resize and an Achievement Tracker, brought over from the launcher.

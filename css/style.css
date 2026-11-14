@@ -1093,6 +1093,21 @@
   .about-credits p{font-size:0.75rem;color:var(--muted);line-height:1.6;margin:0 0 8px;}
   .about-credits a{color:var(--teal);text-decoration:none;}
 
+  /* Android app pop-up (android-promo.js), shown once on Android browsers */
+  .android-promo-card{max-width:420px;}
+  .android-promo-list{margin:0 0 18px;padding-left:18px;display:flex;flex-direction:column;gap:8px;}
+  .android-promo-list li{font-size:0.8125rem;line-height:1.5;color:var(--text);}
+  .android-promo-list b{color:var(--gold);}
+  .android-promo-get{
+    display:block;text-align:center;background:var(--gold);color:var(--bg);border-radius:var(--radius);
+    font-family:'Space Mono', monospace;font-weight:700;font-size:0.875rem;padding:12px 20px;text-decoration:none;
+  }
+  .android-promo-later{
+    display:block;width:100%;margin-top:8px;background:transparent;border:1px solid var(--border);color:var(--muted);
+    border-radius:var(--radius);font-family:'Space Mono', monospace;font-size:0.8125rem;padding:10px 20px;cursor:pointer;
+  }
+  .android-promo-note{font-size:0.7rem;color:var(--muted);text-align:center;margin:12px 0 0;}
+
   /* Small teal "RA" link on each achievement row -> that achievement's page on retroachievements.org */
   .ach-ra-link{
     flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
