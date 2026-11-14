@@ -4,7 +4,7 @@
 // keeps serving its own files, so old and new code never mix.
 
 const CACHE_PREFIX = 'gl-tracker-';
-const CACHE_NAME = CACHE_PREFIX + 'v170';
+const CACHE_NAME = CACHE_PREFIX + 'v171';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -31,6 +31,7 @@ const ASSETS_TO_CACHE = [
   './js/add-game.js',
   './js/social.js',
   './js/settings.js',
+  './js/android-promo.js',
   './js/ach-tracker.js',
   './js/sync.js',
   './js/gestures.js',
