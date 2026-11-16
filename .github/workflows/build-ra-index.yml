@@ -24,9 +24,7 @@ jobs:
           node-version: 24
 
       - name: Build RAPatches index
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # raises the RAPatches API rate limit; scoped read-only to this repo by default
-        run: node tools/build-ra-index.mjs ra-patches-index.json
+        run: node tools/build-ra-index.mjs ra-patches-index.json  # shallow-clones the file list only; no token needed
 
       - name: Build RA guides index
         run: node tools/build-ra-guides-index.mjs ra-guides-index.json  # shallow-clones the public guides wiki; no token needed
