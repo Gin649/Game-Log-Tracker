@@ -12,7 +12,7 @@ function closeDataModal(){
 
 // About
 // Bump this every release, together with CACHE_NAME in sw.js.
-const APP_VERSION = '2.1.3.7';
+const APP_VERSION = '2.1.3.8';
 function openAboutModal(){
   $('#about-version').textContent = APP_VERSION;
   $('#about-backdrop').classList.add('open');
@@ -24,7 +24,7 @@ function closeAboutModal(){
 // Cached RA data is refetched on demand, so it would only make backup files bigger.
 // (ra-snap: is not one of them: the playtime at the moment a game was beaten can't be fetched again.)
 const REBUILDABLE_CACHE_PREFIXES = ['ra-hours:', 'ra-gameinfo:', 'ra-ach:', 'ra-dash:', 'boxcand:',
-  'ra-gamelist:', 'ss3-info:', 'igdb-info2:', 'rating-igdb:', 'guide-archive-index:', 'rapatches-tree-cache-v3',
+  'ra-gamelist:', 'ss3-info:', 'igdb-info2:', 'rating-igdb:', 'rating-igdb2:', 'guide-archive-index:', 'rapatches-tree-cache-v3',
   'social-cache:', 'backlog-points'];
 // A base ROM remembered for the ROM patcher is raw bytes, which a JSON file can't hold. It is left out of backups and
 // picked again when needed.

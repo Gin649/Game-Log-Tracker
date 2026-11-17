@@ -2,6 +2,21 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.3.8
+
+Achievement tiles, full screen and a condensed search bar, brought over from the launcher.
+
+### Added
+- Achievement tiles: a button next to Reorder switches achievements and beaten achievements to a tile view. Pinch to change how many fit in a row; at 3 per row each tile also shows its name and points. Tap a tile to see its name, unlock time and description. Tiles keep your custom order and can be dragged to reorder, and unlocked tiles have a gold frame for hardcore and teal for casual. Tile view stays on for every game until you switch back.
+- Full screen: achievements, beaten achievements and Game Details have an expand button to fill the screen. The Beaten or Mastered pill shows on the right, and Locked is hidden when nothing is locked. Back, Escape or the shrink button leaves full screen.
+
+### Changed
+- The Library and Backlog tabs have one condensed bar (search, its button, then the count), so more games fit on screen.
+
+### Fixed
+- Review ratings are found for games listed with the owner's name in front, such as Disney's Darkwing Duck.
+- Playtime no longer drops to zero when RetroAchievements can't be reached.
+
 ## v2.1.3.7
 
 ### Added

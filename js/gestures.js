@@ -252,6 +252,7 @@ enableDragToScroll($('#system-chips')); // the console-name chips above the libr
     if(target.closest('input, textarea, select, iframe, .yt-player-wrap')) return true;
     const row = target.closest('.ach-row');
     if(row && row.querySelector('.ach-reorder-controls')) return true;
+    if(target.closest('.ach-tiles.reordering')) return true;
     for(let el = target; el && el !== profile; el = el.parentElement){
       const overflowX = getComputedStyle(el).overflowX;
       if((overflowX === 'auto' || overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 1) return true;

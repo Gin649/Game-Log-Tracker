@@ -153,10 +153,10 @@
 
     <div id="tab-library" class="tab-panel">
       <div class="panel-head">
-      <div class="section-title">Game Library <span class="count" id="lib-count"></span></div>
       <div class="lib-search-row">
         <input class="lib-search" id="lib-search" type="text" placeholder="Search your games...">
         <button class="btn-ghost" id="btn-hide-done" aria-pressed="false">Hide Beaten</button>
+        <span class="count" id="lib-count"></span>
       </div>
       </div>
       <div id="lib-table-wrap"><div class="loading">Loading</div></div>
@@ -168,10 +168,10 @@
 
     <div id="tab-backlog" class="tab-panel">
       <div class="panel-head">
-      <div class="section-title">Backlog <span class="count" id="backlog-count"></span></div>
       <div class="lib-search-row">
         <input class="lib-search" id="backlog-search" type="text" placeholder="Search your backlog...">
         <button class="btn-ghost" id="btn-add-game">+ Add game</button>
+        <span class="count" id="backlog-count"></span>
       </div>
       </div>
       <div id="backlog-table-wrap"><div class="loading">Loading</div></div>
@@ -367,6 +367,7 @@
 <script src="js/state.js"></script>
 <script src="js/ra-api.js"></script>
 <script src="js/achievements.js"></script>
+<script src="js/fullscreen-panels.js"></script>
 <script src="js/subsets.js"></script>
 <script src="js/cheats.js"></script>
 <script src="js/walkthroughs.js"></script>

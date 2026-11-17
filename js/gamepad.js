@@ -361,7 +361,9 @@
         $('#guide-reader-close').click();
         return true;
       }
-      if(top.el.id === 'modal-backdrop' && closeOpenProfileSection()) return true; // Back closes the open section first
+      // in a game profile, Back first leaves a section shown full screen, then closes the open section
+      if(top.el.id === 'modal-backdrop' && window.glFsExit && window.glFsExit()) return true;
+      if(top.el.id === 'modal-backdrop' && closeOpenProfileSection()) return true;
       const back = top.el.querySelector('.soc-back, #patch-back-btn');
       if(back && isVisible(back)){ back.click(); return true; }
       const close = top.el.querySelector('.modal-close');
