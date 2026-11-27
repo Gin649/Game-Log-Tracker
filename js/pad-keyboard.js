@@ -2,15 +2,15 @@
 // with the controller. gamepad.js opens it when you confirm on a text box (or press Y to jump to a search box);
 // tapping a text box still brings up the device's own keyboard.
 //
-// Buttons are named by where they sit, as in the rest of gamepad.js (Xbox layout). Handhelds with Nintendo-style
-// labels print the bottom button as B, the left one as Y and the top one as X.
-//   D-pad      move between keys            A (confirm)  type the highlighted key
-//   B (back)   delete a letter; with the box empty, close the keyboard
-//   Y (top)    space                        X (left)     capitals on / off
+// The help line uses Nintendo-style labels, the same as the launcher: the bottom button is B, the right one A,
+// the top one X and the left one Y (gamepad.js calls these a, b, y and x, by where they sit on an Xbox pad).
+//   D-pad      move between keys            B (confirm)  type the highlighted key
+//   A (back)   delete a letter; with the box empty, close the keyboard
+//   X (top)    space                        Y (left)     capitals on / off
 //   L1 / R1    move the cursor              R2           symbols on / off
 //   Start      search / done
-// Hold A on a letter (or press and hold it on the screen) for its accents, like the é in Pokémon: left / right
-// choose one, A types it, B closes the accents. With A and B swapped in Controller settings, so are these.
+// Hold B on a letter (or press and hold it on the screen) for its accents, like the é in Pokémon: left / right
+// choose one, B types it, A closes the accents. With A and B swapped in Controller settings, so are these.
 (function(){
   const LETTERS = [
     ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
@@ -33,7 +33,7 @@
   const HOLD_MS = 450;
   let ROWS = [...LETTERS, BOTTOM];
   const LABEL = { '{shift}': 'ABC', '{sym}': '#+=', '{space}': 'Space', '{del}': '⌫', '{done}': 'Search' };
-  const HINT = { '{shift}': 'X', '{sym}': 'R2', '{space}': 'Y', '{del}': 'B', '{done}': 'Start' };
+  const HINT = { '{shift}': 'Y', '{sym}': 'R2', '{space}': 'X', '{del}': 'A', '{done}': 'Start' };
 
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -48,12 +48,13 @@
   const textEl = root.querySelector('.pkb-text');
   const helpEl = root.querySelector('.pkb-help');
 
-  // The button names in the help line follow the A / B swap.
+  // Nintendo-style names, as printed on AYN and Retroid handhelds: the bottom button is B and the right one A.
+  // They follow the A / B swap in Controller settings.
   function drawHelp(){
-    const ok = confirmName.toUpperCase(), back = confirmName === 'a' ? 'B' : 'A';
+    const ok = confirmName === 'a' ? 'B' : 'A', back = ok === 'B' ? 'A' : 'B';
     HINT['{del}'] = back;
-    helpEl.innerHTML = `<span class="hk">${ok}</span> type (hold: é) <span class="hk">${back}</span> delete <span class="hk">Y</span> space
-      <span class="hk">X</span> capitals <span class="hk">R2</span> symbols <span class="hk">L1</span><span class="hk">R1</span> cursor <span class="hk">Start</span> done`;
+    helpEl.innerHTML = `<span class="hk">${ok}</span> type (hold: é) <span class="hk">${back}</span> delete <span class="hk">X</span> space
+      <span class="hk">Y</span> capitals <span class="hk">R2</span> symbols <span class="hk">L1</span><span class="hk">R1</span> cursor <span class="hk">Start</span> done`;
   }
 
   let input = null, row = 1, col = 0, caps = false, sym = false, savedMode = null, onClose = null;
