@@ -1,7 +1,7 @@
 // Pinch on the game tiles (tile view) or the covers on the Beaten tab to change how many fit in a row. The pinch
 // can be anywhere on that tab, not only on the tiles. Spreading two fingers makes them bigger, so fewer fit, and
-// pinching them together makes them smaller. The game tiles go from 2 to 6 in a row, the same as Tiles per row
-// in Display Options, and the Beaten tab from 2 to 10. The choice is kept.
+// pinching them together makes them smaller. The game tiles go from 1 to 6 in a row (Tiles per row in Display
+// Options has 2 to 6; one game per row is pinch only), and the Beaten tab from 2 to 10. The choice is kept.
 // Achievement tiles in a game profile go from 3 to 6 (achTilesStep in achievements.js).
 (function(){
   const YEARCOLS_KEY = 'app-year-cols';
@@ -26,11 +26,11 @@
   // The grids on screen are changed where they are. Drawing them again would take the tiles out from under
   // your fingers and end the pinch.
   function setTileCols(n){
-    n = Math.min(6, Math.max(2, n));
+    n = Math.min(6, Math.max(1, n));
     if(n === tileCols) return false;
     tileCols = n;
     document.querySelectorAll('.tile-grid').forEach(g => {
-      g.classList.remove('cols-2', 'cols-3', 'cols-4', 'cols-5', 'cols-6');
+      g.classList.remove('cols-1', 'cols-2', 'cols-3', 'cols-4', 'cols-5', 'cols-6');
       g.classList.add('cols-' + n);
       g.style.setProperty('--tile-cols', n);
     });

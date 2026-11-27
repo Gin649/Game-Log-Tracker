@@ -31,31 +31,70 @@ function findGameLocal(gameId){
   return libraryData.find(g => g.GameID === gameId) || recentGamesData.find(g => g.GameID === gameId) || null;
 }
 
-// The review score badge: the average of IGDB's critic and user scores (see igdb.js).
-function attachRatingLookup(gameId, title, card){
+// A score resting on only a few reviews gets a *: fewer than this many votes in all, counting the sources that say
+// how many people voted. A single source that doesn't say (ScreenScraper) gets one too.
+const RATING_FEW_VOTES = 20;
+function ratingIsThin(rating){
+  if(!rating || !rating.sources.length) return false;
+  const counted = rating.sources.filter(s => s.votes != null);
+  if(counted.length === rating.sources.length) return counted.reduce((n, s) => n + s.votes, 0) < RATING_FEW_VOTES;
+  return rating.sources.length === 1;
+}
+
+// The review score badge: the average of every source's score (see igdb.js), with a * when it rests on few reviews.
+// Tapping the badge shows each source's score in a bubble, with a button to look the score up again.
+function attachRatingLookup(gameId, title, consoleName, card){
   const badge = card.querySelector('#rating-badge');
   if(badge) badge.innerHTML = `<span class="rawg-score tier-muted">…</span>`;
 
+  const closeBubble = () => card.querySelectorAll('.rating-bubble').forEach(b => b.remove());
+
+  const showBubble = (rating, runLookup) => {
+    closeBubble();
+    const row = card.querySelector('.rawg-badge-row');
+    if(!row) return;
+    const lines = rating && rating.sources.length
+      ? rating.sources.map(s => `<div class="rating-src"><span class="n">${esc(s.label)}</span>`
+          + `${s.votes ? `<span class="v">${s.votes.toLocaleString()} ${s.votes === 1 ? 'vote' : 'votes'}</span>` : ''}`
+          + `<span class="s">${s.score}</span></div>`).join('')
+      : '<p class="rating-none">No review site has a score for this game.</p>';
+    const one = ratingIsThin(rating) ? '<p class="rating-note">* Based on only a few reviews.</p>' : '';
+    const bubble = document.createElement('div');
+    bubble.className = 'rating-bubble';
+    bubble.innerHTML = `<p class="rating-head">Review score${rating ? `: ${rating.score}${ratingIsThin(rating) ? '*' : ''}` : ''}</p>`
+      + `${lines}${one}<button class="rating-again" type="button">Look up again</button>`;
+    bubble.addEventListener('click', e => e.stopPropagation());
+    bubble.querySelector('.rating-again').addEventListener('click', () => { closeBubble(); runLookup(true); });
+    row.appendChild(bubble);
+  };
+
   const runLookup = (force) => {
-    getGameRating(title, force).then(rating => {
+    const badgeEl0 = card.querySelector('#rating-badge');
+    if(force && badgeEl0) badgeEl0.innerHTML = `<span class="rawg-score tier-muted">…</span>`;
+    getGameRating(title, consoleName, force).then(rating => {
       if(card.dataset.gameId !== String(gameId)) return; // another game was opened meanwhile
       const badgeEl = card.querySelector('#rating-badge');
       if(!badgeEl) return;
 
-      const label = rating ? String(rating.score) : 'NR'; // not rated
+      const label = rating ? `${rating.score}${ratingIsThin(rating) ? '*' : ''}` : 'NR'; // not rated
       const tier = !rating ? 'tier-muted' : rating.score >= 80 ? 'tier-green' : rating.score >= 50 ? 'tier-yellow' : 'tier-red';
-      badgeEl.innerHTML = `<span class="rawg-score ${tier}" id="rating-retry" title="Tap to look up again">${label}</span>`;
+      badgeEl.innerHTML = `<span class="rawg-score ${tier}" id="rating-retry" role="button" title="Tap to see where the score comes from">${label}</span>`;
 
-      const retryEl = card.querySelector('#rating-retry');
-      if(retryEl){
-        retryEl.style.cursor = 'pointer';
-        retryEl.addEventListener('click', () => {
-          badgeEl.innerHTML = `<span class="rawg-score tier-muted">…</span>`;
-          runLookup(true);
+      const scoreEl = card.querySelector('#rating-retry');
+      if(scoreEl){
+        scoreEl.style.cursor = 'pointer';
+        scoreEl.addEventListener('click', e => {
+          e.stopPropagation();
+          if(card.querySelector('.rating-bubble')) closeBubble();
+          else showBubble(rating, runLookup);
         });
       }
     });
   };
+  if(!card.dataset.ratingCloser){
+    card.dataset.ratingCloser = '1';
+    card.addEventListener('click', () => card.querySelectorAll('.rating-bubble').forEach(b => b.remove()));
+  }
   runLookup(false);
 }
 
@@ -251,7 +290,7 @@ function renderCustomGameModal(gameId, local, card){
     }
   });
 
-  attachRatingLookup(gameId, local.Title, card);
+  attachRatingLookup(gameId, local.Title, local.ConsoleName, card);
   setupGameDetailsUI(gameId, local.Title, card, { aboutOnly: true, consoleName: local.ConsoleName });
   setupGameGuideUI(gameId, local.Title, card, local.ConsoleID);
   setupCheatsUI(gameId, local.Title, card, local.ConsoleName);
@@ -555,7 +594,7 @@ async function openGameModal(gameId, opts){
     });
   }
 
-  attachRatingLookup(gameId, title, card);
+  attachRatingLookup(gameId, title, console_, card);
   setupGameDetailsUI(gameId, title, card, { consoleName: console_ });
   setupGameGuideUI(gameId, title, card, ext.ConsoleID || (local && local.ConsoleID));
   setupCheatsUI(gameId, title, card, console_);

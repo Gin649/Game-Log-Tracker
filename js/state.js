@@ -15,7 +15,7 @@ const achievementsListCache = {}; // in-memory, keyed by GameID, full per-achiev
 let systemFilter = 'All';
 let gameView = 'list'; // Game Library and Backlog: 'list' or 'tile' (Display Options)
 let consoleBar = 'logos'; // the console bar shows console 'logos' (default) or 'names' (Display Options)
-let tileCols = 4;       // tiles per row in tile view, 2 to 6
+let tileCols = 4;       // tiles per row in tile view, 1 to 6
 let libraryHideDone = false; // Game Library: hide beaten/mastered games so only ones in progress show
 
 // Games checked in the Add Game modal's RA-system search but not yet
