@@ -9,7 +9,63 @@ function fetchWithTimeout(url, ms){
   const timer = setTimeout(() => ctrl.abort(), ms);
   return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
 }
-async function raFetch(endpoint, params){
+// RetroAchievements rate-limits per key (HTTP 429). Background bulk loads (playtimes for the whole library)
+// go through a small gate and step aside whenever something the person is waiting on is running; a 429 on
+// them backs off and retries instead of trying every other route. Requests the person is waiting on
+// (opening a game, the dashboard) always go straight out.
+const RA_FG_PARALLEL = 4;
+const RA_BG_PARALLEL = 5;
+const RA_BG_GAP_MS = 120;
+let raFgActive = 0;
+let raBgActive = 0;
+let raLastBgStart = 0;
+let raCooldownUntil = 0;
+let raPumpTimer = null;
+const raFgQueue = [];
+const raBgQueue = [];
+
+function raStart(job, bg){
+  if(bg){ raBgActive++; raLastBgStart = Date.now(); } else raFgActive++;
+  job.run().then(job.resolve, job.reject).finally(() => {
+    if(bg) raBgActive--; else raFgActive--;
+    raPump();
+  });
+}
+
+function raPump(){
+  while(raFgQueue.length && raFgActive < RA_FG_PARALLEL) raStart(raFgQueue.shift(), false);
+  while(!raFgActive && !raFgQueue.length && raBgQueue.length && raBgActive < RA_BG_PARALLEL){
+    const wait = Math.max(raCooldownUntil, raLastBgStart + RA_BG_GAP_MS) - Date.now();
+    if(wait > 0){
+      clearTimeout(raPumpTimer);
+      raPumpTimer = setTimeout(raPump, wait);
+      return;
+    }
+    raStart(raBgQueue.shift(), true);
+  }
+}
+
+function raGate(run, bg){
+  return new Promise((resolve, reject) => {
+    (bg ? raBgQueue : raFgQueue).push({ run, resolve, reject });
+    raPump();
+  });
+}
+
+async function raFetch(endpoint, params, opts){
+  const bg = !!(opts && opts.background);
+  for(let tries = 0; ; tries++){
+    try{ return await raGate(() => raFetchOnce(endpoint, params, bg), bg); }
+    catch(e){
+      if(!e.rateLimited || tries >= (bg ? 3 : 1)) throw e;
+      const backoff = 2000 * Math.pow(2, tries);
+      if(bg) raCooldownUntil = Math.max(raCooldownUntil, Date.now() + backoff);
+      await new Promise(r => setTimeout(r, backoff));
+    }
+  }
+}
+
+async function raFetchOnce(endpoint, params, background){
   const qs = new URLSearchParams({ u: creds.username, ...params, y: creds.apiKey }); // params.u lets Social look up another user
   const targetUrl = `https://retroachievements.org/API/${endpoint}?${qs.toString()}`;
 
@@ -25,6 +81,11 @@ async function raFetch(endpoint, params){
         throw err;
       }
       throw new Error(`${label}: HTTP ${res.status} (likely the proxy, not RetroAchievements)`);
+    }
+    if(res.status === 429 && (label === 'direct' || label === 'worker')){
+      const err = new Error('RetroAchievements is rate-limiting requests (HTTP 429). Try again in a minute.');
+      err.rateLimited = true;
+      throw err;
     }
     if(!res.ok) throw new Error(`${label}: HTTP ${res.status}`);
     let data;
@@ -70,6 +131,8 @@ async function raFetch(endpoint, params){
     return await attempt('worker', () => fetchWithTimeout(`https://ra-proxy.gin649.workers.dev/${endpoint}?${qs.toString()}`, WORKER_TIMEOUT_MS));
   }catch(workerErr){
     if(workerErr.authFailure) throw workerErr;
+    // Rate limited: the proxies would only use up the same key's limit faster, so wait and retry instead (raFetch).
+    if(workerErr.rateLimited) throw workerErr;
     // Otherwise fall through and race the public proxies below.
   }
 
@@ -282,7 +345,7 @@ async function saveSnap(gameId, existing, slots, hours){
   catch(e){ /* non-fatal */ }
 }
 
-async function getEstimatedHours(gameId, force){
+async function getEstimatedHours(gameId, force, background){
   if(!force && estHoursCache[gameId] !== undefined) return estHoursCache[gameId];
 
   const localGame = findLibraryGame(gameId);
@@ -326,7 +389,7 @@ async function getEstimatedHours(gameId, force){
   let hours = null;
   let real = false;
   try{
-    const data = await raFetch('API_GetGameInfoAndUserProgress.php', { g: gameId, a: 1 });
+    const data = await raFetch('API_GetGameInfoAndUserProgress.php', { g: gameId, a: 1 }, { background: !!background });
 
     if(data && data.Achievements){
       achievementsListCache[gameId] = Object.values(data.Achievements)
@@ -374,7 +437,7 @@ async function getEstimatedHours(gameId, force){
 }
 
 async function loadEstimatedHoursFor(games, onProgress, forceIds){
-  const CONCURRENCY = 8;
+  const CONCURRENCY = 5;
   const targets = games.filter(g =>
     g && g.GameID != null &&
     (estHoursCache[g.GameID] === undefined || (forceIds && forceIds.has(g.GameID)))
@@ -385,7 +448,7 @@ async function loadEstimatedHoursFor(games, onProgress, forceIds){
     while(idx < targets.length){
       const g = targets[idx++];
       const force = !!(forceIds && forceIds.has(g.GameID));
-      await getEstimatedHours(g.GameID, force);
+      await getEstimatedHours(g.GameID, force, true);
       doneSinceRender++;
       if(onProgress && doneSinceRender % 4 === 0) onProgress();
     }

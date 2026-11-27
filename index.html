@@ -258,20 +258,17 @@
   <div class="modal-card" id="addgame-card">
     <button class="modal-close" id="addgame-close-btn">✕</button>
     <div class="modal-body">
-      <h2 style="margin-bottom:4px;">Add a game</h2>
-      <p class="sub" style="margin-bottom:18px;">Search RetroAchievements' game list, or add a game from a system RA doesn't track.</p>
+      <h2>Add your game(s)</h2>
+      <p class="sub">Search a game below by Title and/or specific system.</p>
 
-      <div class="field">
-        <label>System</label>
-        <select id="addgame-system"><option>Loading systems…</option></select>
-      </div>
-      <div class="field" id="addgame-custom-console-field" style="display:none;">
-        <div class="hint">Not on RetroAchievements — pick the platform after you find a match below. Box art and details are pulled from IGDB, and this game won't count toward any RetroAchievements-based stats.</div>
-      </div>
       <div class="field">
         <label>Game title</label>
         <input id="addgame-title" type="text" placeholder="e.g. Chrono Trigger" autocomplete="off">
-        <div class="hint" id="addgame-multi-hint">Tip: check off several results to add them all at once — handy for adding a batch from the same system.</div>
+      </div>
+      <div class="field">
+        <label>Which console?</label>
+        <select id="addgame-system"><option>Loading systems…</option></select>
+        <div class="hint" id="addgame-multi-hint">Tick several results to add them all at once.</div>
       </div>
       <button class="btn-primary" id="addgame-search-btn">Search</button>
 
@@ -392,6 +389,7 @@
 <script src="js/display-mode.js"></script>
 <script src="js/menu.js"></script>
 <script src="js/pinch-tiles.js"></script>
+<script src="js/pad-keyboard.js"></script>
 <script src="js/gamepad.js"></script>
 <script src="js/gamepad-browser.js"></script>
 <script src="js/startup.js"></script>

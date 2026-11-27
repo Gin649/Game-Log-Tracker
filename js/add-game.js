@@ -1,7 +1,32 @@
-// Add Game modal: RA system search, IGDB search, and the bulk add.
+// Add Game: RA system search, IGDB search for other systems, and adding several at once.
 
-// Add game (manual + IGDB search)
-// Add game manually
+// A short message at the bottom of the screen, such as "Chrono Trigger added to your Backlog".
+function showToast(text){
+  let el = document.getElementById('glt-toast');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'glt-toast';
+    el.className = 'glt-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// A title with the tags, brackets and "The" taken out, for comparing a file name with RA's name.
+function romMatchKey(title){
+  return String(title == null ? '' : title)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/~[^~]*~/g, ' ')
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ').filter(w => w && w !== 'the').join(' ');
+}
+
+
 function rankGames(games, query){
   const q = foldText(query.trim());
   if(!q || !games) return [];
@@ -23,10 +48,10 @@ function rankGames(games, query){
 async function openAddGameModal(){
   $('#addgame-backdrop').classList.add('open');
   $('#addgame-title').value = '';
-  $('#addgame-custom-console-field').style.display = 'none';
   $('#addgame-results').innerHTML = '';
   addGameSelections.clear();
   renderAddGameSelectionBar();
+  setSearchButton(false);
   const sel = $('#addgame-system');
   sel.innerHTML = '<option>Loading systems…</option>';
   try{
@@ -35,26 +60,24 @@ async function openAddGameModal(){
       .map(c => ({ id: c.ID ?? c.id, name: c.Name ?? c.name }))
       .filter(c => c.id != null && c.name)
       .sort((a, b) => a.name.localeCompare(b.name));
-    sel.innerHTML = `<option value="__custom__">Other system (not on RetroAchievements)…</option>`
+    sel.innerHTML = `<option value="__custom__">Any console/system</option>`
       + sorted.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
   }catch(e){
-    sel.innerHTML = '<option value="__custom__">Other system (not on RetroAchievements)…</option><option value="">Could not load systems</option>';
+    sel.innerHTML = '<option value="__custom__">Any console/system</option><option value="">Could not load systems</option>';
   }
-  // "Other" is the first option and starts selected, so a non-RA game is just a title away.
   sel.value = '__custom__';
   syncAddGameSystem();
 }
 
 function syncAddGameSystem(){
   const isCustom = $('#addgame-system').value === '__custom__';
-  $('#addgame-custom-console-field').style.display = isCustom ? 'block' : 'none';
   const multiHint = $('#addgame-multi-hint');
-  if(multiHint) multiHint.style.display = isCustom ? 'none' : 'block'; // the multi-select checkboxes are RA-search only
+  if(multiHint) multiHint.style.display = isCustom ? 'none' : 'block'; // ticking several is RA search only
 }
 
 $('#addgame-system').addEventListener('change', syncAddGameSystem);
 
-// Reflects addGameSelections (checked but not yet committed) in the modal.
+// Shows how many games are ticked.
 function renderAddGameSelectionBar(){
   const bar = $('#addgame-selection-bar');
   if(!bar) return;
@@ -69,6 +92,12 @@ function closeAddGameModal(){
 }
 
 async function searchAddGame(){
+  await runAddGameSearch();
+  // a search has been made: the button now clears it
+  if($('#addgame-title').value.trim()) setSearchButton(true);
+}
+
+async function runAddGameSearch(){
   const sel = $('#addgame-system');
   const consoleId = sel.value;
   const query = $('#addgame-title').value.trim();
@@ -86,10 +115,7 @@ async function searchAddGame(){
         resultsEl.innerHTML = '<div class="ag-empty">No matching games found.</div>';
         return;
       }
-      // Platform choices come straight from each result's own IGDB data
-      // instead of being typed in, no typos, and the same real-world
-      // platform (e.g. "PlayStation 4") always ends up spelled the same
-      // way across every custom game, which keeps the System filter tidy.
+      // The platform is picked from IGDB's list for the game, so it's always spelled the same way.
       resultsEl.innerHTML = results.map(g => {
         const plats = Array.isArray(g.platforms) ? g.platforms.filter(Boolean) : [];
         const platOptions = plats.length
@@ -100,19 +126,34 @@ async function searchAddGame(){
               <img src="${g.cover || ''}" alt="">
               <span class="t">${g.name}</span>
               <span class="n">${g.released ? g.released.slice(0,4) : ''}</span>
+              <span class="ag-ra-tag" title="On RetroAchievements on this console" hidden>RA</span>
               <select class="ag-platform-select">${platOptions}</select>
               <button class="ag-add-btn" type="button" title="Add game" aria-label="Add game">+</button>
             </div>
           `;
       }).join('');
-      resultsEl.querySelectorAll('.ag-result-custom').forEach(row => {
+      const rows = [...resultsEl.querySelectorAll('.ag-result-custom')];
+      rows.forEach(row => {
         const id = Number(row.getAttribute('data-game-id'));
         const match = results.find(g => g.id === id);
         const select = row.querySelector('.ag-platform-select');
-        row.querySelector('.ag-add-btn').addEventListener('click', () => {
-          if(match) addManualGameFromSearch(match, select.value || 'Unknown');
+        const tag = row.querySelector('.ag-ra-tag');
+        // the RA tag follows the platform picked: it shows when that console's RetroAchievements list has the game
+        const showTag = () => { tag.hidden = !(row._ra && row._ra.get(select.value)); };
+        select.addEventListener('change', showTag);
+        row._showTag = showTag;
+        const addBtn = row.querySelector('.ag-add-btn');
+        addBtn.addEventListener('click', async () => {
+          if(!match || row.classList.contains('added')) return;
+          const ra = row._ra && row._ra.get(select.value);
+          addBtn.disabled = true;
+          // a game RetroAchievements has goes in as that game, with its achievements, straight away
+          if(ra) await addManualGamesBulk([{ g: ra.g, consoleId: ra.consoleId, consoleName: ra.consoleName }]);
+          else await addManualGameFromSearch(match, select.value || 'Unknown');
+          markRowAdded(row);
         });
       });
+      tagRaResults(rows, results, () => sel.value === '__custom__' && resultsEl.contains(rows[0]));
     }catch(e){
       resultsEl.innerHTML = `<div class="error-box">Search failed: ${/abort/i.test(String(e && e.message)) ? 'The search took too long to answer. Try again in a moment.' : e.message}</div>`;
     }
@@ -138,6 +179,15 @@ async function searchAddGame(){
       const icon = g.ImageIcon ?? g.imageIcon;
       const numAch = g.NumAchievements ?? g.numAchievements ?? 0;
       const checked = addGameSelections.has(id);
+      const where = whereInApp(id);
+      if(where) return `
+          <div class="ag-result added" data-game-id="${id}" aria-disabled="true">
+            <input type="checkbox" class="ag-checkbox" checked disabled tabindex="-1">
+            <img src="${imgUrl(icon)}" alt="">
+            <span class="t">${title}</span>
+            <span class="ag-where">in ${where}</span>
+          </div>
+        `;
       return `
           <div class="ag-result ${checked ? 'selected' : ''}" data-game-id="${id}">
             <input type="checkbox" class="ag-checkbox" ${checked ? 'checked' : ''} aria-label="Select ${title}">
@@ -147,7 +197,7 @@ async function searchAddGame(){
           </div>
         `;
     }).join('');
-    resultsEl.querySelectorAll('.ag-result').forEach(row => {
+    resultsEl.querySelectorAll('.ag-result:not(.added)').forEach(row => {
       const id = Number(row.getAttribute('data-game-id'));
       const match = matches.find(g => Number(g.ID ?? g.id) === id);
       const checkbox = row.querySelector('.ag-checkbox');
@@ -161,9 +211,7 @@ async function searchAddGame(){
         }
         renderAddGameSelectionBar();
       };
-      // Checking the box toggles it natively; clicking elsewhere on the row
-      // toggles it manually, either way applySelection reads the box's
-      // resulting state, so the two paths never fight each other.
+      // Tapping anywhere on the row toggles the box.
       row.addEventListener('click', (e) => {
         if(e.target === checkbox) return;
         checkbox.checked = !checkbox.checked;
@@ -176,9 +224,59 @@ async function searchAddGame(){
   }
 }
 
-// Shared by addManualGamesBulk (fresh adds) and convertCustomToRaGame (linking an
-// existing custom entry to its real RA game), same shape of "tracked but
-// not yet actually played" entry either way.
+// A manually added RA game that hasn't been played yet.
+// The RetroAchievements console id for a platform name from the search (IGDB's spelling), or null.
+function raConsoleIdForPlatform(name){
+  const hit = PLATFORM_TO_RA_CONSOLE[String(oneConsoleName(name) || '').toLowerCase()];
+  return hit ? hit[0] : null;
+}
+
+// Marks the "Any console/system" results that RetroAchievements has, platform by platform. Each console's list is
+// read once (and kept for a week), after the results are already on screen.
+async function tagRaResults(rows, results, stillShown){
+  let consoles = [];
+  try{ consoles = (await getConsoleList()) || []; }catch(e){ return; }
+  const lists = new Map(); // console id -> Map(title key -> game), or null when it could not be read
+  const listFor = async (cid) => {
+    if(!lists.has(cid)){
+      let m = null;
+      try{
+        m = new Map();
+        (await getGameListForConsole(cid) || []).forEach(g => {
+          const raw = String(g.Title ?? g.title ?? '');
+          const k = romMatchKey(raw);
+          if(k && !/~hack~/i.test(raw) && !m.has(k)) m.set(k, g);
+        });
+      }catch(e){ m = null; }
+      lists.set(cid, m);
+    }
+    return lists.get(cid);
+  };
+  for(const row of rows){
+    if(!stillShown()) return;
+    const g = results.find(x => x.id === Number(row.getAttribute('data-game-id')));
+    if(!g) continue;
+    const ra = new Map();
+    for(const p of (Array.isArray(g.platforms) ? g.platforms.filter(Boolean) : [])){
+      const cid = raConsoleIdForPlatform(p);
+      if(cid == null) continue;
+      const list = await listFor(cid);
+      const hit = list && list.get(romMatchKey(g.name));
+      if(hit){
+        const c = consoles.find(x => Number(x.ID ?? x.id) === cid);
+        ra.set(p, { g: hit, consoleId: cid, consoleName: c ? (c.Name ?? c.name) : p });
+      }
+    }
+    row._ra = ra;
+    if(ra.size){
+      // start on a platform RetroAchievements has, so the game is added with its achievements
+      const select = row.querySelector('.ag-platform-select');
+      if(select && !ra.has(select.value)) select.value = ra.keys().next().value;
+      row._showTag();
+    }
+  }
+}
+
 function buildManualRaEntry(g, consoleId, consoleName){
   return {
     GameID: Number(g.ID ?? g.id),
@@ -199,10 +297,7 @@ function buildManualRaEntry(g, consoleId, consoleName){
   };
 }
 
-// Adds every checked search result in one shot: a single manual-games
-// read/write and a single set of re-renders, rather than the old
-// one-at-a-time flow's read/write/render/close per game, that's what
-// made checking off several games and adding them together practical.
+// Adds every ticked result with one save and one redraw.
 async function addManualGamesBulk(selections){
   return enqueueTask(async () => {
     const manual = await loadManualGames();
@@ -210,7 +305,7 @@ async function addManualGamesBulk(selections){
     const newEntries = [];
     selections.forEach(({ g, consoleId, consoleName }) => {
       const gameId = Number(g.ID ?? g.id);
-      if(existingIds.has(gameId)) return; // already tracked for real, or a duplicate selection
+      if(existingIds.has(gameId)) return;
       existingIds.add(gameId);
       newEntries.push(buildManualRaEntry(g, consoleId, consoleName));
     });
@@ -218,21 +313,61 @@ async function addManualGamesBulk(selections){
       libraryData = [...libraryData, ...newEntries];
       await saveManualGames([...manual, ...newEntries]);
     }
-    renderSystemChips();
-    renderBacklog();
-    renderLibrary();
-    renderByYear();
-    closeAddGameModal();
+    renderLibraryViews();
+    // You stay on Add your game(s), with the same search: what was added is marked, and the ticks are cleared
+    addGameSelections.clear();
+    renderAddGameSelectionBar();
+    selections.forEach(({ g }) => {
+      const row = document.querySelector(`#addgame-results .ag-result[data-game-id="${Number(g.ID ?? g.id)}"]:not(.ag-result-custom)`);
+      if(row) markRowAdded(row);
+    });
+    if(newEntries.length && typeof showToast === 'function'){
+      showToast(newEntries.length === 1 ? `${newEntries[0].Title} added to your Backlog` : `${newEntries.length} games added to your Backlog`);
+    }
   });
+}
+
+// Where a game is in the app: 'Backlog', 'Library', or '' when it isn't there.
+function whereInApp(gameId){
+  const g = libraryData.find(x => x.GameID === gameId);
+  if(!g) return '';
+  return (typeof isBacklogGame === 'function' && isBacklogGame(g)) ? 'Backlog' : 'Library';
+}
+
+// A search result that has just been added: ticked, greyed out and marked, so it can't be added twice.
+function markRowAdded(row){
+  row.classList.remove('selected');
+  row.classList.add('added');
+  row.setAttribute('aria-disabled', 'true');
+  const box = row.querySelector('.ag-checkbox');
+  if(box){ box.checked = true; box.disabled = true; box.tabIndex = -1; }
+  const btn = row.querySelector('.ag-add-btn');
+  if(btn){ btn.textContent = '✓'; btn.disabled = true; }
+  const sel = row.querySelector('.ag-platform-select');
+  if(sel) sel.disabled = true;
+  const n = row.querySelector('.n');
+  if(n && !row.classList.contains('ag-result-custom')) n.outerHTML = '<span class="ag-where">in Backlog</span>';
+}
+
+// After a search the Search button becomes Clear search; typing something new turns it back.
+function setSearchButton(searched){
+  const btn = $('#addgame-search-btn');
+  btn.textContent = searched ? 'Clear search' : 'Search';
+  btn.classList.toggle('btn-clear', searched);
+  btn.dataset.searched = searched ? '1' : '';
+}
+function clearAddGameSearch(){
+  $('#addgame-title').value = '';
+  $('#addgame-results').innerHTML = '';
+  addGameSelections.clear();
+  renderAddGameSelectionBar();
+  setSearchButton(false);
 }
 
 async function addManualGameFromSearch(found, customConsole){
   return enqueueTask(async () => {
-    const gameId = -Date.now(); // synthetic, always negative, never collides with a real RA GameID
-    if(libraryData.some(x => x.GameID === gameId)){
-      closeAddGameModal();
-      return;
-    }
+    const gameId = -Date.now(); // negative, so it never clashes with a real RA GameID
+    if(libraryData.some(x => x.GameID === gameId)) return;
     const genre = (found.genres && found.genres.length) ? found.genres.join(', ') : null;
     const entry = {
       GameID: gameId,
@@ -250,7 +385,7 @@ async function addManualGameFromSearch(found, customConsole){
       pct: 0,
       lastPlayed: null,
       manual: true,
-      customConsole: true, // not on RA at all, no achievement data will ever exist for this entry
+      customConsole: true, // not on RA
       genre: genre,
       released: found.released || null,
       manualStarted: false,
@@ -260,17 +395,12 @@ async function addManualGameFromSearch(found, customConsole){
     libraryData = [...libraryData, entry];
     const manual = await loadManualGames();
     await saveManualGames([...manual, entry]);
-    renderSystemChips();
-    renderBacklog();
-    renderLibrary();
-    renderByYear();
-    closeAddGameModal();
+    renderLibraryViews();
+    if(typeof showToast === 'function') showToast(`${entry.Title} added to your Backlog`);
   });
 }
 
-// Turns a customConsole entry into a real RA-tracked one once it shows up on RA.
-// Replaces the synthetic entry with a normal manual RA entry (same shape as
-// addManualGamesBulk makes), so it stays in the Backlog until RA reports progress.
+// Replaces a non-RA entry with a manually added RA game, which stays in the Backlog until RA sees progress.
 async function convertCustomToRaGame(oldGameId, g, consoleId, consoleName){
   return enqueueTask(async () => {
     const gameId = Number(g.ID ?? g.id);
@@ -284,10 +414,7 @@ async function convertCustomToRaGame(oldGameId, g, consoleId, consoleName){
       manual = [...manual, entry];
     }
     await saveManualGames(manual);
-    renderSystemChips();
-    renderBacklog();
-    renderLibrary();
-    renderByYear();
+    renderLibraryViews();
     closeGameModal();
   });
 }
@@ -297,7 +424,12 @@ $('#addgame-close-btn').addEventListener('click', closeAddGameModal);
 $('#addgame-backdrop').addEventListener('click', (e) => {
   if(e.target.id === 'addgame-backdrop') closeAddGameModal();
 });
-$('#addgame-search-btn').addEventListener('click', searchAddGame);
+$('#addgame-search-btn').addEventListener('click', () => {
+  if($('#addgame-search-btn').dataset.searched) clearAddGameSearch();
+  else searchAddGame();
+});
+$('#addgame-title').addEventListener('input', () => setSearchButton(false));
+$('#addgame-system').addEventListener('change', () => { if($('#addgame-search-btn').dataset.searched) setSearchButton(false); });
 $('#addgame-add-selected-btn').addEventListener('click', () => {
   if(addGameSelections.size === 0) return;
   addManualGamesBulk([...addGameSelections.values()]);

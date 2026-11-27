@@ -69,11 +69,13 @@ function wireSubmenu(name){
 // Box art and anything sized in px/%/aspect-ratio is unaffected.
 const TEXTSIZE_MIN = 80, TEXTSIZE_MAX = 160, TEXTSIZE_STEP = 10, TEXTSIZE_DEFAULT = 100, TEXTSIZE_BASE_PX = 16;
 const TEXTSIZE_KEY = 'app-text-size-pct';
+const NINTENDO_TEXT_SCALE = 1.4;
 let textSizePct = TEXTSIZE_DEFAULT;
 
 function applyTextSize(){
-  // The Nintendo pixel font is very wide, so its text is scaled down to sit like the others.
-  const themeScale = document.documentElement.getAttribute('data-theme') === 'nintendo' ? 0.7 : 1;
+  // Pixelify Sans (the Nintendo theme's font) draws its letters about 70% the size of the other themes' fonts,
+  // so its text is made 1.4x larger to read the same. Keep in step with the Nintendo rule in style.css.
+  const themeScale = document.documentElement.getAttribute('data-theme') === 'nintendo' ? NINTENDO_TEXT_SCALE : 1;
   document.documentElement.style.fontSize = (TEXTSIZE_BASE_PX * textSizePct / 100 * themeScale) + 'px';
   $('#textsize-label').textContent = textSizePct + '%';
   $('#textsize-dec').disabled = textSizePct <= TEXTSIZE_MIN;
@@ -145,7 +147,7 @@ async function initGameView(){
     if(v && (v.value === 'tile' || v.value === 'list')) gameView = v.value;
     const c = await window.storage.get(TILECOLS_KEY, false);
     const n = c ? parseInt(c.value, 10) : NaN;
-    if(n >= 2 && n <= 6) tileCols = n;
+    if(n >= 1 && n <= 6) tileCols = n;
     const bar = await window.storage.get(CONSOLEBAR_KEY, false);
     if(bar && (bar.value === 'logos' || bar.value === 'names')) consoleBar = bar.value;
   }catch(e){}

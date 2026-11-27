@@ -3,6 +3,8 @@
 //   D-pad / left stick  move the highlight      A  confirm        B  back
 //   Right stick         scroll quickly          Select  hamburger menu
 //   X                   refresh (the left face button; handhelds with Nintendo-style labels print it as Y)
+//   Y                   jump to the Library or Backlog search box (the top face button, printed X on Nintendo-style pads)
+//   Text boxes          confirm opens the controller keyboard (pad-keyboard.js); Back clears a search first
 //   L1 / R1             previous / next console L2 / R2  previous / next tab (both wrap around)
 //
 // The Android app turns controller input into calls on window.GLTPad (see PadRouter.java).
@@ -39,6 +41,17 @@
   const showKeyboard = (on) => {
     try{ if(nativePad) on ? nativePad.showKeyboard() : nativePad.hideKeyboard(); }catch(e){ /* not in the app */ }
   };
+
+  // Typing in a text box with the controller: the controller keyboard (pad-keyboard.js), or the device's own if it's missing.
+  function typeInto(el){
+    if(!el) return;
+    if(window.PadKeyboard && window.PadKeyboard.canType(el)){
+      window.PadKeyboard.open(el, (box) => { if(box.isConnected && padMode) setFocus(box); }, swapAB ? 'b' : 'a');
+      return;
+    }
+    el.focus();
+    showKeyboard(true);
+  }
 
   // ---- what is on screen ---------------------------------------------------------------------
 
@@ -118,6 +131,8 @@
   // ---- the highlight -------------------------------------------------------------------------
 
   const TILE = '.cart, .year-item';
+  // What stays put at the top of the page while the rest scrolls (position:sticky in the stylesheet).
+  const PINNED = '.tabs, .chip-row, .panel-head, .lib-table th';
 
   const cls = (el) => el.className.replace(/\bpad-focus\b/, '').trim();
   // key: what else names an element that is drawn again in place. A column heading has its column.
@@ -187,13 +202,37 @@
       const c0 = cur.getBoundingClientRect();
       let rowTop = dir === 'down' ? Infinity : -Infinity;
       const ahead = [];
+      // The console row's blades have different heights, so the small ones start lower than the big one in the
+      // middle. They are still the same row: up and down leave the row, they never step to another blade.
+      const chipRow = cur.closest('#system-chips');
       for(const it of list){
         if(it.el === cur) continue;
+        if(chipRow && chipRow.contains(it.el)) continue;
         if(dir === 'down' ? it.r.top <= c0.top + 12 : it.r.top >= c0.top - 12) continue; // same row, or behind
         ahead.push(it);
         rowTop = dir === 'down' ? Math.min(rowTop, it.r.top) : Math.max(rowTop, it.r.top);
       }
-      list = ahead.filter(it => Math.abs(it.r.top - rowTop) <= 12);
+      // The headings, the console row and the search bar stay pinned at the top while the games scroll under them.
+      // A row of games that has slid under them is then higher up the screen than they are, so going by position
+      // alone, up from a game would jump to the search bar. Pinned things count as being above all the games:
+      // up from a game goes to what is above it in its own tab first, and from a pinned thing up and down stay
+      // among the pinned things while there are any that way.
+      const pinned = (el) => !!el.closest(PINNED);
+      const curPinned = pinned(cur);
+      const panel = cur.closest('.tab-panel');
+      let pool = ahead;
+      if(curPinned){
+        const want = ahead.filter(it => pinned(it.el));
+        if(want.length) pool = want;
+      }else if(dir === 'up' && panel){
+        const want = ahead.filter(it => !pinned(it.el) && panel.contains(it.el));
+        if(want.length) pool = want;
+      }
+      if(pool !== ahead){
+        rowTop = dir === 'down' ? Infinity : -Infinity;
+        for(const it of pool) rowTop = dir === 'down' ? Math.min(rowTop, it.r.top) : Math.max(rowTop, it.r.top);
+      }
+      list = pool.filter(it => Math.abs(it.r.top - rowTop) <= 12);
       if(cur.closest('#modal-card')){
         // In a game profile, down and up follow the left edge: Play, then Play port, and so on, not the buttons beside them.
         let hit = null, bestD = Infinity;
@@ -245,6 +284,12 @@
     }
     const cur = ensureFocus();
     if(!cur) return;
+    // One game per row: left and right go to the previous and next game.
+    if((dir === 'left' || dir === 'right') && cur.matches('.tile-grid.cols-1 > .cart') && !menuOpen() && !topOverlay()){
+      const next = dir === 'right' ? cur.nextElementSibling : cur.previousElementSibling;
+      if(next && next.classList.contains('cart')) setFocus(next);
+      return;
+    }
     if((dir === 'left' || dir === 'right') && cur.classList.contains('tab-btn') && !menuOpen() && !topOverlay()){
       // On the headings, left and right switch the tab at once (like L2 / R2) and the highlight goes with it.
       const tabs = Array.from(document.querySelectorAll('.tab-btn')).filter(isVisible);
@@ -331,7 +376,7 @@
       focusFirstGame();
       return;
     }
-    if(isTextField(el)){ el.focus(); showKeyboard(true); return; }
+    if(isTextField(el)){ typeInto(el); return; }
     if(el.tagName === 'SELECT'){ // the native picker can't be opened from here, so step through the options
       if(!el.options.length) return;
       el.selectedIndex = (el.selectedIndex + 1) % el.options.length;
@@ -344,9 +389,12 @@
 
   // Closes or steps back out of whatever is open. Returns true if it did something.
   function goBack(){
+    if(window.PadKeyboard && window.PadKeyboard.isOpen()){ window.PadKeyboard.close(); return true; }
     const ae = document.activeElement;
     if(isTextField(ae)){ ae.blur(); showKeyboard(false); return true; }
     const top = topOverlay();
+    // After a search, Back first clears it (the words and what was found), then works as usual
+    if(!menuOpen() && clearSearch(top)) return true;
     if(top){
       if(top.type === 'zoom'){ $('#img-zoom-close').click(); return true; }
       if(top.type === 'pop'){
@@ -375,6 +423,49 @@
     if(chipOk){ chipOk.click(); return true; }
     if(menuOpen()){ closeDropdownMenu(); return true; }
     return false;
+  }
+
+  // The search box of what's on screen: Add your game(s), or the Library or Backlog tab.
+  function clearSearch(top){
+    if(top){
+      if(top.el.id !== 'addgame-backdrop') return false;
+      const box = $('#addgame-title'), results = $('#addgame-results');
+      if(!box.value && !results.children.length) return false;
+      if(typeof clearAddGameSearch === 'function') clearAddGameSearch();
+      else{ box.value = ''; results.innerHTML = ''; }
+      if(padMode) setFocus(box);
+      return true;
+    }
+    const box = document.querySelector('#tab-library.active #lib-search, #tab-backlog.active #backlog-search');
+    if(!box || !box.value) return false;
+    box.value = '';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+
+  // The top face button: jumps to the search box of the Library or Backlog (the Library if neither is open)
+  // and opens the controller keyboard on it. In Add your game(s) it goes to that window's title box.
+  function jumpToSearch(){
+    if(menuOpen()) return;
+    const top = topOverlay();
+    if(top){
+      if(top.el.id === 'addgame-backdrop'){
+        const box = $('#addgame-title');
+        if(box && isVisible(box)){ setFocus(box); typeInto(box); }
+      }
+      return;
+    }
+    const find = () => document.querySelector('#tab-library.active #lib-search, #tab-backlog.active #backlog-search');
+    let input = find();
+    if(!input){
+      const lib = document.querySelector('.tab-btn[data-tab="library"]');
+      if(lib) lib.click();
+      input = find();
+    }
+    if(!input || !isVisible(input)) return;
+    input.scrollIntoView({ block: 'center' });
+    setFocus(input);
+    typeInto(input);
   }
 
   function toggleMenu(){
@@ -428,6 +519,7 @@
     const wasShowing = padMode;
     if(!padMode){ padMode = true; document.body.classList.add('pad-mode'); }
     const confirmKey = swapAB ? 'b' : 'a';
+    if(window.PadKeyboard && window.PadKeyboard.key(name, confirmKey)) return; // the controller keyboard is open
     if(DIRS.includes(name)){
       if(!wasShowing) ensureFocus(); // first press just shows where the highlight is
       else move(name);
@@ -450,6 +542,8 @@
       toggleMenu();
     }else if(name === 'x'){
       if(window.padRefresh) window.padRefresh();
+    }else if(name === 'y'){
+      jumpToSearch();
     }else if(name === 'l1'){
       switchSystem(-1);
     }else if(name === 'r1'){
@@ -481,6 +575,7 @@
     }else{
       held[name] = false;
       clearTimeout(timers[name]);
+      if(window.PadKeyboard && window.PadKeyboard.isOpen()) window.PadKeyboard.up(name);
       if(name === holdKey){
         holdKey = null;
         if(holdTimer){ // let go before it counted as a hold

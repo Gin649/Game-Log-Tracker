@@ -2,6 +2,27 @@
 
 Notable changes to Game Log Tracker, newest first.
 
+## v2.1.3.9
+
+The controller keyboard, the new Add your game(s), review scores from more sites and one game per row, brought over from the launcher.
+
+### Added
+- Controller keyboard: press A on any text box, or Y to jump to the Library or Backlog search, and a console-style keyboard opens at the bottom of the screen in your theme's colours. D-pad to move, A to type, B to delete, Y for space, X for capitals, R2 for symbols, L1/R1 to move the cursor and Start to search. Hold A on a letter (or press and hold it on the screen) for its accents, like the é in Pokémon. Touch works too, and tapping a text box still opens your device's own keyboard. With A and B swapped in Controller settings, so are A and B here.
+- RA tag: when you search Any console/system, results on RetroAchievements for the chosen console get a gold RA tag and are added with their achievements straight away.
+- More review sources: the review score now averages IGDB's critics and players, ScreenScraper and, for PC games, Steam players. Every source counts the same, and a source with fewer than 5 votes is left out.
+- Tap the review score to see each source's score and number of votes, with a Look up again button. A score based on only a few reviews is marked with a *.
+- One game per row: pinch the Library or Backlog tiles down to a single game per row, centred. Left and right on the controller go to the previous or next game.
+
+### Changed
+- Add game is now Add your game(s), and fills the screen. Game title comes first, then Which console?, and Other system is now Any console/system.
+- You stay on Add your game(s) after adding a game, with your search still there. Added games are ticked and greyed out, games you already have say in Backlog or in Library, and the Search button becomes Clear search.
+- Back clears a search first, on Add your game(s) and in the Library and Backlog tabs.
+- A highlighted yellow button now has a light ring and a gold glow, so it's easy to see what's selected.
+- The Nintendo theme uses the Pixelify Sans font, sized to read like the other themes.
+- Review scores are looked up for the game's own console, so a game released on more than one system gets that system's score.
+- Controller: up from a game no longer jumps past the rows pinned at the top of the page to the search bar, and up and down on the console row leave the row instead of stepping between blades.
+- Playtimes for the whole library load more gently. When RetroAchievements limits how fast it answers, they wait and try again, and whatever you are opening goes first.
+
 ## v2.1.3.8
 
 Achievement tiles, full screen and a condensed search bar, brought over from the launcher.

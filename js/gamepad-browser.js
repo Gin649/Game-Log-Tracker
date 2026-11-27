@@ -149,9 +149,14 @@
     return el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|file|range|color)$/.test(el.type);
   }
 
+  // While the controller keyboard is open its box has the focus, but controls that arrive as keys still have to
+  // reach it. Letters typed on a real keyboard still go into the box as usual.
+  const padKbOpen = () => !!(window.PadKeyboard && window.PadKeyboard.isOpen());
+
   document.addEventListener('keydown', (e) => {
     const name = KEY_MAP[e.key];
-    if(!name || typing(e.target) || e.ctrlKey || e.altKey || e.metaKey) return;
+    if(!name || e.ctrlKey || e.altKey || e.metaKey) return;
+    if(typing(e.target) && !(padKbOpen() && e.key.length > 1)) return;
     e.preventDefault(); // stops the arrow keys scrolling the page underneath the highlight
     fromKeys[name] = true;
     update(name);
